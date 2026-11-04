@@ -240,5 +240,12 @@
   "native-type-parameter-producer.test.mjs",
   "native-type-parameter-transport.test.mjs",
   "test-support/native-type-parameter-producer.mjs",
-  "test-support/native-type-parameter-peers.cs"
+  "test-support/native-type-parameter-peers.cs",
+  "lib/parameter-write-result.mjs",
+  "native-parameter-write-producer.test.mjs",
+  "parameter-write-result.test.mjs",
+  "native-parameter-write-transport.test.mjs",
+  "test-support/native-parameter-write-producer.mjs",
+  "test-support/native-parameter-write-peers.cs",
+  "model-write-publication.test.mjs"
 ]

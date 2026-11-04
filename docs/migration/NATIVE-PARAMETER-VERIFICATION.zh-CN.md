@@ -2,6 +2,8 @@
 
 日期：2026 年 11 月 5 日。P1 `revit_get_type_parameters` 已完成自有 C# 实现、具名契约、原子队列和隔离验证，宿主升至 **0.8.2**。它读取实例对应的真实类型参数，直接输入 ElementType 时读取自身，明确返回源元素与类型身份。BX-006 仍在进行，其他参数和建模命令尚未全部迁移。
 
+此页和 `native-parameter-verification.json` 保留该切片的历史证据。后续已复现并修复本文末尾记录的 setter 回读缺口，最新 0.8.3 实现与受控证据见 [参数写入验证](PARAMETER-WRITE-VERIFICATION.zh-CN.md)。
+
 本轮没有加载新插件、替换用户 DLL/Addins、重启既有服务、执行真实模型操作或公开发布。新内部候选 **`releaseReady:false`，仍阻止安装**。
 
 ## 实际变化与边界

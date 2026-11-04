@@ -17,7 +17,7 @@ namespace RevitLocalCodex
     // This local queue is an application integration boundary, not a security sandbox.
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
-        private const string HostVersion = "0.8.2";
+        private const string HostVersion = "0.8.3";
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");

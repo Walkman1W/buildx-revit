@@ -29,6 +29,7 @@
 - revit_get_type_parameters 要求宿主0.8.2、nativeParameterQueriesVersion=1及get_type_parameters声明。输入实例时读取其实际ElementType；输入类型时读取自身。保留element_id/source_is_type/type_id、原始值、显示值和单位；无有效类型时明确失败，不回落实例参数。类型参数影响所有该类型实例，读取成功不授权写入；现有revit_set_parameters写入仍遵守原权限、显式ID和默认rollback。
 
 - 只有document.allowedSample为true的已授权文档允许写入；allowedSample是旧字段名，表示文档位于宿主许可清单，脚本执行也受此限制。优先使用set_parameters/move_elements/copy_elements/create_wall/create_pipe/rotate_elements/place_family_instance/create_floor等明确工具，使用实际查询得到的元素、类型、系统类型和标高ID。设置参数前必须describe_parameters确认parameter_id、存储类型、可写性和单位；Double只能使用value_unit="internal"及Revit内部单位，不能把显示值直接写入。
+- set_parameters 在宿主0.8.3核对设置后、Regenerate后及内层Commit后的值；Set返回true不等于目标值已满足。回执changed表示观测前后差异，updated_count包含未变化行。after_internal发生在外层事务组的rollback/commit决定之前，rollback模式不能把它说成当前模型仍保留该值。回执身份、类型或值不匹配时核对原请求，不自动重发；普通错误不证明已回滚。
 
 - 移动、复制、墙、管道工具使用毫米，由工具换算内部单位。坐标是Revit内部坐标系的绝对毫米坐标，delta_mm为位移；墙基线水平，两端Z必须等于list_levels返回的project_elevation_mm加offset_mm。不要把墙的标高相对高度当绝对Z。
 

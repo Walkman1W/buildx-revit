@@ -26,8 +26,8 @@ using WpfVisibility = System.Windows.Visibility;
 
 [assembly: AssemblyTitle("BuildX")]
 [assembly: AssemblyDescription("BuildX workspace for Revit 2024")]
-[assembly: AssemblyVersion("0.8.2.0")]
-[assembly: AssemblyFileVersion("0.8.2.0")]
+[assembly: AssemblyVersion("0.8.3.0")]
+[assembly: AssemblyFileVersion("0.8.3.0")]
 [assembly: TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace RevitLocalCodex

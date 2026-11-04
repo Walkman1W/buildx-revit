@@ -8,6 +8,8 @@
 
 2026-11-05 实施进展：六查询、独立路径和官方私有编译器已完成源码与隔离验证。常用命令阶段新增 P1 `revit_get_type_parameters`，自有原子读取明确区分源实例与类型，参数事实沿用原 owner；见 `NATIVE-PARAMETER-VERIFICATION.zh-CN.md`。103 项台账中的旧 provider/mapping 保留为静态来源证据，当前这一项的实现对应关系在新验证记录单列；不得把原台账状态当作最新验收结果。真实模型、原生系统图和标注验收仍未完成。
 
+后续 0.8.3 已为已有 `set_parameters` 增加实际生产 setter/事务组受控覆盖，修复 Set 返回值与实际值脱节、Regenerate/内层提交后值漂移未复验的成功路径，Node 另核对原请求与逐行回读；见 `PARAMETER-WRITE-VERIFICATION.zh-CN.md`。通用失败仍不推断已回滚，实机写入尚未执行。
+
 ## 原生架构与实现边界
 
 ```text

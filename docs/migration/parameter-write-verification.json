@@ -1,0 +1,619 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-04T20:37:10.218Z",
+  "sourceBaseCommit": "52f0c5d6909a1a2abfe7eb4f8f14a53ee0dbb91e",
+  "version": "0.8.3-internal-parameter-write",
+  "slice": {
+    "task": "BX-006",
+    "operation": "set_parameters",
+    "hostVersion": "0.8.3",
+    "assemblyVersion": "0.8.3.0",
+    "nativeSetReadbackValidated": true,
+    "regenerateReadbackValidated": true,
+    "innerCommitReadbackValidated": true,
+    "nodeExactReceiptReconciliation": true,
+    "rawAndRetainedEntrypointsValidated": true,
+    "changedMeaning": "Observed before/after difference",
+    "updatedCountMeaning": "Result rows, including unchanged rows",
+    "observedValuesScope": "After inner transaction validation, before outer transaction-group rollback/commit decision",
+    "permissionsAndDocumentBindingChanged": false,
+    "genericRollbackProofAdded": false,
+    "automaticReplayAdded": false
+  },
+  "regression": {
+    "baseline": {
+      "record": "artifacts/native-parameter-write-validation-20261105-01/baseline-failures.json",
+      "sha256": "1565ab210e18b517160940a79c356095ace5f5ca12e9a5e0f6ffe4b4f98da5ad",
+      "expectedAssertions": 3,
+      "failedAssertions": 3,
+      "actionsSha256": "63a0f3aeeb62f1ae9aa6aa12c9a812bc5bf7bb0b7f89b53878eaf78b4ba899c3",
+      "hostSha256": "b40d7188590eecf9a114b989a7bf9e4d9a5d9305436b7e5760f62b94c3f72628"
+    },
+    "afterFix": {
+      "record": "artifacts/native-parameter-write-validation-20261105-01/fixed-peer-evidence.json",
+      "sha256": "ada0e5b5f09d711c68b2243c71699394b27bdd94c4611f7c9feb84d9fd405650",
+      "originalFixturesIdentical": true,
+      "allOriginalWrongSuccessesRejected": true
+    },
+    "cases": [
+      {
+        "storage": "Double",
+        "input": {
+          "parameters": [
+            {
+              "id": 1,
+              "storage": "Double",
+              "value": 1,
+              "behavior": "trueNoChange"
+            }
+          ],
+          "args": {
+            "changes": [
+              {
+                "element_id": 100,
+                "parameter_id": 1,
+                "value": 2,
+                "value_unit": "internal"
+              }
+            ]
+          }
+        },
+        "before": {
+          "ok": true,
+          "committed": true,
+          "afterInternal": 1,
+          "transactions": {
+            "InnerStarts": 1,
+            "InnerCommits": 1,
+            "InnerRollbacks": 0,
+            "Regenerates": 0,
+            "GroupStarts": 1,
+            "GroupCommits": 1,
+            "GroupRollbacks": 0,
+            "events": [
+              "GroupStart",
+              "InnerStart",
+              "Set:1",
+              "InnerCommit",
+              "GroupAssimilate"
+            ]
+          }
+        },
+        "after": {
+          "ok": false,
+          "error": {
+            "type": "InvalidOperationException",
+            "message": "Revit did not retain the requested Double parameter value."
+          },
+          "transactions": {
+            "InnerStarts": 1,
+            "InnerCommits": 0,
+            "InnerRollbacks": 1,
+            "Regenerates": 0,
+            "GroupStarts": 1,
+            "GroupCommits": 0,
+            "GroupRollbacks": 1,
+            "events": [
+              "GroupStart",
+              "InnerStart",
+              "Set:1",
+              "InnerRollback",
+              "GroupRollback"
+            ]
+          },
+          "finalParameterValue": 1
+        }
+      },
+      {
+        "storage": "Integer",
+        "input": {
+          "parameters": [
+            {
+              "id": 1,
+              "storage": "Integer",
+              "value": 1,
+              "behavior": "trueNoChange"
+            }
+          ],
+          "args": {
+            "changes": [
+              {
+                "element_id": 100,
+                "parameter_id": 1,
+                "value": 2
+              }
+            ]
+          }
+        },
+        "before": {
+          "ok": true,
+          "committed": true,
+          "afterInternal": 1,
+          "transactions": {
+            "InnerStarts": 1,
+            "InnerCommits": 1,
+            "InnerRollbacks": 0,
+            "Regenerates": 0,
+            "GroupStarts": 1,
+            "GroupCommits": 1,
+            "GroupRollbacks": 0,
+            "events": [
+              "GroupStart",
+              "InnerStart",
+              "Set:1",
+              "InnerCommit",
+              "GroupAssimilate"
+            ]
+          }
+        },
+        "after": {
+          "ok": false,
+          "error": {
+            "type": "InvalidOperationException",
+            "message": "Revit did not retain the requested Integer parameter value."
+          },
+          "transactions": {
+            "InnerStarts": 1,
+            "InnerCommits": 0,
+            "InnerRollbacks": 1,
+            "Regenerates": 0,
+            "GroupStarts": 1,
+            "GroupCommits": 0,
+            "GroupRollbacks": 1,
+            "events": [
+              "GroupStart",
+              "InnerStart",
+              "Set:1",
+              "InnerRollback",
+              "GroupRollback"
+            ]
+          },
+          "finalParameterValue": 1
+        }
+      },
+      {
+        "storage": "String",
+        "input": {
+          "parameters": [
+            {
+              "id": 1,
+              "storage": "String",
+              "value": "原值",
+              "behavior": "trueNoChange"
+            }
+          ],
+          "args": {
+            "changes": [
+              {
+                "element_id": 100,
+                "parameter_id": 1,
+                "value": "新值中文"
+              }
+            ]
+          }
+        },
+        "before": {
+          "ok": true,
+          "committed": true,
+          "afterInternal": "原值",
+          "transactions": {
+            "InnerStarts": 1,
+            "InnerCommits": 1,
+            "InnerRollbacks": 0,
+            "Regenerates": 0,
+            "GroupStarts": 1,
+            "GroupCommits": 1,
+            "GroupRollbacks": 0,
+            "events": [
+              "GroupStart",
+              "InnerStart",
+              "Set:1",
+              "InnerCommit",
+              "GroupAssimilate"
+            ]
+          }
+        },
+        "after": {
+          "ok": false,
+          "error": {
+            "type": "InvalidOperationException",
+            "message": "Revit did not retain the requested String parameter value."
+          },
+          "transactions": {
+            "InnerStarts": 1,
+            "InnerCommits": 0,
+            "InnerRollbacks": 1,
+            "Regenerates": 0,
+            "GroupStarts": 1,
+            "GroupCommits": 0,
+            "GroupRollbacks": 1,
+            "events": [
+              "GroupStart",
+              "InnerStart",
+              "Set:1",
+              "InnerRollback",
+              "GroupRollback"
+            ]
+          },
+          "finalParameterValue": "原值"
+        }
+      }
+    ]
+  },
+  "producer": {
+    "standaloneTests": 91,
+    "controlledFixtureExecutions": 110,
+    "record": "artifacts/native-parameter-write-validation-20261105-01/peer-summary.json",
+    "sourceEvidence": {
+      "actionsSha256": "12700327bd96b80f77a5e81e3c4a7d17b434922558a102ba28a639448f4c6a5b",
+      "hostSha256": "e42e973b69cfb5c460e43d8a1a3f154757c5a1ecfba022fca9389c776e125c02",
+      "peersSha256": "31cb66e6436fa09d9f2bb90e309f0a5abaa86da28c528fb8c97f1d448f481cde",
+      "generatedSha256": "153907eb8dc8eff9acaf114d21cff61d5475570e1b694c2bf5bc4995724d816c",
+      "fragments": {
+        "parameterWrite": {
+          "sha256": "edf68349b4971eb907856dbcff3b994b3e1a79db1b6212cdd0b46945f9d31c04",
+          "characters": 8925
+        },
+        "private static object InternalValue(": {
+          "sha256": "2c73a83ebcf92b1e67db11b6dcff09f3a532c8e4ad61d900cba7cc551d21e3fe",
+          "characters": 529
+        },
+        "private static Element RequiredElement(": {
+          "sha256": "61fdec71928281a1a7e0ed9c4fd349f0ee71cc82b201cb1da61975b3752a58b6",
+          "characters": 323
+        },
+        "private static object Required(": {
+          "sha256": "6113fbe08518b7f6d8f846e824d9340f37515532fe0d7e2af426620057109133",
+          "characters": 288
+        },
+        "private static IList RequiredList(": {
+          "sha256": "4700b3e935a13759920c9e7204fcad0014112d59070225fff84b52a17df74d9b",
+          "characters": 405
+        },
+        "private static string OptionalString(": {
+          "sha256": "d054cce629358953ce7feb742df2c96ad5bdf58627417301f173a76b06baaf4d",
+          "characters": 358
+        },
+        "private static long ElementIdValue(": {
+          "sha256": "699d567fc11ff7a51156b32bae4fa0595b2e1206ef41d9e005f8e1decc60655f",
+          "characters": 118
+        },
+        "private static long Integer(": {
+          "sha256": "287ccf22e76f9c6004ba43dd04d7689ef44a86056281d6a6b74ffb477acec87f",
+          "characters": 413
+        },
+        "private static double FiniteNumber(": {
+          "sha256": "2b185702449c4d3f40f5e0be7bebb5bd48d26679ef4cabbd494d5dedcb21b44e",
+          "characters": 554
+        },
+        "private static void Fields(": {
+          "sha256": "8324cca146092482944753aa2bb920b6770d236db82930025e58f8cdb1528196",
+          "characters": 267
+        },
+        "private sealed class RejectErrors": {
+          "sha256": "b84ab08985f5d6aa22825a711545398ec590197717af9a202d96320301416dee",
+          "characters": 465
+        },
+        "writeOperations": {
+          "sha256": "b2ef1539c480d1d86a445bad1304057e9853e2df6ca7aba7c89a10294d04c0ab",
+          "characters": 137
+        },
+        "isWrite": {
+          "sha256": "7c55985524312439bcfe7fe86e2ca34af281bdb2001ea4adf612fb47b97a8335",
+          "characters": 118
+        },
+        "hostWrite": {
+          "sha256": "65764a8d017b098b3c3e68037b2e6fe7f8bdf9716a865a2c941f5b06f6eb815a",
+          "characters": 3109
+        },
+        "private sealed class ScriptExecutionFailure": {
+          "sha256": "f9e171f4154a40dd9082d6a0204009438ecf3571fbcf9019ef3629d94dc2eaff",
+          "characters": 660
+        },
+        "private static Dictionary<string, object> BoundedFailureError(": {
+          "sha256": "3b590965bfc3be0eef58f9ac6bd30fa14b32774dd87ab82818fc9170b54c1787",
+          "characters": 621
+        },
+        "private object FreezeResult(": {
+          "sha256": "8223e4b9ce27f5c5c9e6b87cf1ad87e3ad229980931bc5722c9020d478dc78a6",
+          "characters": 516
+        },
+        "private static IDictionary<string, object> ScriptParameters(": {
+          "sha256": "602714f003b42351dabb413577085c6295e9b044b7f3740492ab7bf0e0f67585",
+          "characters": 937
+        },
+        "private static string ExpectedDocument(": {
+          "sha256": "ac22fdd5cb6d042ccae2c24f598c55d9f7716fad661074c64c914b2d2869a591",
+          "characters": 368
+        },
+        "private static void RequireDocument(": {
+          "sha256": "233637753d1074908622590cb4b7ca227228608127a3c33ca652484ba8715252",
+          "characters": 820
+        }
+      },
+      "scope": "Exact production Write/SetParameters/helpers and Host write transaction-group branch; API, access policy and other providers are controlled peers; no Autodesk load or real Revit/model execution"
+    },
+    "hostWriteBranchUnchanged": true,
+    "actualProductionFragments": "Write, SetParameters and parameter parsing/value helpers, Host write branch and document guard",
+    "controlledPeers": "Autodesk API/state, Parameter/Document/Transaction/TransactionGroup behavior, access policy, other provider dispatches; queue envelopes/timing in cross-layer tests",
+    "realRevitExecuted": false,
+    "realModelModified": false
+  },
+  "checks": [
+    {
+      "name": "parameter-writes",
+      "record": "artifacts/native-parameter-write-validation-20261105-01/write-merged-final.tap.log",
+      "sha256": "36ea914a9cb41ed94503b61730fbf3f457baff9e6854b86956e6d231c08b5c46",
+      "passed": 117,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-queries-and-catalog",
+      "record": "artifacts/native-parameter-write-validation-20261105-01/native-final.tap.log",
+      "sha256": "3c34664124df0866aca9ddbad9537a66433f140350c30088c86618482e5b4da1",
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-type-queries",
+      "record": "artifacts/native-parameter-write-validation-20261105-01/type-query-final.tap.log",
+      "sha256": "a55fd193503714ccd266c22a605917e11faaa5ad49656777a2d048630103fc4e",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "layout",
+      "record": "artifacts/native-parameter-write-validation-20261105-01/layout-final.tap.log",
+      "sha256": "97e8c1c4a78dde723c17d9d74cda12c0f9d2b43f5296ca6394710bbf4d1d3856",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "hostChecks": {
+    "record": "artifacts/native-parameter-write-validation-20261105-01/host-final-summary.json",
+    "checks": 80,
+    "passed": 80,
+    "failed": 0,
+    "staticFacts": {
+      "hostVersion_0_8_3": true,
+      "assemblyVersion_0_8_3_0": true,
+      "modelCapabilityVersion1Count": 2,
+      "sixModelOperationsUnchanged": true,
+      "parameterCapabilityVersion1Count": 2,
+      "parameterCapabilityOperationCount": 2,
+      "genericFailureCatchStillRethrowsWithoutRollbackProof": true,
+      "failureTransactionProofRemainsScriptOnly": true
+    },
+    "genericFailureReceiptBoundary": "A generic write failure attempts outer-group rollback and rethrows, but publishes no verified transaction rollback proof; a failure or attempted cleanup does not establish a rolled-back model outcome.",
+    "sources": [
+      {
+        "path": "revit-addin/WorkbenchHost.cs",
+        "sha256": "e42e973b69cfb5c460e43d8a1a3f154757c5a1ecfba022fca9389c776e125c02"
+      },
+      {
+        "path": "revit-addin/WorkbenchActions.cs",
+        "sha256": "12700327bd96b80f77a5e81e3c4a7d17b434922558a102ba28a639448f4c6a5b"
+      },
+      {
+        "path": "revit-addin/LocalCodexRevit.cs",
+        "sha256": "80480dca49b10eda4995a9a4648a9df1cc529826345c964bd5d4f15630f29621"
+      }
+    ]
+  },
+  "transactionBoundaryEvidence": {
+    "scenario": "Inner Commit succeeded, then value drift rejected before outer Assimilate",
+    "innerCommits": 1,
+    "innerRollbacks": 0,
+    "groupCommits": 0,
+    "groupRollbacks": 1,
+    "realRollbackProven": false,
+    "unknownCases": "Rollback throws/Pending and generic dispatch errors remain unconfirmed in Node, with original receipt retained; no automatic replay."
+  },
+  "productionApiBuild": {
+    "record": "artifacts/buildx-source-20261105-06/build/build-record.json",
+    "compilerExit": 0,
+    "sources": 33,
+    "dllSha256": "4ba6a4f7c63d47cfa5ac383a7ceda12b03050e30b90086103c9a3ac12d766d02",
+    "apiAssemblies": [
+      {
+        "name": "RevitAPI.dll",
+        "fileVersion": "24.3.30.11",
+        "sha256": "eb3ade235237b300e699176ed91786b3998cc30d889b95a2e45f84d556b6df0d"
+      },
+      {
+        "name": "RevitAPIUI.dll",
+        "fileVersion": "24.3.30.11",
+        "sha256": "a7dc0e93ba4c29fad6549262b611a3231b9f0b9e5739e69381d1d2f08d8e7097"
+      }
+    ],
+    "realRevitLoadVerified": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-parameter-write-20261105-01",
+    "productVersion": "0.8.3-internal-parameter-write",
+    "releaseReady": false,
+    "files": 144,
+    "totalBytes": 19387669,
+    "manifestSha256": "9a4b883dc0c83c843e586e3d107ae0313e01f131c2b421c5f9d34b0e28dcd820",
+    "modules": 98,
+    "imports": 308,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "4ba6a4f7c63d47cfa5ac383a7ceda12b03050e30b90086103c9a3ac12d766d02",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-06",
+    "sourceFiles": 249,
+    "sourceModules": 177,
+    "sourceReferences": 518,
+    "sourceManifestSha256": "bedd5e135d4e1a8ed53d642612471b7b261927936032ee650dbf450b57b08fc1",
+    "currentSourceMismatches": [],
+    "buildSources": 33,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false
+  },
+  "archives": [
+    {
+      "kind": "runtime",
+      "path": "artifacts/BuildX-Revit2024-0.8.3-internal-parameter-write-20261105.zip",
+      "sha256": "c45b42eff753f9d204883aa5f2a3ca26514720b427a5d528bd045634fc51266f",
+      "bytes": 7393411,
+      "files": 145,
+      "manifestPayloadFiles": 144,
+      "entryReadbackVerified": true,
+      "sourceFilesMatchManifest": true,
+      "inputsUnchanged": true
+    },
+    {
+      "kind": "source",
+      "path": "artifacts/BuildX-Source-0.8.3-internal-parameter-write-20261105.zip",
+      "sha256": "e40f3d97a3169d571139ee228ec420b200f37e046ce81e2cb48d7cde09394307",
+      "bytes": 1047295,
+      "files": 251,
+      "manifestPayloadFiles": 249,
+      "entryReadbackVerified": true,
+      "sourceFilesMatchManifest": true,
+      "inputsUnchanged": true
+    }
+  ],
+  "archiveVerification": {
+    "entryRecord": "artifacts/native-parameter-write-validation-20261105-01/archive-entry-checks.json",
+    "entryRecordSha256": "18d30237cdf82d8230162b81deb1d087d7c2c39f47a986eb32d8f636c03dfe2e",
+    "roundtripRecord": "artifacts/native-parameter-write-validation-20261105-01/archive-roundtrip.json",
+    "roundtripRecordSha256": "696e69f73e170c34cc919bebe099052c0b0b8aaed25100763e3b9f875bec93b1",
+    "passed": true,
+    "roundtrip": {
+      "runtime": {
+        "ok": true,
+        "filesVerified": 145,
+        "manifestPayloadFiles": 144,
+        "scriptCompiler": {
+          "ok": true,
+          "version": "5.0.0",
+          "files": 17,
+          "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627"
+        },
+        "noNodeModules": true,
+        "catalog": {
+          "ok": true,
+          "methods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list"
+          ],
+          "toolCount": 21,
+          "nativeModelTools": [
+            "revit_health",
+            "revit_get_document_info",
+            "revit_list_views",
+            "revit_get_element_parameters",
+            "revit_get_elements_by_type",
+            "revit_get_element_geometry"
+          ],
+          "typeParameterTool": "revit_get_type_parameters",
+          "typeParameterOutputSchemaCompiled": true,
+          "schemaCompiler": "workspace Ajv; extracted MCP child has no node_modules",
+          "modelToolsCalled": false,
+          "exitCode": 0
+        },
+        "parameterWriteResult": {
+          "modulePresent": true,
+          "imported": true,
+          "validSuccessAccepted": true,
+          "afterMismatchRejected": true,
+          "pureMemoryProbe": true
+        },
+        "queueCreated": false,
+        "inventoryUnchangedAfterProbe": true
+      },
+      "source": {
+        "ok": true,
+        "filesVerified": 251,
+        "snapshotFiles": 249,
+        "manifestSha256": "bedd5e135d4e1a8ed53d642612471b7b261927936032ee650dbf450b57b08fc1",
+        "dependencyClosureOk": true,
+        "modules": 177,
+        "references": 518,
+        "buildExcluded": true
+      }
+    },
+    "temporaryCleanup": {
+      "ownerVerified": true,
+      "absoluteRealpathVerified": true,
+      "resolvedUnderTemp": true,
+      "removed": true
+    }
+  },
+  "resolvedTestFailures": [
+    {
+      "check": "C# to Node temporary queue fixture",
+      "reason": "processing directory was absent, so the unchanged receipt owner refused publication.",
+      "resolution": "Create the complete owned test queue; seven transport tests and the merged 117-test group passed."
+    },
+    {
+      "check": "Independent receipt validator change fields",
+      "reason": "An extra field inside a requested change was not rejected.",
+      "resolution": "Restrict the change fields to the existing named contract; all nine result tests passed."
+    }
+  ],
+  "officialReference": {
+    "title": "Autodesk 2024 Transactions: Getting Element Geometry and AnalyticalElement",
+    "url": "https://help.autodesk.com/cloudhelp/2024/ENU/Revit-API/files/Revit_API_Developers_Guide/Basic_Interaction_with_Revit_Elements/Transactions/Revit_API_Revit_API_Developers_Guide_Basic_Interaction_with_Revit_Elements_Transactions_Getting_Element_Geometry_and_AnalyticalModel_html.html",
+    "use": "Explicit Regenerate inside open transactions; successful commit regenerates automatically; post-commit verification is read-only."
+  },
+  "remainingAcceptance": {
+    "taskBX006Complete": false,
+    "installable": false,
+    "releaseReady": false,
+    "realRevitLoadVerified": false,
+    "realSetterUpdaterRollbackVerified": false,
+    "realWebViewCodexVerified": false,
+    "customerMachineVerified": false,
+    "installationUpgradeRestoreUninstallVerified": false,
+    "realModelRegeneratePerformanceVerified": false,
+    "argusReplacementComplete": false,
+    "otherBlockers": [
+      "Argus runtime/features and distribution conditions",
+      "External Node bootstrap and Node/Python private runtimes",
+      "WebView2 Runtime",
+      "Plugin distribution conditions",
+      "Python/pypdf",
+      "Customer data upgrade/restore",
+      "License backend/customer configuration"
+    ]
+  },
+  "next": "Implement the next P1 named single-parameter read with stable ID selection and explicit ambiguity handling, reusing existing parameter facts and original request/receipt owners."
+}

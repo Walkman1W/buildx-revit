@@ -85,21 +85,32 @@ namespace RevitLocalCodex
                 try
                 {
                     object result;
-                    if (operation == "set_parameters") result = SetParameters(doc, args);
+                    var parameterWrites = operation == "set_parameters" ? new List<ParameterWriteExpectation>() : null;
+                    if (operation == "set_parameters") result = SetParameters(doc, args, parameterWrites);
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
-                    if (transaction.Commit() != TransactionStatus.Committed) throw new InvalidOperationException("Revit rejected the operation; transaction was rolled back.");
+                    if (parameterWrites != null)
+                    {
+                        doc.Regenerate();
+                        VerifyParameterWrites(doc, parameterWrites);
+                    }
+                    TransactionStatus completion = transaction.Commit();
+                    if (completion != TransactionStatus.Committed) throw new InvalidOperationException("Revit did not commit the operation; transaction status: " + completion + ".");
+                    // Commit regenerates again and can run updaters. The host's
+                    // outer group is still open, so a changed value must throw
+                    // before that group can assimilate or publish success.
+                    if (parameterWrites != null) VerifyParameterWrites(doc, parameterWrites);
                     return result;
                 }
                 catch { if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack(); throw; }
             }
         }
 
-        private static object SetParameters(Document doc, Dictionary<string, object> args)
+        private static object SetParameters(Document doc, Dictionary<string, object> args, List<ParameterWriteExpectation> expectations = null)
         {
             Fields(args, "expected_document", "mode", "changes");
             IList changes = RequiredList(args, "changes", 1, 50);
@@ -123,34 +134,72 @@ namespace RevitLocalCodex
                 string unit = OptionalString(change, "value_unit", "");
                 if (change.ContainsKey("value_unit") && unit != "internal") throw new InvalidOperationException("value_unit, when provided, must equal internal.");
                 object before = InternalValue(parameter);
-                bool changed;
-                if (parameter.StorageType == StorageType.Double)
+                StorageType storageType = parameter.StorageType;
+                object expected;
+                if (storageType == StorageType.Double)
                 {
                     if (unit != "internal") throw new InvalidOperationException("Double parameters require value_unit=internal for each change.");
-                    double number = FiniteNumber(value, "value");
-                    changed = parameter.HasValue && parameter.AsDouble() == number ? false : parameter.Set(number);
-                    if ((!parameter.HasValue || parameter.AsDouble() != number) && !changed) throw new InvalidOperationException("Revit refused Double parameter value.");
+                    expected = FiniteNumber(value, "value");
                 }
-                else if (parameter.StorageType == StorageType.Integer)
+                else if (storageType == StorageType.Integer)
                 {
                     int number = (int)Integer(value, "value", int.MinValue, int.MaxValue);
                     if (parameter.Definition.GetDataType() == SpecTypeId.Boolean.YesNo && number != 0 && number != 1)
                         throw new InvalidOperationException("Yes/No parameters require integer 0 or 1.");
-                    changed = parameter.HasValue && parameter.AsInteger() == number ? false : parameter.Set(number);
-                    if ((!parameter.HasValue || parameter.AsInteger() != number) && !changed) throw new InvalidOperationException("Revit refused Integer parameter value.");
+                    expected = number;
                 }
-                else if (parameter.StorageType == StorageType.String)
+                else if (storageType == StorageType.String)
                 {
                     if (!(value is string)) throw new InvalidOperationException("String parameter value must be a string, not a converted number or null.");
-                    string text = (string)value;
-                    changed = parameter.HasValue && parameter.AsString() == text ? false : parameter.Set(text);
-                    if ((!parameter.HasValue || parameter.AsString() != text) && !changed) throw new InvalidOperationException("Revit refused String parameter value.");
+                    expected = (string)value;
                 }
                 else throw new InvalidOperationException("Only Double, Integer and String parameters can be written; ElementId parameters are not supported.");
-                results.Add(new { element_id = elementId, parameter_id = parameterId, storage_type = parameter.StorageType.ToString(),
-                    data_type = parameter.Definition.GetDataType().TypeId, changed, before_internal = before, after_internal = InternalValue(parameter) });
+                bool changed = !object.Equals(before, expected);
+                if (changed)
+                {
+                    // Set's Boolean reports whether Revit changed a value; it
+                    // does not establish that the requested value was retained.
+                    if (storageType == StorageType.Double) parameter.Set((double)expected);
+                    else if (storageType == StorageType.Integer) parameter.Set((int)expected);
+                    else parameter.Set((string)expected);
+                }
+                object after = VerifyParameterValue(parameter, storageType, expected);
+                if (expectations != null) expectations.Add(new ParameterWriteExpectation(elementId, parameterId, storageType, expected));
+                results.Add(new { element_id = elementId, parameter_id = parameterId, storage_type = storageType.ToString(),
+                    data_type = parameter.Definition.GetDataType().TypeId, changed, before_internal = before, after_internal = after });
             }
             return new { updated_count = results.Count, changes = results.ToArray() };
+        }
+
+        private sealed class ParameterWriteExpectation
+        {
+            internal readonly long ElementId;
+            internal readonly long ParameterId;
+            internal readonly StorageType StorageType;
+            internal readonly object Value;
+            internal ParameterWriteExpectation(long elementId, long parameterId, StorageType storageType, object value)
+            { ElementId = elementId; ParameterId = parameterId; StorageType = storageType; Value = value; }
+        }
+
+        private static object VerifyParameterValue(Parameter parameter, StorageType storageType, object expected)
+        {
+            if (parameter.StorageType != storageType || !parameter.HasValue)
+                throw new InvalidOperationException("Revit did not retain the requested " + storageType + " parameter value.");
+            object actual = InternalValue(parameter);
+            if (!object.Equals(actual, expected))
+                throw new InvalidOperationException("Revit did not retain the requested " + storageType + " parameter value.");
+            return actual;
+        }
+
+        private static void VerifyParameterWrites(Document doc, List<ParameterWriteExpectation> expectations)
+        {
+            foreach (ParameterWriteExpectation expected in expectations)
+            {
+                Element element = RequiredElement(doc, expected.ElementId);
+                Parameter parameter = element.Parameters.Cast<Parameter>().SingleOrDefault(candidate => candidate.Id.Value == expected.ParameterId);
+                if (parameter == null) throw new InvalidOperationException("Parameter id " + expected.ParameterId + " no longer belongs to element " + expected.ElementId + ".");
+                VerifyParameterValue(parameter, expected.StorageType, expected.Value);
+            }
         }
 
         private static object TransformElements(Document doc, string operation, Dictionary<string, object> args)
