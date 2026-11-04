@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "component": "buildx-customer-web-assets",
+  "releaseReady": false,
+  "entries": [
+    {
+      "path": "public/account.js",
+      "sha256": "027581954226dec8ba6f2645c5133ba846274ebd36be2bc8ec9033b90d929169",
+      "byteLength": 11054,
+      "role": "script",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/app.js",
+      "sha256": "f04bc5f62eb289c4d8f34430eb5107b2a19fefbc975146c29cbf3499b733a72c",
+      "byteLength": 34514,
+      "role": "script",
+      "dependencies": [
+        "public/chat-view.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/chat-view.mjs",
+      "sha256": "87893ddb59ef5a69b49c95dd7198dc8e4c2d8aed454cd8b05c1a0abfae213f58",
+      "byteLength": 5486,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/codex-account.js",
+      "sha256": "74eecb20605de7bc5ff61f59332a0fe97d0033cc544f6367abc29b15a673a5e3",
+      "byteLength": 11405,
+      "role": "script",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/index.html",
+      "sha256": "502a0c7854078a9ae3f0a937e3ecb327f75d5da79c344673e0be6e986cf2427b",
+      "byteLength": 8453,
+      "role": "entry",
+      "dependencies": [
+        "public/style.css",
+        "public/app.js",
+        "public/account.js",
+        "public/codex-account.js"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/style.css",
+      "sha256": "27cbe7f9e64e2f9314d367ce24558965f76009d8a992eacfc33cd4f70c7b95ce",
+      "byteLength": 13478,
+      "role": "style",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    }
+  ]
+}

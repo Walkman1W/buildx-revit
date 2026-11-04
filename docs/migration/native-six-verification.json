@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "scope": "Six named native queries: source contracts, actual C# services with controlled Revit peers, real temporary queue and installed MCP client, real Revit2024 API reference compilation.",
+  "hostVersion": "0.8.1",
+  "nativeModelQueriesVersion": 1,
+  "targetSuite": {
+    "command": "npm run test:native-queries",
+    "tests": 181,
+    "pass": 181,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "log": "artifacts/native-six-validation-20261105/native-queries.final.tap.log",
+    "logSha256": "a9b962a28d57d8216bfdfbdc691694ca3cbf95abfb7f49a34390e781dfb4ab1f"
+  },
+  "entrySyntax": {
+    "command": "npm run check",
+    "passed": true,
+    "log": "artifacts/native-six-validation-20261105/syntax.final.log"
+  },
+  "managedHost": {
+    "checks": 80,
+    "passed": true,
+    "evidence": "artifacts/native-six-managed-20261105-02/source-proof.json",
+    "sourceSha256": "d4e8d28cc2b93f89ef4535f959812e3af0411fc2ac5e224205c3a7c0837890d2"
+  },
+  "apiCompilation": {
+    "exitCode": 0,
+    "evidence": "artifacts/native-six-api-20261105-02/build-record.json",
+    "dllSha256": "6671b96b445b1e434b21d332029efbacd987abd9df90fb146ef8b385a47a9f09",
+    "compiledSources": 32,
+    "currentSourceHashMismatches": 0,
+    "installed": false,
+    "realRevitLoadVerified": false
+  },
+  "staticSourceClosure": {
+    "modules": 384,
+    "imports": 2069,
+    "syntaxFailures": 0,
+    "missingRelativeImports": 0,
+    "method": "Node vm.SourceTextModule parsing only; modules not evaluated"
+  },
+  "sourceHashes": {
+    "lib/native-model-queries.mjs": "2fe6e836d9b91cbc84a98934a283aa76a8c4bc6ae2e6ca932f161b86266c01a6",
+    "lib/workbench-client.mjs": "929f076fd612da71814079b0f05a057cc137392279738d5f14e4aae2f0e2d99f",
+    "lib/model-tool-dispatch.mjs": "932aa5abbbd4e0cc556e3d4301fccee4d7567238b4c500fe8fb844df1181dd40",
+    "lib/panel-tools.mjs": "81d94c4a565c488b493e75bc2ae4cdb3541755cce06f05627a146eed8567734c",
+    "lib/model-command-catalog.mjs": "0be7b9ae6a67e5ea19400f99de5fb93212dcf337edb479668a256489f4fa3e15",
+    "lib/codex-profile.mjs": "894e2cfb6e1697c52138cb6cc48d6ec9e30f1972f44e3f8926d7fd4e6353d500",
+    "workbench-mcp.mjs": "829117946984e2f2562d4d2d0ee8a561d17d2b3de654ddd19a3cf4e4adb079bc",
+    "revit-addin/NativeModelQueries.cs": "fd17f1bc62943e1f4929c6e9a4930d027d86b19efe397424e1d2757a45264a97",
+    "revit-addin/WorkbenchHost.cs": "d4e8d28cc2b93f89ef4535f959812e3af0411fc2ac5e224205c3a7c0837890d2",
+    "revit-addin/WorkbenchActions.cs": "bfc3c09cdfcee1b9d409545e349cdfdcfe22b103cfeae7ffb24ec559f7d85df5",
+    "native-model-queries.test.mjs": "4b832c4fe5e7458242dfd207305d0043f8d86999b231e20ca7549268b6ec11e4",
+    "native-model-query-producer.test.mjs": "5d8888482c091c7bbe569ce6a5d75dd4fdae94ffdbdac6e68d960d5621af2ddb",
+    "native-query-transport.test.mjs": "8bdc47d55b5e7ef9c77ccd16e25433087bf21357e212b28c6ce3a13489cf7eb4",
+    "native-six-mcp-client.test.mjs": "63638b6c99af85ad4b857c1fa906513d0ee6290e3f27dbe0828f24505205ef06"
+  },
+  "realModelExecutionVerified": false,
+  "realWebViewCodexVerified": false,
+  "customerMachineVerified": false,
+  "deferred": [
+    "General slimming and installer candidate work",
+    "Independent deployment/data paths and WebView2 source",
+    "Remaining recovered adapters/compiler dependencies and document Python",
+    "Real Revit load and execution under separate concrete authorization"
+  ]
+}

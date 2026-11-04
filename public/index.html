@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BuildX · 项目助手</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%2327664d' d='M3 14h5v15H3zM13 3h6v26h-6zM24 19h5v10h-5z'/%3E%3C/svg%3E"><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="identity"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><div><h1>BuildX <span id="workspace-name">项目助手</span></h1><p id="workspace-subtitle">REVIT WORKSPACE · CODEX</p></div></div>
+    <button id="new-chat" class="icon-button" type="button" title="开始新对话" aria-label="开始新对话"><span aria-hidden="true">＋</span><span class="wide-label">新对话</span></button>
+  </header>
+  <div class="connection" role="status"><span id="status-dot" class="dot"></span><span id="status-text">正在连接本地服务…</span><button id="reconnect" class="text-button" type="button" title="重建工具连接；AI 对话上下文会重置">重新连接</button></div>
+  <section id="codex-setup-guide" class="codex-setup-guide" aria-live="polite" hidden>
+    <p id="codex-setup-title" class="codex-setup-title"></p>
+    <p id="codex-setup-detail" class="codex-setup-detail"></p>
+    <p id="codex-setup-source" class="codex-setup-detail" hidden></p>
+  </section>
+  <details id="account-panel" class="account-panel" hidden>
+    <summary><span>BuildX 账号</span><span id="account-summary">正在检查</span></summary>
+    <div class="account-content">
+      <p id="account-state" class="account-state" role="status">正在检查账号服务…</p>
+      <p class="account-boundary">BuildX 账号管理产品身份；Codex 使用本机自己的登录。两套登录分别管理。</p>
+      <div id="account-fields" class="account-fields">
+        <label for="account-email">邮箱<input id="account-email" type="email" inputmode="email" autocomplete="username" maxlength="320" placeholder="name@example.com" disabled></label>
+        <label for="account-password">密码<input id="account-password" type="password" autocomplete="current-password" maxlength="1024" placeholder="输入 BuildX 密码" disabled></label>
+      </div>
+      <div class="account-actions">
+        <button id="account-sign-in" type="button" disabled>登录</button>
+        <button id="account-sign-up" type="button" class="secondary-button" disabled>注册</button>
+        <button id="account-renew" type="button" class="secondary-button" hidden disabled>续期登录</button>
+        <button id="account-sign-out" type="button" class="secondary-button" hidden disabled>退出 BuildX</button>
+        <button id="account-refresh" type="button" class="text-button">刷新状态</button>
+      </div>
+      <p id="account-notice" class="account-notice" role="status" hidden></p>
+      <p class="account-boundary">账号登录成功不代表已绑定 Codex 或取得付费权限。密码只用于本次提交，不在浏览器保存。</p>
+    </div>
+  </details>
+  <details id="codex-account-panel" class="account-panel" hidden>
+    <summary><span>本机 Codex 连接确认</span><span id="codex-account-summary">未确认</span></summary>
+    <div class="account-content">
+      <p id="codex-account-state" class="account-state" role="status">正在读取本地连接状态…</p>
+      <div id="codex-account-observation" hidden>
+        <p id="codex-account-email" class="account-boundary"></p>
+        <p id="codex-account-plan" class="account-boundary"></p>
+        <p id="codex-account-observed-at" class="account-boundary"></p>
+      </div>
+      <div class="account-actions">
+        <button id="codex-account-inspect" type="button" class="secondary-button" disabled>读取本机 Codex</button>
+        <button id="codex-account-confirm" type="button" class="secondary-button" disabled>确认使用此连接</button>
+        <button id="codex-account-refresh" type="button" class="text-button">刷新状态</button>
+      </div>
+      <p id="codex-account-notice" class="account-notice" role="status" hidden></p>
+      <p class="account-boundary">确认仅适用于这次本机连接，不代表已绑定稳定的 OpenAI 账号或工作区。稳定账号 ID、工作区 ID 均未取得；邮箱和套餐仅为本次观察。</p>
+    </div>
+  </details>
+  <details class="tools-panel">
+    <summary><span>工具目录</span><span id="tool-count">正在读取目录</span></summary>
+    <div class="tools-content"><p id="tool-note" class="tools-note">目录尚未就绪。</p><ul id="tool-list" class="tool-list"></ul><p id="tools-boundary" class="tools-note">目录可见不等于已实机验证。修改模型仍需核对文档和授权，不会自动保存。</p></div>
+  </details>
+  <section id="skills-panel" class="skills-panel" aria-label="技能列表" hidden>
+    <div class="skills-heading"><h2>技能</h2><span id="skills-summary">尚未读取</span></div>
+    <div class="tools-content">
+      <p class="tools-note">读取当前会话的技能，并为下一条消息选择；终端、浏览器和插件不会因此自动开放。</p>
+      <button id="skills-refresh" class="secondary-button" type="button">读取技能</button>
+      <p id="skills-message" class="tools-note" role="status">列表尚未核实。</p>
+      <ul id="skills-list" class="skills-list"></ul>
+    </div>
+  </section>
+  <div id="context-reset" class="notice" role="status" hidden>AI 上下文已重置。本地历史保留供查看，请在新请求中补充必要信息。</div>
+  <div id="error-notice" class="notice error-notice" role="alert" hidden></div>
+  <main id="messages" aria-label="对话记录" tabindex="0">
+    <section id="welcome" class="welcome">
+      <div class="welcome-rule" aria-hidden="true"></div><span id="welcome-section-label" class="section-label">从模型到下一步</span>
+      <h2 id="welcome-title">把问题交给 BuildX。</h2><p id="welcome-description">先了解当前模型，再调用工具完成任务。执行过程、参数与返回结果都会留在对话里。</p>
+      <div class="suggestions">
+        <button type="button" data-prompt="请只读查看当前 Revit 文档，简洁说明模型的基本情况。"><span class="suggestion-index">01</span><span><span id="suggestion-title-0">查看当前模型</span><small id="suggestion-note-0">文档、视图与模型概况</small></span><span aria-hidden="true">↗</span></button>
+        <button type="button" data-prompt="请只读检查 Revit 当前选中的对象，说明类别、关键参数及单位。不要修改模型。"><span class="suggestion-index">02</span><span><span id="suggestion-title-1">检查选中对象</span><small id="suggestion-note-1">类别、参数与可用信息</small></span><span aria-hidden="true">↗</span></button>
+        <button type="button" data-prompt="请列出本地已保存的 command，说明名称、版本和验证状态。只查看，不运行命令。"><span class="suggestion-index">03</span><span><span id="suggestion-title-2">用已有命令</span><small id="suggestion-note-2">先查看版本与验证记录</small></span><span aria-hidden="true">↗</span></button>
+      </div>
+      <p id="welcome-hint" class="welcome-hint">需要模型信息时，可在下方显式附加上下文。</p>
+    </section>
+    <div id="history-note" class="history-note" hidden>较早的记录已截断，当前显示保留的对话。</div>
+    <div id="transcript" role="log" aria-live="polite" aria-relevant="additions text"></div>
+  </main>
+  <div id="activity" class="activity" role="status" hidden><span class="activity-dot" aria-hidden="true"></span><span id="activity-text">Codex 正在处理…</span></div>
+  <section id="user-input" class="user-input" aria-label="Codex 提问" hidden></section>
+  <section id="dynamic-approval" class="dynamic-approval" aria-label="操作确认" aria-live="polite" hidden></section>
+  <footer>
+    <section id="context-panel" class="context-panel" aria-label="附加上下文">
+      <div class="context-actions"><span class="context-label">上下文</span><label class="context-choice"><input id="include-document" type="checkbox"><span>当前模型</span></label><label class="context-choice"><input id="include-selection" type="checkbox"><span>当前选择</span></label><button id="refresh-context" class="text-button" type="button" disabled>刷新</button></div>
+      <details id="context-details"><summary id="context-summary">未附加模型信息</summary><div id="context-content" class="context-content">勾选后可读取上下文，也可随下一条消息附加。</div></details>
+    </section>
+    <form id="composer">
+      <label for="prompt" class="sr-only">向 BuildX 提问</label><textarea id="prompt" rows="3" maxlength="16000" placeholder="描述任务，或问问当前模型…"></textarea>
+      <div class="composer-bottom"><span>Ctrl + Enter 发送</span><button id="stop" class="secondary-button" type="button" hidden>停止</button><button id="steer" class="secondary-button" type="button" hidden disabled>补充当前任务</button><button id="send" type="submit" disabled>发送 <span aria-hidden="true">↑</span></button></div>
+      <p id="steer-feedback" class="steer-feedback" role="status" hidden></p>
+    </form>
+    <p id="workspace-footnote" class="footnote">使用你的 Codex 登录 · 不自动保存模型。停止对话不保证取消已开始的 Revit 操作。</p>
+  </footer>
+  <script src="/app.js" type="module"></script>
+  <script src="/account.js" type="module"></script>
+  <script src="/codex-account.js" type="module"></script>
+</body>
+</html>

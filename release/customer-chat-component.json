@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "component": "buildx-customer-chat-component",
+  "releaseReady": false,
+  "entries": [
+    {
+      "path": "customer-chat.README.zh-CN.md",
+      "sha256": "a73e06e9572ba8ccb126cb038c8ace704b5f32a820f3332bcaa042c40adda77e",
+      "byteLength": 8732,
+      "role": "document",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "customer-server.mjs",
+      "sha256": "5733261569a9aea990eac62bf1de023d3af3d5a43857f74ae3317adf860527e7",
+      "byteLength": 4990,
+      "role": "entry",
+      "dependencies": [
+        "lib/customer-chat.mjs",
+        "lib/panel-audit.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/buildx-auth.mjs",
+      "sha256": "7d1831c6fd8f6df75ade40da16c0b74e67e2b49a9a938192ab11d157f8bc2c5c",
+      "byteLength": 16219,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/buildx-runtime-config.mjs",
+      "sha256": "44d87e51bf0a10202a45c46b1500cc005e386e7d0a33637781da39d632767cfc",
+      "byteLength": 1022,
+      "role": "module",
+      "dependencies": [
+        "lib/buildx-auth.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/cad-document-path.mjs",
+      "sha256": "8efa2f77e8a1716aebd1445122abb8ceb82d44c92fb015547ab582e2bb603a92",
+      "byteLength": 804,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/chat-context.mjs",
+      "sha256": "b85f716d7b62fb898524c28b7ae61a1ca1812e69d65ac6e97d9a78df283c16d9",
+      "byteLength": 3376,
+      "role": "module",
+      "dependencies": [
+        "lib/workbench-contracts.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/chat-session.mjs",
+      "sha256": "18c45f0e5790de8287b446dc5cf0ef4ca90ad9fa68df614bd08ed8bf9ee9d8e8",
+      "byteLength": 11650,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/codex-client-core.mjs",
+      "sha256": "b5b453eec506101f4820cee64a37375c6097067605fb5fd7908790f524d9460c",
+      "byteLength": 30614,
+      "role": "module",
+      "dependencies": [
+        "lib/local-runtimes.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/codex-confirmation.mjs",
+      "sha256": "807119c31aa92a13bf4b5dba9214a874a70061724e217bcc9722cc940ca4d34b",
+      "byteLength": 9579,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/customer-chat-profile.mjs",
+      "sha256": "d47ee30bea3bf36270c801aefa0331ee2d9724a802359565eb516644f1dedeca",
+      "byteLength": 3120,
+      "role": "module",
+      "dependencies": [
+        "prompts/buildx-customer-chat.zh-CN.md"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/customer-chat.mjs",
+      "sha256": "42510f22202486478004c4ff3d71e83a841159ef727e30bc028ebbd3d4e4d08d",
+      "byteLength": 6198,
+      "role": "module",
+      "dependencies": [
+        "lib/codex-client-core.mjs",
+        "lib/panel-server-core.mjs",
+        "lib/customer-chat-profile.mjs",
+        "lib/buildx-runtime-config.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/local-runtimes.mjs",
+      "sha256": "4e86e7111ae19ffe75e6d6b43dba7038f8bc091b2970e919ab9a9b443f4c181e",
+      "byteLength": 2283,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/panel-accounts.mjs",
+      "sha256": "a1552a0527280facf34bf45831258e32ac8d9f7f0ced3df486d7e952b6d055eb",
+      "byteLength": 11381,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/panel-audit.mjs",
+      "sha256": "a293e9438f21a36d12543fbe61669ee73bbbfd1bbcaef3e9dba9497f2d3cd825",
+      "byteLength": 16063,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/panel-server-core.mjs",
+      "sha256": "950df2b130a0c15c24f6dec1a2e36af6bd8269d0df4a83b949ca05569e8cf439",
+      "byteLength": 31626,
+      "role": "module",
+      "dependencies": [
+        "lib/chat-session.mjs",
+        "lib/chat-context.mjs",
+        "lib/panel-accounts.mjs",
+        "lib/codex-confirmation.mjs",
+        "public/index.html",
+        "public/style.css",
+        "public/app.js",
+        "public/chat-view.mjs",
+        "public/account.js",
+        "public/codex-account.js"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "lib/workbench-contracts.mjs",
+      "sha256": "bb831cb6360aea506ba9df460b7ca4a313b4ee296fe65ffa0673f58d33b470cc",
+      "byteLength": 2070,
+      "role": "module",
+      "dependencies": [
+        "lib/cad-document-path.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "prompts/buildx-customer-chat.zh-CN.md",
+      "sha256": "ba3524f437a1e4e614b97c3352ab429f972d8d6bc0a4c67c81a4e5a20e4ff7c0",
+      "byteLength": 1323,
+      "role": "prompt",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/account.js",
+      "sha256": "027581954226dec8ba6f2645c5133ba846274ebd36be2bc8ec9033b90d929169",
+      "byteLength": 11054,
+      "role": "script",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/app.js",
+      "sha256": "f04bc5f62eb289c4d8f34430eb5107b2a19fefbc975146c29cbf3499b733a72c",
+      "byteLength": 34514,
+      "role": "script",
+      "dependencies": [
+        "public/chat-view.mjs"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/chat-view.mjs",
+      "sha256": "87893ddb59ef5a69b49c95dd7198dc8e4c2d8aed454cd8b05c1a0abfae213f58",
+      "byteLength": 5486,
+      "role": "module",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/codex-account.js",
+      "sha256": "74eecb20605de7bc5ff61f59332a0fe97d0033cc544f6367abc29b15a673a5e3",
+      "byteLength": 11405,
+      "role": "script",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/index.html",
+      "sha256": "502a0c7854078a9ae3f0a937e3ecb327f75d5da79c344673e0be6e986cf2427b",
+      "byteLength": 8453,
+      "role": "document",
+      "dependencies": [
+        "public/style.css",
+        "public/app.js",
+        "public/account.js",
+        "public/codex-account.js"
+      ],
+      "provenance": "BuildX application source"
+    },
+    {
+      "path": "public/style.css",
+      "sha256": "27cbe7f9e64e2f9314d367ce24558965f76009d8a992eacfc33cd4f70c7b95ce",
+      "byteLength": 13478,
+      "role": "style",
+      "dependencies": [],
+      "provenance": "BuildX application source"
+    }
+  ]
+}

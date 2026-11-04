@@ -9,6 +9,7 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const allowed=new Set(['.mjs','.js','.cs','.ps1','.py','.json','.md','.css','.html','.png','.svg','.cmd','.sql','.txt']);
 const directoryNames=['lib','public','prompts','revit-addin','family-core','tools','test','test-support','release','docs','sql','.agents'];
 const excluded=new Set(['node_modules','artifacts','runtime','runtime-history','workbench','backups','obj','bin','.git','__pycache__','.cache']);
+const excludedFiles=new Set(['lib/aec-read-contracts.json','revit-addin/build-record.json','revit-addin/built-dll-inspection.json']);
 const paths=[];
 async function collect(relative){
   const full=path.join(source,relative),stat=await fs.lstat(full);
@@ -18,7 +19,7 @@ async function collect(relative){
       if(excluded.has(entry.name)||entry.name.startsWith('bin-'))continue;
       await collect(path.join(relative,entry.name));
     }
-  }else if(stat.isFile()&&allowed.has(path.extname(relative))&&relative.replaceAll('\\','/')!=='lib/aec-read-contracts.json')paths.push(relative);
+  }else if(stat.isFile()&&allowed.has(path.extname(relative))&&!excludedFiles.has(relative.replaceAll('\\','/')))paths.push(relative);
 }
 for(const directory of directoryNames)await collect(directory);
 for(const entry of await fs.readdir(source,{withFileTypes:true})){
@@ -43,7 +44,7 @@ for(const record of records){
   if(hash(await fs.readFile(path.join(target,record.path)))!==record.sha256)throw new Error(`Destination differs: ${record.path}`);
 }
 const manifest={schemaVersion:1,createdAt:new Date().toISOString(),sourceRoot:source,sourceStableDuringCopy:changed.length===0,changed,releaseReady:false,
-  omitted:['node_modules','runtime','runtime-history','workbench','artifacts','ui-preview','plugin binaries and build records','lib/aec-read-contracts.json'],files:records};
+  omitted:['node_modules','runtime','runtime-history','workbench','artifacts','ui-preview','plugin binaries and build records',...excludedFiles],files:records};
 await fs.mkdir(path.join(target,'docs','migration'),{recursive:true});
 await fs.writeFile(path.join(target,'docs','migration','source-baseline.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
 console.log(JSON.stringify({files:records.length,bytes:records.reduce((sum,item)=>sum+item.bytes,0),sourceStableDuringCopy:manifest.sourceStableDuringCopy,changed}));

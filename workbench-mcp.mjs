@@ -1,0 +1,55 @@
+import readline from 'node:readline';
+import {invokeWorkbench,READONLY_WORKBENCH_TOOL_NAMES,workbenchFailureEvidence} from './lib/workbench-client.mjs';
+import {PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
+import {isCommandTool,invokeCommand} from './lib/command-store.mjs';
+import {sanitizePanelAudit} from './lib/panel-audit.mjs';
+import {isNativeModelQuery} from './lib/native-model-queries.mjs';
+
+const flags=process.argv.slice(2);
+if(flags.length!==0&&(flags.length!==1||!['--read-only','--workspace'].includes(flags[0]))){
+  process.stderr.write('Usage: node workbench-mcp.mjs [--read-only|--workspace]\n');process.exit(2);
+}
+const readOnly=flags[0]==='--read-only',workspace=flags[0]==='--workspace',readOnlyNames=new Set(READONLY_WORKBENCH_TOOL_NAMES);
+// Legacy/read-only entries retain their original dependency boundary.
+const workspaceDispatch=workspace?(await import('./lib/model-tool-dispatch.mjs')).invokeModelTool:null;
+const workspaceTools=workspace?(await import('./lib/panel-tools.mjs')).MODEL_AI_READ_TOOLS:null;
+const tools=readOnly?READONLY_WORKBENCH_TOOL_NAMES.map(name=>{
+  const matches=PANEL_WORKBENCH_TOOLS.filter(tool=>tool.name===name);
+  if(matches.length!==1||matches[0].annotations?.readOnlyHint!==true)throw new Error('Read-only workbench catalog does not match its named contracts');
+  return matches[0];
+}):workspace?workspaceTools:PANEL_WORKBENCH_TOOLS;
+const exposedNames=new Set(tools.map(tool=>tool.name));
+const send=message=>process.stdout.write(JSON.stringify(message)+'\n');
+const input=readline.createInterface({input:process.stdin,crlfDelay:Infinity});
+input.on('line',async line=>{
+  let request;
+  try{
+    if(Buffer.byteLength(line)>140000)throw new Error('Request too large');
+    request=JSON.parse(line);
+    if(request.id===undefined)return;
+    let result;
+    if(request.method==='initialize')result={protocolVersion:request.params?.protocolVersion||'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'revit-workbench',version:'0.6.0'}};
+    else if(request.method==='ping')result={};
+    else if(request.method==='tools/list')result={tools};
+    else if(request.method==='tools/call'){
+      const events=[];
+      try{
+        const name=request.params.name,args=request.params.arguments||{};
+        if(!exposedNames.has(name)||readOnly&&!readOnlyNames.has(name))throw new Error('此会话不提供该工具。');
+        const onTiming=value=>{const data=sanitizePanelAudit('phase-timing.jsonl',value);if(data&&events.length<8)events.push(data);};
+        const value=workspace?await workspaceDispatch(name,args,{onTiming}):isCommandTool(name)?await invokeCommand(name,args,{execute:invokeWorkbench}):await invokeWorkbench(name,args,readOnly?{onTiming}:{});
+        result={content:[{type:'text',text:JSON.stringify(value)}],...(isNativeModelQuery(name)?{structuredContent:value}:{}),isError:false};
+      }
+      catch(error){
+        // MCP's isError describes a failed tool call, not necessarily a failed
+        // Revit operation. Only the transport's typed algebra can establish a
+        // definite outcome; all other exceptions remain unconfirmed.
+        const outcome=workbenchFailureEvidence(error).outcome;
+        result={content:[{type:'text',text:error.producerResult?JSON.stringify({error:{message:error.message,outcome:error.modelOutcome},result:error.producerResult}):error.message}],isError:true,
+          structuredContent:{buildxToolOutcome:{schemaVersion:1,outcome:['not_started','expired','failed'].includes(outcome)?outcome:'unconfirmed'}}};
+      }
+      if(events.length)result._meta={'buildx/phaseTiming':{schemaVersion:1,events}};
+    }else{send({jsonrpc:'2.0',id:request.id,error:{code:-32601,message:'Unknown method'}});return;}
+    send({jsonrpc:'2.0',id:request.id,result});
+  }catch(error){send({jsonrpc:'2.0',id:request?.id??null,error:{code:-32600,message:error.message}});}
+});

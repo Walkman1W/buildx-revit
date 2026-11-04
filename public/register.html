@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="same-origin">
+  <title>邀请注册 · BuildX</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%2328664d' d='M3 14h5v15H3zM13 3h6v26h-6zM24 19h5v10h-5z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/register.css">
+</head>
+<body>
+  <main class="registration" aria-labelledby="registration-title">
+    <a class="brand" href="/" aria-label="BuildX 首页">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>BuildX</span>
+    </a>
+    <div class="registration-heading">
+      <p class="eyebrow">一起构建下一步</p>
+      <h1 id="registration-title">邀请注册</h1>
+      <p class="introduction">内测采用邀请码注册。</p>
+    </div>
+    <p id="registration-status" class="registration-status" role="status">注册服务正在接入，暂未开放注册。</p>
+    <section class="registration-fields" aria-label="注册信息预览" aria-describedby="registration-status">
+      <label for="registration-email">邮箱
+        <input id="registration-email" type="email" autocomplete="off" placeholder="name@example.com" disabled>
+      </label>
+      <label for="registration-password">密码
+        <input id="registration-password" type="password" autocomplete="new-password" placeholder="设置登录密码" disabled>
+      </label>
+      <label for="registration-invitation">邀请码
+        <input id="registration-invitation" type="text" autocomplete="off" placeholder="输入内测邀请码" disabled>
+      </label>
+      <button type="button" disabled aria-describedby="registration-status">注册暂未开放</button>
+    </section>
+    <a class="return-link" href="/"><span aria-hidden="true">←</span> 返回 BuildX</a>
+  </main>
+  <p class="page-note">BuildX · 项目助手</p>
+</body>
+</html>

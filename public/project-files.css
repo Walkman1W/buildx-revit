@@ -1,0 +1,51 @@
+.project-files{color:#26362e;max-width:760px}
+.project-files-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:3px 0 18px}
+.project-files-heading h2{margin:0;font-size:19px;line-height:1.4;font-weight:600}
+.project-files-heading p{margin:5px 0 0;color:#778478;font-size:11px}
+.project-files-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+.project-files .project-files-add,.project-files .project-files-save,.project-files .project-files-cancel,.project-files .project-files-manual{border:1px solid #d3dfd1;border-radius:7px;padding:7px 10px;background:#fff;color:#28644d;font-size:11px;white-space:nowrap}
+.project-files .project-files-add:hover,.project-files .project-files-cancel:hover{background:#eff5ed}
+.project-files .project-files-save{background:#28644d;color:#fff;border-color:#28644d}
+.project-files-form{padding:13px 14px;margin-bottom:15px;background:#f0f5ee;border:1px solid #d9e5d7;border-radius:9px}
+.project-files-form[hidden]{display:none}
+.project-files-form label{display:block;font-size:11px;font-weight:600}
+.project-files .project-files-kind{display:block;margin:7px 0 10px;padding:6px 8px;border:1px solid #d5dfcd;border-radius:5px;background:white;color:#26362e}
+.project-files .project-files-path{margin:7px 0 4px;background:#fff;font-size:12px}
+.project-files-hint,.project-files-status{color:#778478;font-size:10px;line-height:1.6}
+.project-files-form .project-files-hint{margin:4px 0 8px}.project-files-form-actions{display:flex;gap:5px}
+.project-files-status{margin:0 0 12px;min-height:1.6em}
+.project-files-roots{display:grid;gap:10px}
+.project-files-root{border:1px solid #e0e9de;border-radius:9px;background:#fff;overflow:visible}
+.project-files-root-bar{display:flex;align-items:flex-start;gap:4px;padding:6px 8px 0}
+.project-files-root-bar>.project-files-directory{flex:1;min-width:0}
+.project-files-root-bar>.project-files-file-row{flex:1;min-width:0}
+.project-files .project-files-entry{display:flex;align-items:center;gap:8px;min-height:32px;margin:0;padding:5px 6px;border:0;border-radius:5px;background:none;color:#273d31;font-size:12px;text-align:left;cursor:pointer;list-style:none}
+.project-files summary::-webkit-details-marker{display:none}
+.project-files .project-files-entry:hover{background:#f1f6ef}
+.project-files-icon{flex:none;color:#498365;font-size:15px;line-height:1}
+.project-files-directory[open]>.project-files-entry>.project-files-icon{transform:rotate(90deg)}
+.project-files-entry-name{min-width:0;overflow-wrap:anywhere}
+.project-files-badge{margin-left:auto;padding:2px 6px;border-radius:4px;background:#edf5e9;color:#518065;font-size:9px;white-space:nowrap}
+.project-files .project-files-unavailable{flex:1;min-width:0;color:#929a92;cursor:default}
+.project-files .project-files-unavailable:hover{background:none}
+.project-files-unavailable-badge{margin-left:auto;padding:2px 6px;border-radius:4px;background:#f7eee9;color:#9d6755;font-size:9px;white-space:nowrap}
+.project-files-children{padding:0 0 5px 16px;border-left:1px solid #e6ede3;margin-left:12px}
+.project-files-children .project-files-hint,.project-files-children .project-files-error{margin:4px 8px}
+.project-files .project-files-more{margin:3px 0;padding:5px 8px;border:0;border-radius:5px;background:#edf5e9;color:#28644d;font-size:10px}
+.project-files .project-files-remove{flex:none;margin:2px 0;padding:5px 7px;border:0;border-radius:5px;background:none;color:#809183;font-size:10px}
+.project-files .project-files-enable{flex:none;margin:2px 0;padding:5px 7px;border:0;border-radius:5px;background:#edf5e9;color:#28644d;font-size:10px}
+.project-files .project-files-remove:hover{background:#edf3ec;color:#28644d}
+.project-files-root-path{margin:0;padding:0 14px 9px 30px;color:#8b998d;font:10px/1.6 monospace;overflow-wrap:anywhere}
+.project-files-empty{padding:28px 16px;border:1px dashed #d8e2d5;border-radius:9px;color:#879287;text-align:center;font-size:11px}
+.project-files-file-row{display:flex;align-items:center;gap:5px;min-width:0;position:relative}
+.project-files-file-row>.project-files-file{flex:1;min-width:0}
+.project-files-file[aria-pressed=true]{background:#edf5e9}
+.project-files-file-menu{position:relative;flex:none}
+.project-files-file-menu[open]{z-index:6}
+.project-files-file-menu-toggle,.project-files .project-files-add-context{border:1px solid #d3dfd1;border-radius:5px;background:#fff;color:#28644d;padding:5px 7px;font:10px/1.5 "Microsoft YaHei UI",sans-serif;white-space:nowrap;cursor:pointer;list-style:none}
+.project-files-file-menu-toggle:hover,.project-files .project-files-add-context:hover{background:#eff5ed}
+.project-files-file-menu-options{position:absolute;right:0;top:calc(100% + 3px);z-index:5;min-width:145px;padding:4px;border:1px solid #d3dfd1;border-radius:6px;background:#fff;box-shadow:0 5px 16px #23351b1a}
+.project-files-file-menu-options button{display:block;width:100%;border:0;border-radius:4px;background:none;padding:7px 8px;color:#28644d;font:11px/1.5 "Microsoft YaHei UI",sans-serif;text-align:left;white-space:nowrap}
+.project-files-file-menu-options button:hover{background:#eff5ed}
+.project-files-error{padding:9px 12px;color:#a0524c;font-size:11px;overflow-wrap:anywhere}
+@media(max-width:520px){.project-files-header{display:block}.project-files-actions{justify-content:flex-start;margin-top:10px}.project-files-file-row{flex-wrap:wrap}.project-files-file-row>.project-files-file{flex-basis:100%}.project-files-file-menu{margin-left:auto}}

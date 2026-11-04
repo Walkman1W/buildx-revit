@@ -3058,5 +3058,59 @@
       "bytes": 3759,
       "sha256": "f519d7263cb06418ba57d1796ac7241c7b69a15491f7e3c7ecb80e84ef988e45"
     }
+  ],
+  "postExtractionCorrections": [
+    {
+      "date": "2026-11-05",
+      "historicalEvidencePreserved": {
+        "files": 507,
+        "bytes": 5602302,
+        "sourceStableDuringCopy": true
+      },
+      "omissionClarification": "The original omitted label \"plugin binaries and build records\" was too broad: both generated JSON records listed below were actually copied in the 507-file extraction. Their original records and hashes above remain the historical evidence; both are ignored from Git, and the importer now explicitly excludes them in future extractions. No copied record or source data was deleted.",
+      "actuallyCopiedGeneratedRecords": [
+        {
+          "source": "revit-addin/build-record.json",
+          "path": "revit-addin/build-record.json",
+          "bytes": 6452,
+          "sha256": "39aaf039d7b6214b67dd996f3fbee5c183601ab88ef52b79f8a4031bacf86544"
+        },
+        {
+          "source": "revit-addin/built-dll-inspection.json",
+          "path": "revit-addin/built-dll-inspection.json",
+          "bytes": 19529,
+          "sha256": "bbbc40f5180e6d4ddb6efdd27f7be6aa6790fdc64cc56382fd1daf0ecfbff025"
+        }
+      ],
+      "futureExcludedFiles": [
+        "revit-addin/build-record.json",
+        "revit-addin/built-dll-inspection.json"
+      ],
+      "migratedPureTestOwners": [
+        {
+          "source": "workbench/validation/20261023-buildx-live/public-tool-result.mjs",
+          "sourceSha256": "6c446d5ac8e1a9f063144a6a5160d279b92a7f73fbabfae5179b619faa2cc368",
+          "path": "test-support/public-tool-result.mjs",
+          "sha256": "fa66d5db711ac77ddc422fbb9f5eb6ef111830ec2439172a3b89682e093425ae",
+          "scope": "pure parser; adjusted relative import and provenance comment"
+        },
+        {
+          "source": "workbench/validation/20261023-buildx-live/verify-live-dialogue.mjs",
+          "sourceSha256": "3f6c03528565222d63f9566d9607b4a84aa6db5a84492d0554feec98560f9092",
+          "path": "test-support/live-dialogue-receipt.mjs",
+          "sha256": "002245dc9e27241c90ba4dbe22d0f6d7483bd51b033b51270cd8bd279dec41ad",
+          "scope": "parseCardResult pure projection only; real-service verifier not copied"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-05",
+      "reason": "The existing customer-chat component manifest explicitly requires this source README; copied separately without changing the historical 507-file extraction.",
+      "source": "customer-chat.README.zh-CN.md",
+      "path": "customer-chat.README.zh-CN.md",
+      "bytes": 8732,
+      "sourceSha256": "a73e06e9572ba8ccb126cb038c8ace704b5f32a820f3332bcaa042c40adda77e",
+      "sha256": "a73e06e9572ba8ccb126cb038c8ace704b5f32a820f3332bcaa042c40adda77e"
+    }
   ]
 }

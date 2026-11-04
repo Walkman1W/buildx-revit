@@ -1,0 +1,4988 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-11-04T16:50:13.053033+00:00",
+  "scope": "Static inventory of the local AEC Revit provider only; does not assert AEC-wide tool count or live Revit support",
+  "method": {
+    "providerParsing": "Python stdlib ast.parse and ast.literal_eval; provider modules never imported or executed",
+    "buildxMapping": "Static named declaration comparison and source-derived manual semantic assessment",
+    "sourceSha256": "f18f75bfc426436a15b61ed52e8da157087d8aaaade4aefd8960dd0ae2023226",
+    "providerSource": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+    "providerBaseSource": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\base.py",
+    "providerBaseSha256": "5551a8cecba8ea098980eb57b8efc3f9f13a79f107dab7160435beced0807b5d",
+    "providerMetadataSourceLine": 49,
+    "bridgeMappingDefinitionLine": 237,
+    "noModelCalls": true,
+    "noServiceRestart": true,
+    "legacySourcesReadOnly": true
+  },
+  "summary": {
+    "providerToolCount": 103,
+    "uniqueProviderToolCount": 103,
+    "bridgeMappingCount": 103,
+    "capabilitiesWithoutLiteralMapping": [],
+    "currentlyExposedByBuildxThroughAec": [
+      "revit_get_document_info",
+      "revit_get_element_geometry",
+      "revit_get_element_parameters",
+      "revit_get_elements_by_type",
+      "revit_health",
+      "revit_list_views"
+    ],
+    "currentlyExposedAecCount": 6,
+    "businessGroupCounts": {
+      "advanced-high-authority": 9,
+      "cad-export": 5,
+      "family": 7,
+      "modeling": 24,
+      "parameters": 11,
+      "query": 22,
+      "views-drawings": 25
+    },
+    "migrationPriorityCounts": {
+      "P0": 6,
+      "P1": 18,
+      "P2": 70,
+      "P3": 9
+    }
+  },
+  "businessGroupDefinitions": {
+    "query": "宿主、文档、元素、几何、项目状态与分析读取；文件快照额外标注副作用。",
+    "parameters": "实例/类型/共享/项目参数读取、建立及批量写入。",
+    "modeling": "一般几何、结构、MEP、分组和材料操作。",
+    "views-drawings": "视图、图纸、明细表、选择、文字、尺寸与标签；读取和写入分别评估。",
+    "family": "族与类型清单、放置、编辑及批量换型。",
+    "cad-export": "DWG/IFC/NWC/图像导出与渲染，均需文件或产物权限。",
+    "advanced-high-authority": "文档保存关闭新建、中心模型/所有权、任意API反射及脚本执行，单独明确授权后再评估迁移。"
+  },
+  "priorityDefinitions": {
+    "P0": "六项当前AEC读取原生化，保持具名调用并显式适配输入输出。",
+    "P1": "高频且已有原生/固定模板基础，复用owner并核对覆盖、身份、单位、权限和回执。",
+    "P2": "后续按实际需求逐批实现，不因provider目录中存在就自动纳入首版。",
+    "P3": "高级/宽权限能力，默认不进入首版；需明确产品范围和权限设计。"
+  },
+  "limitations": [
+    "仅解析本地RevitProvider声明；不代表AEC其他provider、协议包装或实际插件全部功能。",
+    "ProviderTool有输入schema但未声明outputSchema；本清单不推断运行输出完整性。",
+    "Python provider主要映射并转发桥接命令，不能据此认定Revit模型操作全部由Python脚本实现。",
+    "工具名匹配不表示行为兼容；BuildX输入、单位、ElementId、文档/宿主身份、分页和事务语义必须逐项适配。",
+    "provider的is_mutating由名称token富化，不足以证明只读或可自动执行；文件、选择、中心模型等副作用在迁移时另行评估。",
+    "BuildX source references只证明可复用源码存在，未在本次执行Node工具、编译API或运行Revit。",
+    "旧Argus相关具名入口需要自研替换；研究依赖不计作正式原生命令。",
+    "按业务组和优先级分类为迁移建议，真实验收仍需逐批记录。"
+  ],
+  "tools": [
+    {
+      "name": "revit_extract_snapshot",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Extract a semantic BIM snapshot of the active document. Streams to a JSON file in the workspace directory.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 766
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "dirty_only": {
+            "type": "boolean",
+            "description": "Extract only added or modified elements tracked in this session",
+            "default": false
+          }
+        },
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "local-file-write",
+      "buildx": {
+        "status": "related-only",
+        "buildxToolNames": [
+          "revit_capture_model_snapshot"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 21
+          }
+        ],
+        "compatibilityNote": "已有包围盒快照最多300项，不是AEC语义模型快照或流式JSON导出。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.extract_snapshot",
+        "sourceLine": 757,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_snapshot_delta",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get lists of unique IDs for elements added, modified, or deleted during the active session.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 781
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_snapshot_delta",
+        "sourceLine": 761,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_health",
+      "businessGroup": "query",
+      "migrationPriority": "P0",
+      "description": "Check if Revit is running and get status information",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 786
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "aec-read-active-native-pending",
+        "buildxToolNames": [
+          "revit_health"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/aec-model-adapter.mjs",
+            "line": 19
+          }
+        ],
+        "compatibilityNote": "当前BuildX通过AEC Python provider提供该项；首批移入自有C#具名契约、统一原子队列并拒绝旧宿主。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.health",
+        "sourceLine": 239,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_wall",
+      "businessGroup": "modeling",
+      "migrationPriority": "P1",
+      "description": "Create a wall in Revit between two points",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 791
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "start_x": {
+            "type": "number",
+            "description": "Start point X coordinate in feet"
+          },
+          "start_y": {
+            "type": "number",
+            "description": "Start point Y coordinate in feet"
+          },
+          "start_z": {
+            "type": "number",
+            "description": "Start point Z coordinate in feet",
+            "default": 0
+          },
+          "end_x": {
+            "type": "number",
+            "description": "End point X coordinate in feet"
+          },
+          "end_y": {
+            "type": "number",
+            "description": "End point Y coordinate in feet"
+          },
+          "end_z": {
+            "type": "number",
+            "description": "End point Z coordinate in feet",
+            "default": 0
+          },
+          "height": {
+            "type": "number",
+            "description": "Wall height in feet",
+            "default": 10
+          },
+          "level": {
+            "type": "string",
+            "description": "Level name (e.g., 'L1', 'L2')",
+            "default": "L1"
+          }
+        },
+        "required": [
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "native-named-contract",
+        "buildxToolNames": [
+          "revit_create_wall"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 30
+          }
+        ],
+        "compatibilityNote": "已有具名原生建墙，真实类型/楼层ID与毫米坐标，输入约束与AEC不同。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_wall",
+        "sourceLine": 247,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_floor",
+      "businessGroup": "modeling",
+      "migrationPriority": "P1",
+      "description": "Create a floor in Revit with a rectangular or custom boundary",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 809
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "points": {
+            "type": "array",
+            "description": "Array of boundary points [{x, y, z}]. Minimum 3 points for a closed boundary.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number",
+                  "default": 0
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ]
+            }
+          },
+          "level": {
+            "type": "string",
+            "description": "Level name",
+            "default": "L1"
+          }
+        },
+        "required": [
+          "points"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "fixed-csharp-template-partial",
+        "buildxToolNames": [
+          "revit_create_floor"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/modelling-tools.mjs",
+            "line": 10
+          }
+        ],
+        "compatibilityNote": "已有固定C#模板，仅水平矩形非结构楼板，不覆盖AEC自定义边界。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_floor",
+        "sourceLine": 260,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_roof",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create a roof in Revit",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 833
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "points": {
+            "type": "array",
+            "description": "Array of boundary points for the roof",
+            "items": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "level": {
+            "type": "string",
+            "description": "Level name"
+          },
+          "slope": {
+            "type": "number",
+            "description": "Roof slope",
+            "default": 0.5
+          }
+        },
+        "required": [
+          "points",
+          "level"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_roof",
+        "sourceLine": 269,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_levels",
+      "businessGroup": "query",
+      "migrationPriority": "P1",
+      "description": "List all levels in the Revit project",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 853
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "native-named-contract",
+        "buildxToolNames": [
+          "revit_list_levels"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 24
+          }
+        ],
+        "compatibilityNote": "已有具名原生读取；新契约使用expected_document及毫米单位，须适配输入输出。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_levels",
+        "sourceLine": 240,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_views",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P0",
+      "description": "List all views in the Revit project",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 858
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "aec-read-active-native-pending",
+        "buildxToolNames": [
+          "revit_list_views"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/aec-model-adapter.mjs",
+            "line": 19
+          }
+        ],
+        "compatibilityNote": "当前BuildX通过AEC Python provider提供该项；首批移入自有C#具名契约、统一原子队列并拒绝旧宿主。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_views",
+        "sourceLine": 241,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_elements",
+      "businessGroup": "query",
+      "migrationPriority": "P1",
+      "description": "List elements by category (Walls, Floors, Roofs, Doors, Windows, etc.)",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 863
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Category name (e.g., 'Walls', 'Floors', 'Doors')"
+          }
+        },
+        "required": [
+          "category"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_search_elements"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 23
+          }
+        ],
+        "compatibilityNote": "已有类别/名称分页查询；类别使用BuiltInCategory身份，不能直接沿用AEC显示名。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_elements_by_category",
+        "sourceLine": 243,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_document_info",
+      "businessGroup": "query",
+      "migrationPriority": "P0",
+      "description": "Get information about the active Revit document",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 874
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "aec-read-active-native-pending",
+        "buildxToolNames": [
+          "revit_get_document_info"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/aec-model-adapter.mjs",
+            "line": 19
+          }
+        ],
+        "compatibilityNote": "当前BuildX通过AEC Python provider提供该项；首批移入自有C#具名契约、统一原子队列并拒绝旧宿主。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_document_info",
+        "sourceLine": 242,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_level",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create a new level in Revit",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 879
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Level name"
+          },
+          "elevation": {
+            "type": "number",
+            "description": "Elevation in feet"
+          }
+        },
+        "required": [
+          "name",
+          "elevation"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_level",
+        "sourceLine": 279,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_save_document",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Save the current Revit document",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 891
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path to save to (optional for existing files)"
+          }
+        }
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-file-save",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.save_document",
+        "sourceLine": 283,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_grid",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create a grid line in Revit",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 901
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "start_x": {
+            "type": "number"
+          },
+          "start_y": {
+            "type": "number"
+          },
+          "start_z": {
+            "type": "number",
+            "default": 0
+          },
+          "end_x": {
+            "type": "number"
+          },
+          "end_y": {
+            "type": "number"
+          },
+          "end_z": {
+            "type": "number",
+            "default": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_grid",
+        "sourceLine": 284,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_room",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create a room at a specific point on a level",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 918
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string",
+            "default": "Room"
+          },
+          "number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_room",
+        "sourceLine": 292,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_delete_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Delete an element by ID",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 933
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.delete_element",
+        "sourceLine": 301,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_place_family_instance",
+      "businessGroup": "family",
+      "migrationPriority": "P1",
+      "description": "Place a family instance (e.g., furniture, equipment)",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 942
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "family_name": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          }
+        },
+        "required": [
+          "family_name",
+          "type_name",
+          "level",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "fixed-csharp-template-partial",
+        "buildxToolNames": [
+          "revit_place_family_instance"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/modelling-tools.mjs",
+            "line": 8
+          }
+        ],
+        "compatibilityNote": "已有固定C#模板，仅非结构、非宿主OneLevelBased族实例。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.place_family_instance",
+        "sourceLine": 302,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_place_door",
+      "businessGroup": "family",
+      "migrationPriority": "P1",
+      "description": "Place a door in a wall",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 958
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "wall_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number",
+                "default": 0
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ]
+          },
+          "family_name": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wall_id"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "x",
+              "y"
+            ]
+          },
+          {
+            "required": [
+              "location"
+            ]
+          }
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "fixed-csharp-template-partial",
+        "buildxToolNames": [
+          "revit_place_door"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/modelling-tools.mjs",
+            "line": 9
+          }
+        ],
+        "compatibilityNote": "已有固定C#模板，仅已载门族和竖直直线Basic墙，边界与AEC不同。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.place_door",
+        "sourceLine": 311,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_place_window",
+      "businessGroup": "family",
+      "migrationPriority": "P2",
+      "description": "Place a window in a wall",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 984
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "wall_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number",
+                "default": 0
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ]
+          },
+          "family_name": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "wall_id"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "x",
+              "y"
+            ]
+          },
+          {
+            "required": [
+              "location"
+            ]
+          }
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.place_window",
+        "sourceLine": 320,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_families",
+      "businessGroup": "family",
+      "migrationPriority": "P1",
+      "description": "List all loaded families and their types",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1010
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_list_family_types"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 25
+          }
+        ],
+        "compatibilityNote": "已有类型清单与分页；需确认已载族/类型覆盖和无实例族语义。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_families",
+        "sourceLine": 329,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_floor_plan_view",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create a floor plan view for a level",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1015
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "level_name": {
+            "type": "string"
+          },
+          "view_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level_name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_floor_plan_view",
+        "sourceLine": 330,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_3d_view",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create a new 3D view",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1024
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "view_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "view_name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_3d_view",
+        "sourceLine": 334,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_section_view",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create a section view",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1029
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "view_name": {
+            "type": "string"
+          },
+          "start_x": {
+            "type": "number"
+          },
+          "start_y": {
+            "type": "number"
+          },
+          "start_z": {
+            "type": "number"
+          },
+          "end_x": {
+            "type": "number"
+          },
+          "end_y": {
+            "type": "number"
+          },
+          "end_z": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number",
+            "default": 10
+          }
+        },
+        "required": [
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_section_view",
+        "sourceLine": 335,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_element_parameters",
+      "businessGroup": "parameters",
+      "migrationPriority": "P0",
+      "description": "Get all parameters of an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1047
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "aec-read-active-native-pending",
+        "buildxToolNames": [
+          "revit_get_element_parameters"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/aec-model-adapter.mjs",
+            "line": 19
+          }
+        ],
+        "compatibilityNote": "当前BuildX通过AEC Python provider提供该项；首批移入自有C#具名契约、统一原子队列并拒绝旧宿主。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_element_parameters",
+        "sourceLine": 344,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_set_parameter_value",
+      "businessGroup": "parameters",
+      "migrationPriority": "P1",
+      "description": "Set a parameter value for an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1056
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "parameter_name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "required": [
+          "element_id",
+          "parameter_name",
+          "value"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_set_parameters"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 27
+          }
+        ],
+        "compatibilityNote": "已有按参数ID写入；禁止静默沿用AEC名称查找与单位假设。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.set_parameter_value",
+        "sourceLine": 348,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_parameter_value",
+      "businessGroup": "parameters",
+      "migrationPriority": "P1",
+      "description": "Get a specific parameter value",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1069
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "parameter_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "element_id",
+          "parameter_name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_describe_parameters"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 26
+          }
+        ],
+        "compatibilityNote": "已有参数描述，返回身份/原始值/显示值；名称匹配和歧义需显式处理。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_parameter_value",
+        "sourceLine": 356,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_shared_parameters",
+      "businessGroup": "parameters",
+      "migrationPriority": "P2",
+      "description": "List shared parameters in the document",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1078
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_shared_parameters",
+        "sourceLine": 360,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_shared_parameter",
+      "businessGroup": "parameters",
+      "migrationPriority": "P2",
+      "description": "Create a new shared parameter",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1083
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_shared_parameter",
+        "sourceLine": 361,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_project_parameters",
+      "businessGroup": "parameters",
+      "migrationPriority": "P2",
+      "description": "List project parameters",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1097
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_project_parameters",
+        "sourceLine": 370,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_project_parameter",
+      "businessGroup": "parameters",
+      "migrationPriority": "P2",
+      "description": "Create a new project parameter",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1102
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "category"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_project_parameter",
+        "sourceLine": 371,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_batch_set_parameters",
+      "businessGroup": "parameters",
+      "migrationPriority": "P1",
+      "description": "Set a parameter value for multiple elements",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1116
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "parameter_name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        },
+        "required": [
+          "element_ids",
+          "parameter_name",
+          "value"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_set_parameters"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 27
+          }
+        ],
+        "compatibilityNote": "已有1至50项显式ID写入，回滚默认；不同批次语义需适配。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.batch_set_parameters",
+        "sourceLine": 381,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_type_parameters",
+      "businessGroup": "parameters",
+      "migrationPriority": "P1",
+      "description": "Get type parameters for an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1129
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "related-only",
+        "buildxToolNames": [
+          "revit_describe_parameters"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 26
+          }
+        ],
+        "compatibilityNote": "可复用参数事实owner，类型ID路径和消费者仍需核查。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_type_parameters",
+        "sourceLine": 389,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_set_type_parameter",
+      "businessGroup": "parameters",
+      "migrationPriority": "P1",
+      "description": "Set a type parameter value",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1138
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "parameter_name": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        },
+        "required": [
+          "element_id",
+          "parameter_name",
+          "value"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "related-only",
+        "buildxToolNames": [
+          "revit_set_parameters"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 27
+          }
+        ],
+        "compatibilityNote": "可复用显式ID参数写入，类型影响范围和类型ID验证尚待核查。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.set_type_parameter",
+        "sourceLine": 393,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_sheets",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "List all sheets",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1151
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_sheets",
+        "sourceLine": 401,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_sheet",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create a new sheet",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1154
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "number": {
+            "type": "string"
+          },
+          "titleblock_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "number"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_sheet",
+        "sourceLine": 402,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_delete_sheet",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Delete a sheet",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1167
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "sheet_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sheet_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.delete_sheet",
+        "sourceLine": 410,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_place_viewport_on_sheet",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Place a view on a sheet",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1172
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "sheet_id": {
+            "type": "integer"
+          },
+          "view_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sheet_id",
+          "view_id",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.place_viewport_on_sheet",
+        "sourceLine": 411,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_batch_create_sheets_from_csv",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create multiple sheets from a CSV file",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1186
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "csv_path": {
+            "type": "string"
+          },
+          "titleblock_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "csv_path"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.batch_create_sheets_from_csv",
+        "sourceLine": 419,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_populate_titleblock",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Populate titleblock parameters",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1195
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "sheet_id": {
+            "type": "integer"
+          },
+          "parameters": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "sheet_id",
+          "parameters"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.populate_titleblock",
+        "sourceLine": 423,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_list_titleblocks",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "List available titleblocks",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1204
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.list_titleblocks",
+        "sourceLine": 427,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_sheet_info",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Get detailed information about a sheet",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1209
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "sheet_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sheet_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_sheet_info",
+        "sourceLine": 428,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_duplicate_sheet",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Duplicate a sheet",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1214
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "sheet_id": {
+            "type": "integer"
+          },
+          "with_views": {
+            "type": "boolean"
+          },
+          "duplicate_option": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.duplicate_sheet",
+        "sourceLine": 429,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_renumber_sheets",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Batch renumber sheets",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1227
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "prefix": {
+            "type": "string"
+          },
+          "start_number": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start_number"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.renumber_sheets",
+        "sourceLine": 437,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_selection",
+      "businessGroup": "query",
+      "migrationPriority": "P1",
+      "description": "Get currently selected element IDs",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1236
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "native-named-contract",
+        "buildxToolNames": [
+          "revit_get_selection"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 22
+          }
+        ],
+        "compatibilityNote": "已有具名原生选择读取，文档身份参数不同。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_selection",
+        "sourceLine": 441,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_set_selection",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Set selection by element IDs",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1241
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          }
+        },
+        "required": [
+          "element_ids"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "selection",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.set_selection",
+        "sourceLine": 442,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_select_by_unique_ids",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Select and zoom to elements in the active view by their UniqueId",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1254
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_uids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "element_uids"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "selection-and-view",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.select_by_unique_ids",
+        "sourceLine": 443,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_text_note",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create a text note",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1263
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "view_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "text",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_text_note",
+        "sourceLine": 447,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_tag",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Tag an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1277
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "view_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "research-dependent-replace",
+        "buildxToolNames": [
+          "revit_smart_annotate"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 37
+          }
+        ],
+        "compatibilityNote": "旧入口依赖恢复Argus与Sano，不作为正式原生命令；需自研标签布局。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_tag",
+        "sourceLine": 455,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_column",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create structural column",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1291
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "family_name": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "family_name",
+          "type_name",
+          "level",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_column",
+        "sourceLine": 463,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_beam",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create structural beam",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1306
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "family_name": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "start_x": {
+            "type": "number"
+          },
+          "start_y": {
+            "type": "number"
+          },
+          "end_x": {
+            "type": "number"
+          },
+          "end_y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "family_name",
+          "type_name",
+          "level",
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_beam",
+        "sourceLine": 472,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_foundation",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create foundation",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1323
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "family_name": {
+            "type": "string"
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          }
+        },
+        "required": [
+          "family_name",
+          "type_name",
+          "level",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_foundation",
+        "sourceLine": 482,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_duct",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create duct",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1339
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "start_x": {
+            "type": "number"
+          },
+          "start_y": {
+            "type": "number"
+          },
+          "end_x": {
+            "type": "number"
+          },
+          "end_y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 10
+          },
+          "system_type": {
+            "type": "string"
+          },
+          "duct_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_duct",
+        "sourceLine": 491,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_pipe",
+      "businessGroup": "modeling",
+      "migrationPriority": "P1",
+      "description": "Create pipe",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1357
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "start_x": {
+            "type": "number"
+          },
+          "start_y": {
+            "type": "number"
+          },
+          "end_x": {
+            "type": "number"
+          },
+          "end_y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          },
+          "system_type": {
+            "type": "string"
+          },
+          "pipe_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "native-named-contract",
+        "buildxToolNames": [
+          "revit_create_pipe"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 31
+          }
+        ],
+        "compatibilityNote": "已有具名原生建管，真实类型/系统/楼层ID与毫米坐标，输入约束与AEC不同。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_pipe",
+        "sourceLine": 501,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_categories",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "List Revit categories",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1375
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_categories",
+        "sourceLine": 511,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_element_type",
+      "businessGroup": "query",
+      "migrationPriority": "P1",
+      "description": "Find element types/families",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1380
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "category_name": {
+            "type": "string"
+          },
+          "family_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_list_family_types"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 25
+          }
+        ],
+        "compatibilityNote": "已有具名类型查询；身份、类别和返回范围与AEC不同。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_element_type",
+        "sourceLine": 512,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_close_document",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Close active document",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1389
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "save_changes": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "document-close",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.close_document",
+        "sourceLine": 516,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_new_document",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Create new project",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1394
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "template_path": {
+            "type": "string"
+          }
+        }
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "document-create",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_new_document",
+        "sourceLine": 520,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_export_dwg",
+      "businessGroup": "cad-export",
+      "migrationPriority": "P2",
+      "description": "Export view to DWG",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1399
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "view_id": {
+            "type": "integer"
+          },
+          "output_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "view_id",
+          "output_path"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "local-file-write",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.export_dwg_by_view",
+        "sourceLine": 524,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_export_ifc",
+      "businessGroup": "cad-export",
+      "migrationPriority": "P2",
+      "description": "Export to IFC",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1408
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "output_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "output_path"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "local-file-write",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.export_ifc_with_settings",
+        "sourceLine": 528,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_export_navisworks",
+      "businessGroup": "cad-export",
+      "migrationPriority": "P2",
+      "description": "Export to NWC",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1417
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "output_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "output_path"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "local-file-write",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.export_navisworks",
+        "sourceLine": 532,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_export_image",
+      "businessGroup": "cad-export",
+      "migrationPriority": "P2",
+      "description": "Export view to Image",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1426
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "view_id": {
+            "type": "integer"
+          },
+          "output_path": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "view_id",
+          "output_path"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "local-file-write",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_capture_view"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/visual-inspection-tools.mjs",
+            "line": 10
+          }
+        ],
+        "compatibilityNote": "已有具名视图PNG导出与产物校验，不能直接等同任意格式/路径导出。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.export_image",
+        "sourceLine": 536,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_render_3d",
+      "businessGroup": "cad-export",
+      "migrationPriority": "P2",
+      "description": "Render 3D view to image",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1440
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "view_id": {
+            "type": "integer"
+          },
+          "output_path": {
+            "type": "string"
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "Draft",
+              "Medium",
+              "High"
+            ]
+          }
+        },
+        "required": [
+          "view_id",
+          "output_path"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "render-and-local-file-write",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.render_3d_view",
+        "sourceLine": 545,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_move_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P1",
+      "description": "Move an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1453
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          }
+        },
+        "required": [
+          "element_id",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_move_elements"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 28
+          }
+        ],
+        "compatibilityNote": "已有1至50项批量原生移动，毫米delta与文档身份必须适配。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.move_element",
+        "sourceLine": 553,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_copy_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P1",
+      "description": "Copy an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1467
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "z": {
+            "type": "number",
+            "default": 0
+          }
+        },
+        "required": [
+          "element_id",
+          "x",
+          "y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "native-partial",
+        "buildxToolNames": [
+          "revit_copy_elements"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 29
+          }
+        ],
+        "compatibilityNote": "已有1至50项批量原生复制，毫米delta与文档身份必须适配。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.copy_element",
+        "sourceLine": 560,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_rotate_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P1",
+      "description": "Rotate an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1481
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "center_x": {
+            "type": "number"
+          },
+          "center_y": {
+            "type": "number"
+          },
+          "center_z": {
+            "type": "number",
+            "default": 0
+          },
+          "angle_radians": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "element_id",
+          "center_x",
+          "center_y",
+          "angle_radians"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "fixed-csharp-template-partial",
+        "buildxToolNames": [
+          "revit_rotate_elements"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/modelling-tools.mjs",
+            "line": 7
+          }
+        ],
+        "compatibilityNote": "已有固定C#模板，经宿主执行；限垂直轴与点/曲线定位对象。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.rotate_element",
+        "sourceLine": 567,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_mirror_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Mirror an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1496
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "plane_origin_x": {
+            "type": "number"
+          },
+          "plane_origin_y": {
+            "type": "number"
+          },
+          "plane_origin_z": {
+            "type": "number",
+            "default": 0
+          },
+          "plane_normal_x": {
+            "type": "number"
+          },
+          "plane_normal_y": {
+            "type": "number"
+          },
+          "plane_normal_z": {
+            "type": "number",
+            "default": 0
+          }
+        },
+        "required": [
+          "element_id",
+          "plane_origin_x",
+          "plane_origin_y",
+          "plane_normal_x",
+          "plane_normal_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.mirror_element",
+        "sourceLine": 575,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_pin_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Pin an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1513
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.pin_element",
+        "sourceLine": 591,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_unpin_element",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Unpin an element",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1522
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.unpin_element",
+        "sourceLine": 592,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_sync_to_central",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Sync to central model",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1531
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "relinquish": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "central-model-and-ownership",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.sync_to_central",
+        "sourceLine": 593,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_relinquish_all",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Relinquish all elements and worksets",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1539
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "worksharing-ownership",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.relinquish_all",
+        "sourceLine": 600,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_worksets",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get all worksets",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1544
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_worksets",
+        "sourceLine": 601,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_schedule",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create a schedule",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1547
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "category_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_name",
+          "name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_schedule",
+        "sourceLine": 602,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_schedule_data",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Get schedule data",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1556
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "schedule_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schedule_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_schedule_data",
+        "sourceLine": 606,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_element_bounding_box",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get element bounding box",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1565
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_element_bounding_box",
+        "sourceLine": 610,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_phases",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get project phases",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1574
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_phases",
+        "sourceLine": 614,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_phase_filters",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get phase filters",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1577
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_phase_filters",
+        "sourceLine": 615,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_design_options",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get design options",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1582
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_design_options",
+        "sourceLine": 616,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_group",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create a group",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1587
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "element_ids",
+          "name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_group",
+        "sourceLine": 617,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_ungroup",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Ungroup a group",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1599
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "group_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "group_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.ungroup",
+        "sourceLine": 621,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_group_members",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get group members",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1604
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "group_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "group_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_group_members",
+        "sourceLine": 622,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_rvt_links",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get RVT links",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1609
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_rvt_links",
+        "sourceLine": 623,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_link_instances",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get link instances",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1612
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_link_instances",
+        "sourceLine": 624,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_conduit",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create electrical conduit",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1617
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "start_x": {
+            "type": "number"
+          },
+          "start_y": {
+            "type": "number"
+          },
+          "start_z": {
+            "type": "number",
+            "default": 10
+          },
+          "end_x": {
+            "type": "number"
+          },
+          "end_y": {
+            "type": "number"
+          },
+          "end_z": {
+            "type": "number",
+            "default": 10
+          },
+          "diameter": {
+            "type": "number",
+            "default": 0.0625
+          }
+        },
+        "required": [
+          "level",
+          "start_x",
+          "start_y",
+          "end_x",
+          "end_y"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_conduit",
+        "sourceLine": 625,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_check_clashes",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Check clashes between categories",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1635
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "category1": {
+            "type": "string"
+          },
+          "category2": {
+            "type": "string"
+          },
+          "tolerance": {
+            "type": "number",
+            "default": 0.01
+          }
+        },
+        "required": [
+          "category1",
+          "category2"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.check_clashes",
+        "sourceLine": 635,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_material",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Create a new material with color and properties",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1648
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "object",
+            "properties": {
+              "r": {
+                "type": "integer"
+              },
+              "g": {
+                "type": "integer"
+              },
+              "b": {
+                "type": "integer"
+              }
+            }
+          },
+          "transparency": {
+            "type": "integer",
+            "default": 0
+          },
+          "shininess": {
+            "type": "integer",
+            "default": 50
+          },
+          "smoothness": {
+            "type": "integer",
+            "default": 50
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_material",
+        "sourceLine": 643,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_set_element_material",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Set material for an element or specific face",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1666
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer"
+          },
+          "material_name": {
+            "type": "string"
+          },
+          "face_index": {
+            "type": "integer",
+            "description": "Optional face index for face-specific material"
+          }
+        },
+        "required": [
+          "element_id",
+          "material_name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.set_element_material",
+        "sourceLine": 653,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_convert_to_group",
+      "businessGroup": "modeling",
+      "migrationPriority": "P2",
+      "description": "Convert elements into a group",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1679
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "element_ids"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.convert_to_group",
+        "sourceLine": 661,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_edit_family",
+      "businessGroup": "family",
+      "migrationPriority": "P2",
+      "description": "Open a family for editing",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1691
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "family_name": {
+            "type": "string"
+          },
+          "family_symbol_id": {
+            "type": "integer"
+          },
+          "family_instance_id": {
+            "type": "integer"
+          }
+        },
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "related-only",
+        "buildxToolNames": [
+          "revit_family_inspect_job"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/family-tools.mjs",
+            "line": 13
+          }
+        ],
+        "compatibilityNote": "已有受控job-owned族工作流，不提供任意现有族打开编辑。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.edit_family",
+        "sourceLine": 665,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_create_dimension",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Create linear dimension between elements",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1704
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "start_point": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            }
+          },
+          "end_point": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            }
+          },
+          "element1_id": {
+            "type": "integer"
+          },
+          "element2_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start_point",
+          "end_point",
+          "element1_id",
+          "element2_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.create_dimension",
+        "sourceLine": 673,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_revision_sequences",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Get list of revision sequences",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1724
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_revision_sequences",
+        "sourceLine": 682,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_tag_all_in_view",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Tag all elements of a category in view",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1729
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "related-research-dependent-replace",
+        "buildxToolNames": [
+          "revit_smart_annotate"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/workbench-client.mjs",
+            "line": 37
+          }
+        ],
+        "compatibilityNote": "旧入口仅显式1至50元素且依赖恢复程序集，不能声称覆盖视图全部标注。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.tag_all_in_view",
+        "sourceLine": 683,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_view_templates",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Get list of view templates",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1734
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_view_templates",
+        "sourceLine": 684,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_apply_view_template",
+      "businessGroup": "views-drawings",
+      "migrationPriority": "P2",
+      "description": "Apply view template to a view",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1739
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "view_id": {
+            "type": "integer"
+          },
+          "template_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "view_id",
+          "template_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.apply_view_template",
+        "sourceLine": 685,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_calculate_material_quantities",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Calculate material volumes for a category",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1748
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "category"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.calculate_material_quantities",
+        "sourceLine": 689,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_warnings",
+      "businessGroup": "query",
+      "migrationPriority": "P2",
+      "description": "Get current project warnings",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1753
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_warnings",
+        "sourceLine": 693,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_invoke_method",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Invoke any Revit API method dynamically using Reflection",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1758
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "class_name": {
+            "type": "string"
+          },
+          "method_name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "array",
+            "items": {}
+          },
+          "target_id": {
+            "type": "string"
+          },
+          "use_transaction": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "class_name",
+          "method_name",
+          "arguments"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "arbitrary-api-invocation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.invoke_method",
+        "sourceLine": 694,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_reflect_get",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Get any Revit property value dynamically",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1773
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "target_id": {
+            "type": "string"
+          },
+          "property_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "property_name"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "dynamic-api-read-requires-review",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.reflect_get",
+        "sourceLine": 704,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_reflect_set",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Set any Revit property value dynamically",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1782
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "target_id": {
+            "type": "string"
+          },
+          "property_name": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "target_id",
+          "property_name",
+          "value"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "arbitrary-api-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.reflect_set",
+        "sourceLine": 708,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_execute_python",
+      "businessGroup": "advanced-high-authority",
+      "migrationPriority": "P3",
+      "description": "Execute arbitrary Python/IronPython code inside Revit with broad access to the public Revit API.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1791
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string",
+            "description": "Python script to execute"
+          }
+        },
+        "required": [
+          "script"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": true,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "arbitrary-code",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.execute_python",
+        "sourceLine": 716,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_change_element_type",
+      "businessGroup": "family",
+      "migrationPriority": "P2",
+      "description": "Swap all instances of one element type to another type.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1800
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "source_type_id": {
+            "type": "integer",
+            "description": "Element type ID to replace (all instances)"
+          },
+          "target_type_id": {
+            "type": "integer",
+            "description": "Element type ID to change to"
+          },
+          "category": {
+            "type": "string",
+            "description": "Optional category filter (e.g. 'Walls', 'Doors') to limit scope"
+          }
+        },
+        "required": [
+          "source_type_id",
+          "target_type_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.change_element_type",
+        "sourceLine": 717,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_elements_by_type",
+      "businessGroup": "query",
+      "migrationPriority": "P0",
+      "description": "Get element IDs and key parameters, filtered by type, category, and/or level.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1816
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "type_id": {
+            "type": "integer",
+            "description": "Filter by element type ID (optional)"
+          },
+          "category": {
+            "type": "string",
+            "description": "Filter by category name, e.g. 'Walls', 'Doors' (optional)"
+          },
+          "level": {
+            "type": "string",
+            "description": "Filter by level name, e.g. 'BG', 'L1' (optional)"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Fields to return: id always included. Options: name, category, type_id, level, length, area, volume"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Pagination offset (default 0)",
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Max results to return (default 200, max 500)",
+            "default": 200
+          }
+        },
+        "required": []
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "aec-read-active-native-pending",
+        "buildxToolNames": [
+          "revit_get_elements_by_type"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/aec-model-adapter.mjs",
+            "line": 19
+          }
+        ],
+        "compatibilityNote": "当前BuildX通过AEC Python provider提供该项；首批移入自有C#具名契约、统一原子队列并拒绝旧宿主。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_elements_by_type",
+        "sourceLine": 725,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_batch_set_parameters_by_filter",
+      "businessGroup": "parameters",
+      "migrationPriority": "P2",
+      "description": "Set a parameter value on all elements matching a filter (category, type, level, or parameter value).",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1843
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "object",
+            "description": "Filter criteria to select elements",
+            "properties": {
+              "category": {
+                "type": "string",
+                "description": "Category name, e.g. 'Walls'"
+              },
+              "type_id": {
+                "type": "integer",
+                "description": "Element type ID filter"
+              },
+              "level": {
+                "type": "string",
+                "description": "Level name filter"
+              },
+              "parameter_filter": {
+                "type": "object",
+                "description": "Only include elements where this parameter equals this value",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {}
+                },
+                "required": [
+                  "name",
+                  "value"
+                ]
+              }
+            }
+          },
+          "parameter_name": {
+            "type": "string",
+            "description": "Name of the parameter to set"
+          },
+          "value": {
+            "description": "Value to set (string, number, or boolean)"
+          }
+        },
+        "required": [
+          "filter",
+          "parameter_name",
+          "value"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.batch_set_parameters_by_filter",
+        "sourceLine": 736,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_replace_family_type",
+      "businessGroup": "family",
+      "migrationPriority": "P2",
+      "description": "Replace all instances of one family/type combination with another, identified by name.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1870
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "old_family": {
+            "type": "string",
+            "description": "Current family name (exact match, case-insensitive)"
+          },
+          "old_type": {
+            "type": "string",
+            "description": "Current type name"
+          },
+          "new_family": {
+            "type": "string",
+            "description": "Replacement family name"
+          },
+          "new_type": {
+            "type": "string",
+            "description": "Replacement type name"
+          }
+        },
+        "required": [
+          "old_family",
+          "old_type",
+          "new_family",
+          "new_type"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": true,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "model-mutation",
+      "buildx": {
+        "status": "no-named-native-equivalent-confirmed",
+        "buildxToolNames": [],
+        "sourceReferences": [],
+        "compatibilityNote": "本次声明清单比对未发现具名等价工具；通用C#执行能力不视为已实现此工具。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.replace_family_type",
+        "sourceLine": 744,
+        "payloadTranslationNeedsReview": true
+      }
+    },
+    {
+      "name": "revit_get_element_geometry",
+      "businessGroup": "query",
+      "migrationPriority": "P0",
+      "description": "Get geometric data for an element: location point or curve endpoints, bounding box, level, area, volume, and length.",
+      "source": {
+        "path": "D:\\code\\pumpbim\\aec-model-bridge\\packages\\mcp-server-revit\\src\\revit_mcp_server\\providers\\revit.py",
+        "line": 1887
+      },
+      "providerInputSchema": {
+        "type": "object",
+        "properties": {
+          "element_id": {
+            "type": "integer",
+            "description": "Element ID"
+          }
+        },
+        "required": [
+          "element_id"
+        ]
+      },
+      "providerStaticMetadata": {
+        "isMutatingAfterNameEnrichment": false,
+        "destructiveAfterNameEnrichment": false,
+        "basis": "Python AST literals plus _enrich_tool_metadata name-token rule; not execution or semantic authority proof"
+      },
+      "migrationEffectAssessment": "read-candidate-needs-producer-review",
+      "buildx": {
+        "status": "aec-read-active-native-pending",
+        "buildxToolNames": [
+          "revit_get_element_geometry"
+        ],
+        "sourceReferences": [
+          {
+            "path": "lib/aec-model-adapter.mjs",
+            "line": 19
+          }
+        ],
+        "compatibilityNote": "当前BuildX通过AEC Python provider提供该项；首批移入自有C#具名契约、统一原子队列并拒绝旧宿主。"
+      },
+      "runtimeVerified": false,
+      "bridgeMapping": {
+        "bridgeTool": "revit.get_element_geometry",
+        "sourceLine": 753,
+        "payloadTranslationNeedsReview": true
+      }
+    }
+  ]
+}

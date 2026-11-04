@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">BIM-X</title>
+  <desc id="desc">An architectural letter B with a superscript X representing multiplied efficiency.</desc>
+  <defs>
+    <linearGradient id="tile" x1="48" y1="24" x2="464" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18344B"/>
+      <stop offset="1" stop-color="#081723"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="324" y1="100" x2="414" y2="190" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#85FFE0"/>
+      <stop offset="1" stop-color="#20D6B0"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#tile)"/>
+  <rect x="17" y="17" width="478" height="478" rx="111" stroke="white" stroke-opacity=".08" stroke-width="2"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M120 120H232C286 120 316 146 316 189C316 216 302 237 280 248C314 258 334 282 334 318C334 367 298 396 240 396H120V120ZM174 169V227H229C251 227 263 216 263 198C263 179 251 169 229 169H174ZM174 274V347H237C265 347 280 334 280 310C280 287 265 274 237 274H174Z" fill="#F3F8FC"/>
+  <path d="M332 104H359L378 132L397 104H424L392 149L425 196H397L378 167L358 196H331L364 149L332 104Z" fill="url(#accent)"/>
+</svg>
