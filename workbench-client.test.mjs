@@ -10,6 +10,8 @@ import {ALL_PANEL_TOOLS,CodexClient} from './lib/codex-client.mjs';
 import {MODELLING_TOOLS,MODELLING_TEMPLATE_VERSION,compileModellingTool} from './lib/modelling-tools.mjs';
 import {invokeCommand} from './lib/command-store.mjs';
 import {FAMILY_PANEL_CONFIRMATION_ONLY} from './lib/family-tools.mjs';
+import {NATIVE_PARAMETER_WRITE_NAMES} from './lib/native-parameter-writes.mjs';
+import {LEGACY_PANEL_TOOL_NAMES} from './lib/panel-tools.mjs';
 
 test('mutating contracts validate ids, mode and UTF8 bounds',()=>{
   assert.equal(new Set(WORKBENCH_TOOLS.map(tool=>tool.name)).size,WORKBENCH_TOOLS.length);
@@ -28,14 +30,14 @@ test('MCP lists the complete tool catalog and connection status derives its coun
   assert.equal(new Set(ALL_PANEL_TOOLS).size,ALL_PANEL_TOOLS.length);
   for(const tool of WORKBENCH_TOOLS){
     const advertised=tools.find(value=>value.name===tool.name);
-    if(FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name))assert.equal(advertised,undefined);
+    if(FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name))assert.equal(advertised,undefined);
     else assert.deepEqual(advertised,tool);
   }
   for(const tool of MODELLING_TOOLS)assert.deepEqual(tools.find(t=>t.name===tool.name),tool);
   for(const name of ['revit_get_selection','revit_search_elements','revit_list_levels','revit_list_family_types','revit_describe_parameters','revit_set_parameters','revit_move_elements','revit_copy_elements','revit_create_wall','revit_create_pipe'])assert.ok(tools.some(tool=>tool.name===name));
   const client=new CodexClient('unused');client.initialized=client.authReady=client.toolsReady=true;
-  assert.equal(client.state.toolCount,ALL_PANEL_TOOLS.length);
-  assert.ok(client.state.message.includes(String(ALL_PANEL_TOOLS.length)));
+  assert.equal(client.state.toolCount,LEGACY_PANEL_TOOL_NAMES.length);
+  assert.ok(client.state.message.includes(String(LEGACY_PANEL_TOOL_NAMES.length)));
 });
 test('real MCP entry preserves its error text and reports an unverified operation outcome conservatively',()=>{
   const request=JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'not_a_registered_tool',arguments:{}}});

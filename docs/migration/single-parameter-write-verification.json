@@ -1,0 +1,541 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-04T22:44:36.891Z",
+  "sourceBaseCommit": "6be102d510e1c9af27e26f836d77bca21f591634",
+  "version": "0.8.5-internal-single-parameter-write",
+  "slice": {
+    "task": "BX-006",
+    "priority": "P1",
+    "tool": "revit_set_parameter_value",
+    "operation": "set_parameter_value",
+    "hostVersion": "0.8.5",
+    "assemblyVersion": "0.8.5.0",
+    "capability": {
+      "nativeParameterWritesVersion": 1,
+      "nativeParameterWriteOperations": [
+        "set_parameter_value"
+      ]
+    },
+    "sourceInventory": "docs/migration/aec-revit-command-inventory.json",
+    "legacyProviderFields": [
+      "element_id",
+      "parameter_name",
+      "value:string|number|boolean"
+    ],
+    "compatibility": "New instance-only stable-ID guard contract; not a transparent adapter for legacy name/boolean payloads. Historical 103-tool inventory remains unchanged.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "expected_document": {
+          "type": "string",
+          "description": "Exact path returned by workbench status; must be in the host allowed-document list.",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "rollback",
+            "commit"
+          ],
+          "default": "rollback",
+          "description": "rollback reads the result then undoes model changes; commit keeps changes in memory without saving."
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "element_id": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[1-9]\\d{0,18}$",
+                    "maxLength": 19
+                  }
+                ]
+              },
+              "parameter_id": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^-?(?:0|[1-9]\\d{0,18})$",
+                    "maxLength": 20
+                  }
+                ],
+                "not": {
+                  "enum": [
+                    0,
+                    -1,
+                    "0",
+                    "-1"
+                  ]
+                }
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "maxLength": 64000
+                  }
+                ]
+              },
+              "value_unit": {
+                "type": "string",
+                "enum": [
+                  "internal"
+                ]
+              },
+              "expected_state": {
+                "type": "object",
+                "properties": {
+                  "storage_type": {
+                    "type": "string",
+                    "enum": [
+                      "Double",
+                      "Integer",
+                      "String"
+                    ]
+                  },
+                  "has_value": {
+                    "type": "boolean"
+                  },
+                  "value_internal": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "data_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 1024
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "storage_type",
+                  "has_value",
+                  "value_internal",
+                  "data_type"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "element_id",
+              "parameter_id",
+              "value",
+              "expected_state"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "expected_document",
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    "targetKind": "instance",
+    "rawMcpExposed": false,
+    "typeWideWriteImplemented": false,
+    "writeVerification": [
+      "immediate",
+      "after_regenerate",
+      "after_inner_commit"
+    ],
+    "unknownOutcomeAutomaticReplay": false
+  },
+  "checks": [
+    {
+      "name": "single-parameter-write",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/single-write-final.tap.log",
+      "sha256": "375afde6984f5ed88ce074afa6e0cc480db7f4de8bc97296c20861ca091c854d",
+      "passed": 124,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-query-catalog",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/native-final.tap.log",
+      "sha256": "9b1aacb8f198cff1210c8e762a1c6c02240991189d529792827d4f2ccead03db",
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-parameter-writes",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/writes-final.tap.log",
+      "sha256": "6a703f4a5a2e0ef286a0a56ae734398a3093ae8271b86bede0942d03ec6eb789",
+      "passed": 117,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "single-parameter-read-ui",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/read-ui-final.tap.log",
+      "sha256": "aca116aa86d3802c4baa939bb60aef61a5bb4be505a71f481c1402253a269477",
+      "passed": 79,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "type-parameter-reads",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/type-final.tap.log",
+      "sha256": "a83824da43026ce403e3f37ce71cda6cd8f63dd67aae1edaf8e4273d72cee605",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "layout",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/layout-final.tap.log",
+      "sha256": "8038454621440229f486d6edb946da9b8708485099dc9646132aeb56390d3cea",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-catalog-session",
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/catalog-corrected.tap.log",
+      "sha256": "39cd5058095694957d6d87c58316a3b45e943cb0913970519006a82c658b7d66",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "hostChecks": {
+    "record": "artifacts/native-single-parameter-write-validation-20261105-01/host-final/results.json",
+    "sourceProof": "artifacts/native-single-parameter-write-validation-20261105-01/host-final/source-proof.json",
+    "passed": 80,
+    "failed": 0,
+    "scope": "Original scheduler/claim/validation/receipt producer methods; controlled event and Dispatch peers; no Revit API"
+  },
+  "descriptorChecks": {
+    "record": "artifacts/native-single-parameter-write-validation-20261105-01/producer-evidence-r2.json",
+    "passed": 7,
+    "failed": 0,
+    "sourceSha256": "9aa5dc852bec3bd4da4dba7c5a41c4e87158604933bf8e08e20fcdd8acfb3957",
+    "actualSerializer": true,
+    "realRevit": false
+  },
+  "apiCompilation": {
+    "record": "artifacts/buildx-source-20261105-09/build/build-record.json",
+    "recordSha256": "14ae16191dc2160d89f4af0b0dc19908c34d9eb7ceb7df4aaa336aaeef24f4db",
+    "compilerExitCode": 0,
+    "sources": 33,
+    "webview2Sdk": {
+      "package_id": "Microsoft.Web.WebView2",
+      "version": "1.0.2478.35",
+      "source": "https://api.nuget.org/v3/index.json",
+      "package_sha256": "b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96",
+      "payload_verified_against_package": true,
+      "runtime_bundled": false
+    },
+    "dllSha256": "c6b9c1744ba43d9753e7084ddafedb855fab7ab0db5205fc0fc01963a7e05cd7",
+    "installed": false,
+    "realRevitLoadVerified": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-single-parameter-write-20261105-02",
+    "productVersion": "0.8.5-internal-single-parameter-write",
+    "releaseReady": false,
+    "files": 145,
+    "totalBytes": 19421009,
+    "manifestSha256": "4cfdc1d22084380995c363ff6f187995b2b1e4ddc3ec80e4d0d39dde81c5acd2",
+    "modules": 99,
+    "imports": 315,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "c6b9c1744ba43d9753e7084ddafedb855fab7ab0db5205fc0fc01963a7e05cd7",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-09",
+    "sourceFiles": 266,
+    "sourceModules": 193,
+    "sourceReferences": 589,
+    "sourceManifestSha256": "d9efe922d88500afa5e0f6e042c7e1079a1af5c032b610d1e994f774c5ebeb29",
+    "currentSourceMismatches": [],
+    "buildSources": 33,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false
+  },
+  "archives": {
+    "record": "artifacts/native-single-parameter-write-validation-20261105-01/archive-roundtrip.json",
+    "recordSha256": "485154d619ad2237c729fb0e908f65a079e76e271cd80f2e6c24db1bd289eece",
+    "passed": true,
+    "archives": [
+      {
+        "inputsUnchanged": true,
+        "kind": "runtime",
+        "sourceFilesMatchManifest": true,
+        "sha256": "78858e9f803cbf7037368f0d30fbb35350d170611ccc114333157bde650511b7",
+        "files": 146,
+        "bytes": 7402873,
+        "entryReadbackVerified": true,
+        "manifestPayloadFiles": 145,
+        "path": "artifacts/BuildX-Revit2024-0.8.5-internal-single-parameter-write-20261105.zip",
+        "entryDigestsVerified": 146
+      },
+      {
+        "inputsUnchanged": true,
+        "kind": "source",
+        "sourceFilesMatchManifest": true,
+        "sha256": "e32da1cc7fb5176568e19f598382e2243beca2e47375990572695de5e093d1ee",
+        "files": 268,
+        "bytes": 1114774,
+        "entryReadbackVerified": true,
+        "manifestPayloadFiles": 266,
+        "path": "artifacts/BuildX-Source-0.8.5-internal-single-parameter-write-20261105.zip",
+        "entryDigestsVerified": 268
+      }
+    ],
+    "roundtrip": {
+      "runtime": {
+        "ok": true,
+        "filesVerified": 146,
+        "manifestPayloadFiles": 145,
+        "scriptCompiler": {
+          "ok": true,
+          "version": "5.0.0",
+          "files": 17,
+          "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627"
+        },
+        "noNodeModules": true,
+        "catalog": {
+          "ok": true,
+          "methods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list",
+            "tools/call"
+          ],
+          "toolCount": 22,
+          "allReadOnly": true,
+          "nativeModelTools": [
+            "revit_health",
+            "revit_get_document_info",
+            "revit_list_views",
+            "revit_get_element_parameters",
+            "revit_get_elements_by_type",
+            "revit_get_element_geometry"
+          ],
+          "typeParameterOutputSchemaCompiled": true,
+          "singleInputSchemaStrictCompiled": true,
+          "singleOutputSchemaStrictCompiled": true,
+          "selectorOneOf": {
+            "idAccepted": true,
+            "nameAccepted": true,
+            "bothRejected": true,
+            "noneRejected": true
+          },
+          "unavailableWrite": {
+            "name": "revit_set_parameter_value",
+            "listed": false,
+            "rejectedBeforeDispatch": true,
+            "isError": true
+          },
+          "schemaCompiler": "Workspace Ajv; extracted MCP child has no node_modules",
+          "exposedModelToolsCalled": false,
+          "exitCode": 0
+        },
+        "singleParameterWriteOwner": {
+          "modulePresent": true,
+          "imported": true,
+          "pureMemoryProbe": true,
+          "exactInt64ArgumentsAndResultsPreserved": true,
+          "staleStateRejected": true,
+          "unsafeResultIdRejected": true,
+          "missingGuardRejected": true,
+          "typeTargetRejected": true,
+          "oldHostRejected": true
+        },
+        "queueCreated": false,
+        "inventoryUnchangedAfterProbe": true
+      },
+      "source": {
+        "ok": true,
+        "filesVerified": 268,
+        "snapshotFiles": 266,
+        "manifestSha256": "d9efe922d88500afa5e0f6e042c7e1079a1af5c032b610d1e994f774c5ebeb29",
+        "dependencyClosureOk": true,
+        "modules": 193,
+        "references": 589,
+        "buildExcluded": true
+      }
+    },
+    "temporaryCleanup": {
+      "ownerVerified": true,
+      "directoryIdentityVerified": true,
+      "absoluteRealpathVerified": true,
+      "resolvedUnderTemp": true,
+      "removed": true
+    }
+  },
+  "failureHistory": [
+    {
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/native-initial-catalog-failure.tap.log",
+      "cause": "Two legacy fixture expectations included the new approval-bound write; synchronized the explicit legacy catalog owner and fixtures; final 182 and 23 pass."
+    },
+    {
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/writes-initial-inflight-fixture-failure.tap.log",
+      "cause": "Compilation observed intermediate peer/production extraction while adding descriptor coverage; final frozen-source legacy group 117 pass."
+    },
+    {
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/layout-initial-inflight-whitelist-failure.tap.log",
+      "cause": "New transport test was not yet written while source whitelist was being assembled; final closed source group 105 pass."
+    },
+    {
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/single-write-initial-fixture-identity-failure.tap.log",
+      "cause": "Four test-only verifyDocument comparisons depended on object property insertion order; explicit field comparison fixed fixture, final 124 pass."
+    },
+    {
+      "record": "artifacts/native-single-parameter-write-validation-20261105-01/candidate-audit.log",
+      "cause": "Intermediate snapshot 08 correctly rejected one subsequent test-file change; final immutable snapshot 09/runtime 02 closes current source."
+    }
+  ],
+  "sources": [
+    {
+      "path": "lib/native-parameter-writes.mjs",
+      "bytes": 7445,
+      "sha256": "d109ebd9576ccb2b0af8b810868ac743669e93e714f3368d9e13d077994e6f49"
+    },
+    {
+      "path": "lib/parameter-write-result.mjs",
+      "bytes": 3119,
+      "sha256": "867f54c79683946939349aa9aee7d9367a095f8bf330844d957a8586ff9bf6cf"
+    },
+    {
+      "path": "lib/workbench-client.mjs",
+      "bytes": 97845,
+      "sha256": "fed4fed276b11f18e8b83b8f6145c94e64ef54334bdf9ac07733d655f2a9b451"
+    },
+    {
+      "path": "lib/model-operation-effects.mjs",
+      "bytes": 3879,
+      "sha256": "7b13c333eba847df0867a9a0d97c7207fe10069af8a01500aab61e51992899c2"
+    },
+    {
+      "path": "lib/panel-tools.mjs",
+      "bytes": 1828,
+      "sha256": "063194ffb056c1aa6ca69cd2cb48c0aab324592b13ca60ee3378ebdc44a78f5a"
+    },
+    {
+      "path": "lib/codex-profile.mjs",
+      "bytes": 27155,
+      "sha256": "1b0429e9e57a55d7144fe52253a1f3754d4478e5f085963b22edd3128070012d"
+    },
+    {
+      "path": "workbench-mcp.mjs",
+      "bytes": 4026,
+      "sha256": "dd01651ce7997aaabc7c79a732b079d03f85f2e641f480b0e978db2ce59453f1"
+    },
+    {
+      "path": "public/parameter-change-field.mjs",
+      "bytes": 20094,
+      "sha256": "504c1f92d425465d48a1ca7e8b1aab96f2d025a220d1d490576fad725356709f"
+    },
+    {
+      "path": "public/model-workspace.mjs",
+      "bytes": 107482,
+      "sha256": "3ec5eaa8a706ba6bf39f6993a48d07dfad566ed08aa055fe3493086caca2fbb6"
+    },
+    {
+      "path": "revit-addin/WorkbenchActions.cs",
+      "bytes": 33412,
+      "sha256": "9aa5dc852bec3bd4da4dba7c5a41c4e87158604933bf8e08e20fcdd8acfb3957"
+    },
+    {
+      "path": "revit-addin/WorkbenchHost.cs",
+      "bytes": 61077,
+      "sha256": "2dfe5e1f5cc195b0502d03d9865c5efc94c067bfaa69e811b6459f67add97e96"
+    },
+    {
+      "path": "revit-addin/LocalCodexRevit.cs",
+      "bytes": 45491,
+      "sha256": "cf3928906d5e82cf981c99816b9d0b7ba36b7140e6a59600cc87461936525196"
+    },
+    {
+      "path": "tools/build-brain-candidate-files.json",
+      "bytes": 9429,
+      "sha256": "c28b8d022b12261f873ae31c86583c1897d9126bc5edaa604ed432930b8aeef7"
+    }
+  ],
+  "notVerified": [
+    "real Revit plugin load",
+    "real model/API effects",
+    "real WebView/Codex integrated UI",
+    "clean customer installation/upgrade/uninstall",
+    "type-wide parameter impact and forced trusted approval",
+    "Argus distribution/runtime and replacement acceptance",
+    "private Node/Python distribution",
+    "WebView2 Runtime presence",
+    "pypdf and third-party/plugin licensing",
+    "data upgrade/restore",
+    "license backend"
+  ],
+  "userServicesRestarted": false,
+  "installedPluginReplaced": false,
+  "realModelWritten": false,
+  "publishedRelease": false,
+  "releaseReady": false,
+  "next": "Define stable type identity, type-wide affected instances and a trusted forced-confirmation contract before adding a type-parameter write. Continue common commands, native schematic/annotation and justified dependency removal."
+}

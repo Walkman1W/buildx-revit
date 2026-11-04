@@ -14,6 +14,8 @@
 
 ## 原生架构与实现边界
 
+0.8.5 新增 `revit_set_parameter_value` 实例专用写操作，显式稳定参数 ID、原始前态守卫和三阶段回读，接入既有审批/事务/原回执 owner，并拒绝 ElementType。新入口与旧 raw MCP 隔离，旧宿主在入队前拒绝；实际检查与兼容差异见 [实例单参数写入验证](SINGLE-PARAMETER-WRITE-VERIFICATION.zh-CN.md)。原 AEC 台账按名称/Boolean 的契约保留为历史来源，新契约不声称可直接替换旧载荷。类型整体写入仍待独立影响与可信确认；真实模型尚未验收。
+
 ```text
 BuildX 界面或 Codex 工具
   → 共享命令、权限和回执 owner

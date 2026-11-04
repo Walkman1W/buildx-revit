@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { buildAssistantInstructions } from './lib/assistant-instructions.mjs';
 import { CodexClient } from './lib/codex-client.mjs';
-import { READ_TOOLS, PANEL_WORKBENCH_TOOLS } from './lib/panel-tools.mjs';
+import { READ_TOOLS, LEGACY_PANEL_WORKBENCH_TOOLS as PANEL_WORKBENCH_TOOLS } from './lib/panel-tools.mjs';
 import {NATIVE_MODEL_QUERY_NAMES} from './lib/native-model-queries.mjs';
 
 test('application prompt retains real execution contracts and distinguishes observations from authority', () => {

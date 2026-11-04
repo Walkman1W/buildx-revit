@@ -15,7 +15,8 @@
     "test:compiler": "node --test script-compiler-package.test.mjs script-compiler-installer.test.mjs script-compiler-offline.test.mjs modelling-tools.test.mjs",
     "test:native-parameters": "node --test native-type-parameter-contract.test.mjs native-type-parameter-producer.test.mjs native-type-parameter-transport.test.mjs",
     "test:parameter-writes": "node --test native-parameter-write-producer.test.mjs parameter-write-result.test.mjs native-parameter-write-transport.test.mjs model-write-publication.test.mjs",
-    "test:single-parameter": "node --test native-single-parameter-contract.test.mjs native-single-parameter-producer.test.mjs native-single-parameter-transport.test.mjs exact-id-fields.test.mjs command-fields.test.mjs model-command-workspace-ui.test.mjs model-workspace.test.mjs"
+    "test:single-parameter": "node --test native-single-parameter-contract.test.mjs native-single-parameter-producer.test.mjs native-single-parameter-transport.test.mjs exact-id-fields.test.mjs command-fields.test.mjs model-command-workspace-ui.test.mjs model-workspace.test.mjs",
+    "test:single-parameter-write": "node --test native-single-parameter-write-contract.test.mjs native-single-parameter-write-producer.test.mjs native-single-parameter-write-transport.test.mjs native-single-parameter-write-ui.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.3.1",

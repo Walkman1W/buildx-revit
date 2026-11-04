@@ -13,7 +13,7 @@ namespace RevitLocalCodex
     internal static class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_type_parameters", "get_parameter_value" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "move_elements", "copy_elements", "create_wall", "create_pipe" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "move_elements", "copy_elements", "create_wall", "create_pipe" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -85,8 +85,9 @@ namespace RevitLocalCodex
                 try
                 {
                     object result;
-                    var parameterWrites = operation == "set_parameters" ? new List<ParameterWriteExpectation>() : null;
-                    if (operation == "set_parameters") result = SetParameters(doc, args, parameterWrites);
+                    bool guardedParameter = operation == "set_parameter_value";
+                    var parameterWrites = operation == "set_parameters" || guardedParameter ? new List<ParameterWriteExpectation>() : null;
+                    if (parameterWrites != null) result = SetParameters(doc, args, parameterWrites, guardedParameter);
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
@@ -110,50 +111,40 @@ namespace RevitLocalCodex
             }
         }
 
-        private static object SetParameters(Document doc, Dictionary<string, object> args, List<ParameterWriteExpectation> expectations = null)
+        private static object SetParameters(Document doc, Dictionary<string, object> args, List<ParameterWriteExpectation> expectations = null, bool guarded = false)
         {
             Fields(args, "expected_document", "mode", "changes");
-            IList changes = RequiredList(args, "changes", 1, 50);
+            IList changes = RequiredList(args, "changes", 1, guarded ? 1 : 50);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var results = new List<object>();
+            object guardedBefore = null;
             foreach (object item in changes)
             {
                 var change = item as Dictionary<string, object>;
                 if (change == null) throw new InvalidOperationException("Each change must be an object.");
-                Fields(change, "element_id", "parameter_id", "value", "value_unit");
-                long elementId = ElementIdValue(Required(change, "element_id"), "element_id");
-                long parameterId = Integer(Required(change, "parameter_id"), "parameter_id", -9007199254740991L, 9007199254740991L);
+                if (guarded) Fields(change, "element_id", "parameter_id", "value", "value_unit", "expected_state");
+                else Fields(change, "element_id", "parameter_id", "value", "value_unit");
+                long elementId = guarded ? NativeModelQueries.ExactId(change, "element_id") : ElementIdValue(Required(change, "element_id"), "element_id");
+                long parameterId = guarded ? NativeModelQueries.ExactSignedId(change, "parameter_id") : Integer(Required(change, "parameter_id"), "parameter_id", -9007199254740991L, 9007199254740991L);
                 if (parameterId == 0 || parameterId == -1) throw new InvalidOperationException("parameter_id must identify an actual parameter, not 0 or -1.");
                 if (!seen.Add(elementId.ToString(CultureInfo.InvariantCulture) + ":" + parameterId.ToString(CultureInfo.InvariantCulture)))
                     throw new InvalidOperationException("Duplicate element_id/parameter_id pair in changes.");
                 Element element = RequiredElement(doc, elementId);
+                if (guarded && (element is ElementType || element.Id == null || element.Id.Value != elementId))
+                    throw new InvalidOperationException("set_parameter_value requires the explicitly selected instance, not an ElementType.");
                 Parameter parameter = element.Parameters.Cast<Parameter>().SingleOrDefault(candidate => candidate.Id.Value == parameterId);
                 if (parameter == null) throw new InvalidOperationException("Parameter id " + parameterId + " does not belong to element " + elementId + ".");
+                if (guarded) RequireInstanceParameter(element, parameter);
                 if (parameter.IsReadOnly) throw new InvalidOperationException("Parameter is read-only: " + parameterId);
                 object value = Required(change, "value");
                 string unit = OptionalString(change, "value_unit", "");
                 if (change.ContainsKey("value_unit") && unit != "internal") throw new InvalidOperationException("value_unit, when provided, must equal internal.");
                 object before = InternalValue(parameter);
                 StorageType storageType = parameter.StorageType;
-                object expected;
-                if (storageType == StorageType.Double)
-                {
-                    if (unit != "internal") throw new InvalidOperationException("Double parameters require value_unit=internal for each change.");
-                    expected = FiniteNumber(value, "value");
-                }
-                else if (storageType == StorageType.Integer)
-                {
-                    int number = (int)Integer(value, "value", int.MinValue, int.MaxValue);
-                    if (parameter.Definition.GetDataType() == SpecTypeId.Boolean.YesNo && number != 0 && number != 1)
-                        throw new InvalidOperationException("Yes/No parameters require integer 0 or 1.");
-                    expected = number;
-                }
-                else if (storageType == StorageType.String)
-                {
-                    if (!(value is string)) throw new InvalidOperationException("String parameter value must be a string, not a converted number or null.");
-                    expected = (string)value;
-                }
-                else throw new InvalidOperationException("Only Double, Integer and String parameters can be written; ElementId parameters are not supported.");
+                string guardedDataType = null;
+                if (guarded) guardedBefore = ValidateParameterBefore(parameter, change, before, out guardedDataType);
+                if (storageType == StorageType.Double && unit != "internal") throw new InvalidOperationException("Double parameters require value_unit=internal for each change.");
+                object expected = NormalizeParameterValue(parameter, value, "value", true);
                 bool changed = !object.Equals(before, expected);
                 if (changed)
                 {
@@ -164,11 +155,71 @@ namespace RevitLocalCodex
                     else parameter.Set((string)expected);
                 }
                 object after = VerifyParameterValue(parameter, storageType, expected);
-                if (expectations != null) expectations.Add(new ParameterWriteExpectation(elementId, parameterId, storageType, expected));
-                results.Add(new { element_id = elementId, parameter_id = parameterId, storage_type = storageType.ToString(),
-                    data_type = parameter.Definition.GetDataType().TypeId, changed, before_internal = before, after_internal = after });
+                if (guarded) VerifyInstanceMetadata(element, parameter, guardedDataType);
+                if (expectations != null) expectations.Add(new ParameterWriteExpectation(elementId, parameterId, storageType, expected, guarded, guardedDataType));
+                results.Add(new { element_id = guarded ? (object)NativeModelQueries.SignedId(element.Id) : elementId,
+                    parameter_id = guarded ? (object)NativeModelQueries.SignedId(parameter.Id) : parameterId, storage_type = storageType.ToString(),
+                    data_type = guarded ? guardedDataType : parameter.Definition.GetDataType().TypeId, changed, before_internal = before, after_internal = after });
             }
-            return new { updated_count = results.Count, changes = results.ToArray() };
+            object batch = new { updated_count = results.Count, changes = results.ToArray() };
+            if (guarded) return new { schema_version = 1, target_kind = "instance", before = guardedBefore, result = batch };
+            return batch;
+        }
+
+        private static object NormalizeParameterValue(Parameter parameter, object value, string label, bool enforceYesNo)
+        {
+            if (parameter.StorageType == StorageType.Double) return FiniteNumber(value, label);
+            if (parameter.StorageType == StorageType.Integer)
+            {
+                int number = (int)Integer(value, label, int.MinValue, int.MaxValue);
+                if (enforceYesNo && parameter.Definition.GetDataType() == SpecTypeId.Boolean.YesNo && number != 0 && number != 1)
+                    throw new InvalidOperationException("Yes/No parameters require integer 0 or 1.");
+                return number;
+            }
+            if (parameter.StorageType == StorageType.String)
+            {
+                if (!(value is string)) throw new InvalidOperationException("String parameter value must be a string, not a converted number or null.");
+                return (string)value;
+            }
+            throw new InvalidOperationException("Only Double, Integer and String parameters can be written; ElementId parameters are not supported.");
+        }
+
+        private static string ParameterDataType(Parameter parameter)
+        {
+            ForgeTypeId dataType = parameter.Definition.GetDataType();
+            return dataType == null ? null : dataType.TypeId;
+        }
+
+        private static object ValidateParameterBefore(Parameter parameter, Dictionary<string, object> change, object before, out string dataType)
+        {
+            var state = Required(change, "expected_state") as Dictionary<string, object>;
+            if (state == null) throw new InvalidOperationException("expected_state must be an object.");
+            Fields(state, "storage_type", "has_value", "value_internal", "data_type");
+            object storage = Required(state, "storage_type"), hasValue = Required(state, "has_value"), raw, data;
+            if (!(storage is string) || ((string)storage != "Double" && (string)storage != "Integer" && (string)storage != "String") || !(hasValue is bool) ||
+                !state.TryGetValue("value_internal", out raw) || !state.TryGetValue("data_type", out data) || data != null && !(data is string))
+                throw new InvalidOperationException("expected_state must contain exact storage_type, has_value, value_internal and data_type facts.");
+            dataType = ParameterDataType(parameter);
+            if ((string)storage != parameter.StorageType.ToString() || (bool)hasValue != parameter.HasValue || !string.Equals((string)data, dataType, StringComparison.Ordinal))
+                throw new InvalidOperationException("Parameter state changed since the approved read.");
+            object expectedBefore = raw == null ? null : NormalizeParameterValue(parameter, raw, "expected_state.value_internal", false);
+            if (!object.Equals(before, expectedBefore)) throw new InvalidOperationException("Parameter state changed since the approved read.");
+            return new { storage_type = parameter.StorageType.ToString(), has_value = parameter.HasValue, value_internal = before, data_type = dataType };
+        }
+
+        private static void RequireInstanceParameter(Element source, Parameter parameter)
+        {
+            Element owner = parameter.Element;
+            if (source is ElementType || owner == null || owner is ElementType || !owner.IsValidObject || owner.Id == null || source.Id == null ||
+                owner.Id.Value != source.Id.Value || owner.Document == null || !owner.Document.Equals(source.Document))
+                throw new InvalidOperationException("Parameter is not owned by the explicitly selected instance.");
+        }
+
+        private static void VerifyInstanceMetadata(Element source, Parameter parameter, string dataType)
+        {
+            RequireInstanceParameter(source, parameter);
+            if (!string.Equals(ParameterDataType(parameter), dataType, StringComparison.Ordinal))
+                throw new InvalidOperationException("Parameter data_type changed during the operation.");
         }
 
         private sealed class ParameterWriteExpectation
@@ -177,8 +228,10 @@ namespace RevitLocalCodex
             internal readonly long ParameterId;
             internal readonly StorageType StorageType;
             internal readonly object Value;
-            internal ParameterWriteExpectation(long elementId, long parameterId, StorageType storageType, object value)
-            { ElementId = elementId; ParameterId = parameterId; StorageType = storageType; Value = value; }
+            internal readonly bool Guarded;
+            internal readonly string DataType;
+            internal ParameterWriteExpectation(long elementId, long parameterId, StorageType storageType, object value, bool guarded = false, string dataType = null)
+            { ElementId = elementId; ParameterId = parameterId; StorageType = storageType; Value = value; Guarded = guarded; DataType = dataType; }
         }
 
         private static object VerifyParameterValue(Parameter parameter, StorageType storageType, object expected)
@@ -198,6 +251,7 @@ namespace RevitLocalCodex
                 Element element = RequiredElement(doc, expected.ElementId);
                 Parameter parameter = element.Parameters.Cast<Parameter>().SingleOrDefault(candidate => candidate.Id.Value == expected.ParameterId);
                 if (parameter == null) throw new InvalidOperationException("Parameter id " + expected.ParameterId + " no longer belongs to element " + expected.ElementId + ".");
+                if (expected.Guarded) VerifyInstanceMetadata(element, parameter, expected.DataType);
                 VerifyParameterValue(parameter, expected.StorageType, expected.Value);
             }
         }
@@ -274,13 +328,19 @@ namespace RevitLocalCodex
                 start_mm = PointDto(start), end_mm = PointDto(end), diameter_mm = Millimeters(actual) };
         }
 
+        private static object DescribedId(ElementId id)
+        {
+            if (id == null) return null;
+            return id.Value > 9007199254740991L || id.Value < -9007199254740991L ? (object)NativeModelQueries.SignedId(id) : id.Value;
+        }
+
         private static object DescribeElement(Element element)
         {
             ElementType type = element as ElementType;
-            return new { element_id = element.Id.Value, name = element.Name, class_name = element.GetType().Name,
+            return new { element_id = DescribedId(element.Id), name = element.Name, class_name = element.GetType().Name,
                 category = element.Category == null ? null : element.Category.Name,
-                category_id = element.Category == null ? (long?)null : element.Category.Id.Value,
-                type_id = element.GetTypeId().Value, level_id = element.LevelId.Value,
+                category_id = element.Category == null ? null : DescribedId(element.Category.Id),
+                type_id = DescribedId(element.GetTypeId()), level_id = DescribedId(element.LevelId),
                 family_name = type == null ? null : type.FamilyName, is_type = type != null };
         }
 

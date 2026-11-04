@@ -1,18 +1,38 @@
 // Presentation only: parameter identities and values come from the native read
 // contract. The existing command owner retains transport and write authority.
 import {commandElementId,commandFormDocument,sameCommandFormDocument,commandFormOwner} from './command-form-source.mjs';
+import {isExactIdRule,parseExactIdValue} from './command-fields.mjs';
 
 const parameterId = value => Number.isSafeInteger(value) && value !== 0 && value !== -1;
 
-export function parameterInputKind(parameter) {
-  if (!parameter || !parameterId(parameter.parameter_id) || typeof parameter.name !== 'string' || parameter.is_read_only !== false) return null;
+export function parameterInputKind(parameter,{exactIds=false,idRule}={}) {
+  let validId=parameter&&parameterId(parameter.parameter_id);
+  if(exactIds)try{parseExactIdValue(idRule,parameter?.parameter_id);validId=true;}catch{validId=false;}
+  if (!parameter || !validId || typeof parameter.name !== 'string' || parameter.is_read_only !== false) return null;
   if (parameter.storage_type === 'String') return 'text';
   if (parameter.storage_type === 'Integer') return /^autodesk\.spec:spec\.bool-\d+\.\d+\.\d+$/.test(parameter.data_type) ? 'yesno' : 'integer';
   if (parameter.storage_type === 'Double' && /^autodesk\.spec\.aec:length-\d+\.\d+\.\d+$/.test(parameter.data_type)) return 'length';
   return null;
 }
 
-export function createParameterChangeField({document,Event=globalThis.Event,id,onCommand,onChange=()=>{}}) {
+export function parameterExpectedState(parameter) {
+  if(!parameter||!['String','Integer','Double'].includes(parameter.storage_type)||typeof parameter.has_value!=='boolean'||
+    !Object.hasOwn(parameter,'value_internal')||!Object.hasOwn(parameter,'data_type')||parameter.data_type!==null&&typeof parameter.data_type!=='string')return null;
+  const value=parameter.value_internal;
+  if(!parameter.has_value&&value!==null||value!==null&&(parameter.storage_type==='String'?typeof value!=='string':
+    parameter.storage_type==='Integer'?!Number.isInteger(value)||value<-2147483648||value>2147483647:typeof value!=='number'||!Number.isFinite(value)))return null;
+  return {storage_type:parameter.storage_type,has_value:parameter.has_value,value_internal:value,data_type:parameter.data_type};
+}
+
+export function createParameterChangeField({document,Event=globalThis.Event,id,onCommand,onChange=()=>{},rule,maxChanges=50,exactIds=false}) {
+  if(!Number.isInteger(maxChanges)||maxChanges<1||maxChanges>50)throw new Error('Invalid parameter change limit');
+  const elementRule=rule?.items?.properties?.element_id,idRule=rule?.items?.properties?.parameter_id;
+  if(exactIds&&(!isExactIdRule(elementRule)||!isExactIdRule(idRule)))throw new Error('Exact parameter changes require the published ID schemas');
+  const normalizeId=(value,signed=false)=>{
+    if(!exactIds)return signed?parameterId(value)?value:null:commandElementId(value);
+    try{return parseExactIdValue(signed?idRule:elementRule,value);}catch{return null;}
+  };
+  const kindOf=parameter=>exactIds&&!parameterExpectedState(parameter)?null:parameterInputKind(parameter,{exactIds,idRule});
   const make = (tag,className,text) => {const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;};
   const element=make('div','model-command-field model-command-field-wide parameter-change-field');
   const input=make('input');input.id=id;input.type='hidden';input.dataset.defaultValue='';
@@ -39,6 +59,7 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
   const valueStep=make('div','parameter-change-step');valueStep.append(make('strong','parameter-change-step-title','2 填写修改'),field('参数',parameterSelect),current,valueLabel,add);
   element.append(input,selectionStep,valueStep,status,error,list);
   let snapshot=null,owner=null,source=null,elements=[],parameters=[],changes=[],pending=null,dirty=false,readBlocked=false,removedButtons=[];
+  const observations=new Map();
 
   function notify() {error.hidden=true;input.dispatchEvent(new Event('input',{bubbles:true}));onChange();}
   function available(node,yes) {node.dataset.fieldUnavailable=String(!yes);node.disabled=!yes || input.disabled;}
@@ -49,14 +70,14 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
     available(elementSelect,elements.length>0&&!pending);
     available(readParameters,Boolean(selectedElement()&&source&&!pending));
     available(parameterSelect,parameters.length>0&&!pending);
-    const parameter=selectedParameter(),kind=parameterInputKind(parameter);
+    const parameter=selectedParameter(),kind=kindOf(parameter);
     valueText.hidden=kind!=='text';valueNumber.hidden=!['length','integer'].includes(kind);valueBoolean.hidden=kind!=='yesno';
     valueLabel.hidden=!kind;current.hidden=!kind;
     available(valueText,kind==='text'&&!pending);available(valueNumber,['length','integer'].includes(kind)&&!pending);available(valueBoolean,kind==='yesno'&&!pending);
-    available(add,Boolean(kind&&source&&!pending&&changes.length<50));
+    available(add,Boolean(kind&&source&&!pending&&changes.length<maxChanges));
     for(const node of removedButtons)available(node,!pending);
   }
-  function clearParameters() {parameters=[];parameterSelect.replaceChildren();option(parameterSelect,'','请先读取参数');parameterSelect.value='';valueText.value='';valueNumber.value='';valueBoolean.value='';current.textContent='';dirty=false;}
+  function clearParameters() {parameters=[];observations.clear();parameterSelect.replaceChildren();option(parameterSelect,'','请先读取参数');parameterSelect.value='';valueText.value='';valueNumber.value='';valueBoolean.value='';current.textContent='';dirty=false;}
   function clearElements() {elements=[];elementSelect.replaceChildren();option(elementSelect,'','请先读取当前选择');elementSelect.value='';clearParameters();}
   function renderChanges() {
     for(const node of removedButtons){const index=controls.indexOf(node);if(index>=0)controls.splice(index,1);}removedButtons=[];list.replaceChildren();
@@ -72,7 +93,7 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
   function reset(message='先在 Revit 中选中元素，再读取当前选择。') {pending=null;source=null;changes=[];readBlocked=false;clearElements();renderChanges();status.textContent=message;sync();}
   function failure(message) {error.textContent=message;error.hidden=false;}
   function pickParameter() {
-    const parameter=selectedParameter(),kind=parameterInputKind(parameter);dirty=false;valueText.value='';valueNumber.value='';valueBoolean.value='';
+    const parameter=selectedParameter(),kind=kindOf(parameter);dirty=false;valueText.value='';valueNumber.value='';valueBoolean.value='';
     valueHeading.textContent=kind==='length'?'新值（mm）':kind==='integer'?'新值（整数）':'新值';
     const currentValue=parameter?.value_internal;
     if(kind==='text'&&typeof currentValue==='string')valueText.value=currentValue;
@@ -97,11 +118,11 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
   }
   readSelection.addEventListener('click',()=>{if(readSelection.disabled)return;clearElements();begin('selection',{});});
   elementSelect.addEventListener('change',()=>{clearParameters();notify();sync();});
-  readParameters.addEventListener('click',()=>{if(readParameters.disabled)return;const item=selectedElement();if(item&&source)begin('revit_describe_parameters',{element_id:item.element_id},source);});
+  readParameters.addEventListener('click',()=>{if(readParameters.disabled)return;const item=selectedElement();if(item&&source)begin(exactIds?'revit_get_element_parameters':'revit_describe_parameters',{element_id:item.element_id},source);});
   parameterSelect.addEventListener('change',()=>{pickParameter();notify();});
   for(const node of [valueText,valueNumber,valueBoolean])for(const event of ['input','change'])node.addEventListener(event,()=>{dirty=true;notify();});
   add.addEventListener('click',()=>{
-    if(add.disabled)return;const item=selectedElement(),parameter=selectedParameter(),kind=parameterInputKind(parameter);if(!item||!kind||!source)return;
+    if(add.disabled)return;const item=selectedElement(),parameter=selectedParameter(),kind=kindOf(parameter);if(!item||!kind||!source)return;
     if(changes.some(entry=>entry.change.element_id===item.element_id&&entry.change.parameter_id===parameter.parameter_id)){failure('此元素的该参数已在列表中；请先移除原项再修改。');return;}
     let value,displayValue;
     if(kind==='text'){value=valueText.value;displayValue=value===''?'空文本':value;}
@@ -115,8 +136,10 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
       displayValue=String(value)+(kind==='length'?' mm':'');if(kind==='length')value/=304.8;
       if(!Number.isFinite(value)){failure('该数字超出可用范围。');return;}
     }
-    const change={element_id:item.element_id,parameter_id:parameter.parameter_id,value,...kind==='length'?{value_unit:'internal'}:{}};
-    changes.push({change,elementName:item.name,parameterName:parameter.name,displayValue});dirty=false;renderChanges();status.textContent='已加入 '+changes.length+' 项修改；可继续选择其他参数。';notify();sync();
+    const expectedState=exactIds?observations.get(String(parameter.parameter_id)):null;
+    if(exactIds&&!expectedState){failure('请重新读取参数，以核对修改前的原始值。');return;}
+    const change={element_id:item.element_id,parameter_id:parameter.parameter_id,value,...kind==='length'?{value_unit:'internal'}:{},...exactIds?{expected_state:{...expectedState}}:{}};
+    changes.push({change,elementName:item.name,parameterName:parameter.name,displayValue});dirty=false;renderChanges();status.textContent=maxChanges===1?'已加入 1 项修改；更换目标前请先移除该项。':'已加入 '+changes.length+' 项修改；可继续选择其他参数。';notify();sync();
   });
   Object.defineProperty(input,'value',{get:()=>JSON.stringify(changes.map(entry=>entry.change)),set:value=>{
     reset(value && value!=='[]'?'请重新读取元素和参数，以核对这份修改的来源。':undefined);notify();
@@ -157,11 +180,12 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
       const data=command.result?.data;
       if(!Array.isArray(data?.items)){reset('选择结果格式不完整，请重新读取。');notify();return;}
       source=receivedSource;
-      // Read aliases retain Int64 identifiers as strings; fixed write contracts
-      // accept JSON safe integers. Normalize once and never round an unsafe ID.
-      elements=[];let unsupportedIds=0;
+      // Legacy writes retain their safe-integer boundary. The guarded mode uses
+      // its published exact-ID schema and never rounds a native decimal ID.
+      elements=[];let unsupportedIds=0,unsupportedTypes=0;
       for(const item of data.items){
-        const element_id=commandElementId(item?.element_id);
+        if(exactIds&&(item?.is_type===true||item?.is_element_type===true||item?.class_name==='ElementType'||item?.class_name==='FamilySymbol')){unsupportedTypes++;continue;}
+        const element_id=normalizeId(item?.element_id);
         if(element_id===null)unsupportedIds++;
         else if(typeof item.name==='string')elements.push({...item,element_id});
       }
@@ -171,13 +195,15 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
       const partial=data.truncated===true||data.has_more===true||Number.isSafeInteger(data.total)&&data.total>elements.length||elements.length<data.items.length;
       status.textContent=elements.length?'已读取 '+elements.length+' 个元素'+(partial?'（仅本次返回；可缩小 Revit 中的选择后重读）':'')+'，选择元素后读取参数。':'当前没有可用的已选元素，请先在 Revit 中选择。';
       if(unsupportedIds)status.textContent+=' '+unsupportedIds+' 个元素编号超出当前表单支持范围或格式无效，已排除。';
+      if(unsupportedTypes)status.textContent+=' '+unsupportedTypes+' 个元素类型已排除；本操作仅修改实例参数。';
     }else{
       const data=command.result?.data?.value;
-      if(data?.element_id!==request.elementId||!Array.isArray(data?.parameters)){
+      if((exactIds?String(normalizeId(data?.element_id))!==String(request.elementId):data?.element_id!==request.elementId)||!Array.isArray(data?.parameters)){
         clearParameters();status.textContent='参数结果与所选元素不一致，请重新读取。';notify();sync();return;
       }
-      parameters=data.parameters.filter(parameter=>parameterInputKind(parameter));
+      parameters=data.parameters.filter(parameter=>kindOf(parameter)).map(parameter=>({...parameter,parameter_id:normalizeId(parameter.parameter_id,true)}));
       const ids=new Set();parameters=parameters.filter(parameter=>{if(ids.has(parameter.parameter_id))return false;ids.add(parameter.parameter_id);return true;});
+      if(exactIds)for(const parameter of parameters)observations.set(String(parameter.parameter_id),Object.freeze(parameterExpectedState(parameter)));
       parameterSelect.replaceChildren();option(parameterSelect,'','请选择参数');
       for(const parameter of parameters)option(parameterSelect,parameter.parameter_id,parameter.name+' · #'+parameter.parameter_id);
       parameterSelect.value='';

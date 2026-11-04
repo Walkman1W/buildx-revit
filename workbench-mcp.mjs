@@ -1,6 +1,6 @@
 import readline from 'node:readline';
 import {invokeWorkbench,READONLY_WORKBENCH_TOOL_NAMES,workbenchFailureEvidence} from './lib/workbench-client.mjs';
-import {PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
+import {PANEL_WORKBENCH_TOOLS,LEGACY_PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
 import {isCommandTool,invokeCommand} from './lib/command-store.mjs';
 import {sanitizePanelAudit} from './lib/panel-audit.mjs';
 import {isNativeModelQuery} from './lib/native-model-queries.mjs';
@@ -18,7 +18,7 @@ const tools=readOnly?READONLY_WORKBENCH_TOOL_NAMES.map(name=>{
   const matches=PANEL_WORKBENCH_TOOLS.filter(tool=>tool.name===name);
   if(matches.length!==1||matches[0].annotations?.readOnlyHint!==true)throw new Error('Read-only workbench catalog does not match its named contracts');
   return matches[0];
-}):workspace?workspaceTools:PANEL_WORKBENCH_TOOLS;
+}):workspace?workspaceTools:LEGACY_PANEL_WORKBENCH_TOOLS;
 const exposedNames=new Set(tools.map(tool=>tool.name));
 const send=message=>process.stdout.write(JSON.stringify(message)+'\n');
 const input=readline.createInterface({input:process.stdin,crlfDelay:Infinity});

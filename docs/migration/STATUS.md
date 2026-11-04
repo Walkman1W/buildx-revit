@@ -19,7 +19,7 @@
 - 锁定安装 19 个 Node 依赖、纯解析 owner 遗漏修复、第三方原始许可证公告和有限敏感扫描完成。历史来源记录仅追加更正，未改写 507 文件复制证据。见 `BASELINE-AUDIT.zh-CN.md`。
 - 每小时自检任务 `buildx` 已启用，目标为本项目聊天，配置读回确认；已收到 2026-11-05 02:12（北京时间）的实际 heartbeat 并推进本轮私有编译器切片。
 - 已执行 `node --check server.mjs`、`node --check source-panel.mjs`、`node --check public/app.js`，三项语法检查通过；这不证明运行依赖完整或真实 Revit 可用。
-- 原提取宿主为 0.8.0；本工程新源码为 0.8.4。六查询保留 `nativeModelQueriesVersion:1`；参数查询族 v1 按具名操作分别门禁：类型参数最低 0.8.2，单参数最低 0.8.4，均在入队前及原子回执校验。新 DLL 只在隔离目录编译，未替换已安装插件。
+- 原提取宿主为 0.8.0；本工程新源码为 0.8.5。六查询保留 `nativeModelQueriesVersion:1`；参数查询族 v1 按具名操作分别门禁：类型参数最低 0.8.2，单参数最低 0.8.4。新实例参数写独立要求 0.8.5、`nativeParameterWritesVersion:1` 和具名写能力，不进入原子读分支。新 DLL 只在隔离目录编译，未替换已安装插件。
 - 独立运行布局源码已完成：schema 2 程序/私有执行资源/数据/队列分离，Node、MCP、命令库与 C# 使用同一配置；schema 1 保留原数据位置。旧开发根、个人 Node 例外和 Python 私有缓存兜底已退出生产启动路径。见 `RUNTIME-LAYOUT.zh-CN.md`。
 - 布局修改后六查询 **181/181** 保持通过，布局/安装/归属相关组 **105/105**，受控宿主 **80/80**；227 文件完整源码快照以官方 NuGet WebView2 SDK 独立通过 Revit 2024 API 编译。首次六查询记录的摘要属于 93b324c 历史切片，该历史候选构建和包摘要见 `internal-candidate-verification.json`。
 - 历史内部候选已完成：运行包 ZIP 1,086,373 字节（123 产品文件及清单），源码 ZIP 983,301 字节（227 源文件及两份清单），全部条目回读与解压验证通过。无 node_modules 的解压运行包能启动生产 MCP 目录并保留六项契约，未创建队列。详见 `INTERNAL-CANDIDATE-20261105.zh-CN.md`，旧产物保留。
@@ -27,8 +27,9 @@
 - P1 `revit_get_type_parameters` 已接通自有 C#、具名原子契约、共享参数事实和双侧能力门禁，实例解析真实类型，直接类型读取自身；没有类型时明确失败，不回落实例参数。新增验证 **24/24**、六查询及目录回归 **182/182**、布局 **105/105**、宿主 **80/80**，均无跳过；242 文件源码快照、33 项 C# 输入真实 Revit 2024 API 引用编译成功。新候选为 `0.8.2-internal-parameters`，143 产品文件，仍 `releaseReady:false`。详见 `NATIVE-PARAMETER-VERIFICATION.zh-CN.md`。
 - 已用实际生产 setter/事务组代码在受控 API peers 复现三种存储类型“Set 返回 true、值未满足却成功”的问题并修复。0.8.3 强制设置后、Regenerate 后及内层 Commit 后按 ID 回读；Node 对参数成功回执逐行核对原请求，不匹配保留 unknown、不重发。写入相关合组 **117/117**、六查询/目录 **182/182**、类型查询 **24/24**、布局 **105/105**、宿主 **80/80**，无跳过；249 文件源码快照和 33 项 C# 输入 API 编译通过。该切片内部候选为 `0.8.3-internal-parameter-write`，144 产品文件，仍阻止安装。详见 `PARAMETER-WRITE-VERIFICATION.zh-CN.md`。
 - P1 `revit_get_parameter_value` 已实现显式 ID/完整名称二选一、完整有界扫描与歧义拒绝，仅读取所选元素参数，不暗中改读类型。精确 ID 使用普通文本控件，大 ID 保留字符串，名称不 trim；前端和执行器都校验选择器互斥。新单参数/字段/界面合组 **79/79**，其余 182/24/117/105/80 组回归均通过。另实际复现并修复旧公共 ID 解析在 boxed Double 安全上界少 1 的问题。最新 `0.8.4-internal-single-parameter` 候选：259 源文件、33 C# API 引用编译、144 产品文件，仍 `releaseReady:false`。见 `SINGLE-PARAMETER-VERIFICATION.zh-CN.md`。
+- P1 `revit_set_parameter_value` 已完成实例专用具名写入：单项稳定 ID、原始前态守卫、实例/参数归属和三阶段回读，复用现有审批、事务及原回执 owner；旧宿主/raw MCP 零入队。新合组 **124/124**，其余 117/182/24/79/105/80 组与 legacy 专项 23 项均通过。选择描述器四项 ID 的真实序列化和 Node 传输已核验。最新 `0.8.5-internal-single-parameter-write`：266 源文件、33 C# API 编译、145 产品文件，仍 `releaseReady:false`。见 `SINGLE-PARAMETER-WRITE-VERIFICATION.zh-CN.md` 与 `single-parameter-write-verification.json`。
 - 真实 Revit/WebView/Codex、模型效果、客户安装升级和恢复尚未验收。
 
 ## 下一步
 
-类型/单参数读取及已有参数写入的回读/回滚受控补强已完成，BX-006 继续进行。下一项按 P1 台账核查具名单参数及类型参数写入的消费者、类型影响范围与已审批输入，复用已验证 setter 定义并实施下一可验切片，再推进剩余常用建模语义。继续沿用文档身份、权限、取消和原回执核对。首版 Argus 功能边界及运行时、许可、数据升级恢复条件仍需核实，不扩展成 103 项全量迁移，不盲删仍有消费者的 Argus/ScriptRunner。真实安装/加载需要覆盖指定目录与 Revit 实例的具体授权，当前未请求或执行该操作。真实 Revit/WebView/Codex 与客户机验收仍单列，不能用目录握手或隔离编译替代。
+实例单参数具名写入已完成源码与隔离验证，BX-006 继续进行。下一项按 P1 台账落实类型参数写入的稳定 type ID、跨实例影响与可信强制确认，不能让模型自报 ack 或普通自动应用权限代替类型整体确认；继续复用已验证 setter，再推进剩余常用建模语义。保留文档身份、权限、取消和原回执核对。首版 Argus 功能边界及运行时、许可、数据升级恢复条件仍需核实，不扩展成 103 项全量迁移，不盲删仍有消费者的 Argus/ScriptRunner。真实安装/加载需要覆盖指定目录与 Revit 实例的具体授权，当前未请求或执行该操作。真实 Revit/WebView/Codex 与客户机验收仍单列，不能用目录握手或隔离编译替代。

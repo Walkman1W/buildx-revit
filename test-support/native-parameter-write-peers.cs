@@ -25,7 +25,7 @@ namespace Autodesk.Revit.DB {
     internal sealed class Definition { public string Name;public ForgeTypeId DataType; public ForgeTypeId GetDataType() { return DataType; } }
     internal sealed class Parameter {
         public ElementId Id; public Definition Definition; public StorageType StorageType; public bool IsReadOnly,HasValue;
-        public object Value; public string Behavior; public Document Document; public int SetCalls,ReadCalls;
+        public object Value; public string Behavior; public Document Document; public Element Element;public int SetCalls,ReadCalls;
         private void BeforeRead() { ReadCalls++;if(Document.ReadsThrow)throw new InvalidOperationException("Controlled post-commit parameter read failure."); }
         public double AsDouble() { BeforeRead();return Convert.ToDouble(Value,CultureInfo.InvariantCulture); }
         public int AsInteger() { BeforeRead();return Convert.ToInt32(Value,CultureInfo.InvariantCulture); }
@@ -35,11 +35,15 @@ namespace Autodesk.Revit.DB {
             SetCalls++;Document.Events.Add("Set:"+Id.Value);
             if(Behavior=="throws")throw new InvalidOperationException("Controlled Parameter.Set failure.");
             if(Behavior!="trueNoChange"&&Behavior!="falseNoChange") { Value=value;HasValue=true;Document.IsModified=true; }
+            if(Behavior=="dataTypeDrift")Definition.DataType=new ForgeTypeId("changed-immediately");
+            if(Behavior=="ownerDrift")Element=new ElementType { Id=Element.Id,Document=Document };
             return Behavior!="falseApplied"&&Behavior!="falseNoChange";
         }
         public bool Set(double value) { return Store(value); } public bool Set(int value) { return Store(value); } public bool Set(string value) { return Store(value); }
     }
-    internal sealed class Element { public ElementId Id;public bool IsValidObject=true;public List<Parameter> Parameters=new List<Parameter>(); }
+    internal sealed class Category { public ElementId Id;public string Name; }
+    internal class Element { public ElementId Id,LevelId=new ElementId(-1),TypeId=new ElementId(-1);public string Name="Controlled instance";public Category Category;public Document Document;public bool IsValidObject=true;public List<Parameter> Parameters=new List<Parameter>();public ElementId GetTypeId() { return TypeId; } }
+    internal sealed class ElementType:Element { public string FamilyName="Controlled family"; }
     internal sealed class Document {
         public string Title="Parameter write fixture",PathName=@"D:\controlled\parameter-write.rvt",CommitBehavior="normal",RegenerateBehavior="normal",GroupBehavior="normal",StartBehavior="normal";
         public bool IsModified,IsReadOnly,IsLinked,IsFamilyDocument,ReadsThrow;public List<Element> Elements=new List<Element>();public List<string> Events=new List<string>();
@@ -52,9 +56,13 @@ namespace Autodesk.Revit.DB {
             foreach(Element element in Elements) {
                 if(behavior=="invalidElement")element.IsValidObject=false;
                 if(behavior=="removeParameter")element.Parameters.Clear();
-                foreach(Parameter p in element.Parameters) { if(behavior=="storageChange")p.StorageType=p.StorageType==StorageType.Double?StorageType.Integer:StorageType.Double;if(behavior=="missingValue")p.HasValue=false; }
+                foreach(Parameter p in element.Parameters) {
+                    if(behavior=="storageChange")p.StorageType=p.StorageType==StorageType.Double?StorageType.Integer:StorageType.Double;if(behavior=="missingValue")p.HasValue=false;
+                    if(behavior=="dataTypeDrift")p.Definition.DataType=new ForgeTypeId("changed-during-boundary");if(behavior=="dataTypeNull")p.Definition.DataType=null;
+                    if(behavior=="ownerDrift")p.Element=new ElementType { Id=element.Id,Document=this };
+                }
                 if(behavior=="replaceParameter") {
-                    var replacements=element.Parameters.Select(p=>new Parameter { Id=new ElementId(p.Id.Value),Definition=p.Definition,StorageType=p.StorageType,HasValue=p.HasValue,Value=p.StorageType==StorageType.Double?(object)(Convert.ToDouble(p.Value)+1):p.StorageType==StorageType.Integer?(object)(Convert.ToInt32(p.Value)+1):(object)((string)p.Value+"-replacement"),Behavior="normal",Document=this }).ToList();
+                    var replacements=element.Parameters.Select(p=>new Parameter { Id=new ElementId(p.Id.Value),Definition=p.Definition,StorageType=p.StorageType,HasValue=p.HasValue,Value=p.StorageType==StorageType.Double?(object)(Convert.ToDouble(p.Value)+1):p.StorageType==StorageType.Integer?(object)(Convert.ToInt32(p.Value)+1):(object)((string)p.Value+"-replacement"),Behavior="normal",Document=this,Element=element }).ToList();
                     element.Parameters.Clear();element.Parameters.AddRange(replacements);
                 }
             }
@@ -62,9 +70,10 @@ namespace Autodesk.Revit.DB {
         public void Regenerate() { Regenerates++;Events.Add("Regenerate");if(RegenerateBehavior=="throws")throw new InvalidOperationException("Controlled Regenerate failure.");Boundary(RegenerateBehavior); }
     }
     internal sealed class Snapshot {
-        private readonly bool modified,readsThrow;private readonly List<Tuple<Element,List<Parameter>,bool>> elements;private readonly List<Tuple<Parameter,object,bool,StorageType>> values;
-        public Snapshot(Document doc) { modified=doc.IsModified;readsThrow=doc.ReadsThrow;elements=doc.Elements.Select(element=>Tuple.Create(element,element.Parameters.ToList(),element.IsValidObject)).ToList();values=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>Tuple.Create(p,p.Value,p.HasValue,p.StorageType)).ToList(); }
-        public void Restore(Document doc) { doc.IsModified=modified;doc.ReadsThrow=readsThrow;doc.Elements.Clear();foreach(var element in elements){doc.Elements.Add(element.Item1);element.Item1.Parameters.Clear();element.Item1.Parameters.AddRange(element.Item2);element.Item1.IsValidObject=element.Item3;}foreach(var item in values){item.Item1.Value=item.Item2;item.Item1.HasValue=item.Item3;item.Item1.StorageType=item.Item4;} }
+        private sealed class State { internal Parameter Parameter;internal object Value;internal bool HasValue;internal StorageType Storage;internal ForgeTypeId DataType;internal Element Owner; }
+        private readonly bool modified,readsThrow;private readonly List<Tuple<Element,List<Parameter>,bool>> elements;private readonly List<State> values;
+        public Snapshot(Document doc) { modified=doc.IsModified;readsThrow=doc.ReadsThrow;elements=doc.Elements.Select(element=>Tuple.Create(element,element.Parameters.ToList(),element.IsValidObject)).ToList();values=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>new State { Parameter=p,Value=p.Value,HasValue=p.HasValue,Storage=p.StorageType,DataType=p.Definition.DataType,Owner=p.Element }).ToList(); }
+        public void Restore(Document doc) { doc.IsModified=modified;doc.ReadsThrow=readsThrow;doc.Elements.Clear();foreach(var element in elements){doc.Elements.Add(element.Item1);element.Item1.Parameters.Clear();element.Item1.Parameters.AddRange(element.Item2);element.Item1.IsValidObject=element.Item3;}foreach(var item in values){item.Parameter.Value=item.Value;item.Parameter.HasValue=item.HasValue;item.Parameter.StorageType=item.Storage;item.Parameter.Definition.DataType=item.DataType;item.Parameter.Element=item.Owner;} }
     }
     internal enum TransactionStatus { Uninitialized,Started,Committed,RolledBack,Pending,Error }
     internal enum FailureProcessingResult { Continue,ProceedWithRollBack }
@@ -102,10 +111,14 @@ namespace Autodesk.Revit.DB {
 namespace RevitLocalCodex {
     using Autodesk.Revit.DB;
     using Autodesk.Revit.UI;
+    internal static class NativeModelQueries {
+        // PRODUCTION_EXACT_ID_METHODS
+    }
     internal static class WorkbenchActions {
         // Exact production methods injected unchanged. Other operation bodies are
         // explicit unreachable peers because this suite only calls set_parameters.
         // PRODUCTION_ACTION_METHODS
+        internal static object DescribeForPeer(Element element) { return DescribeElement(element); }
         private static object TransformElements(Document doc,string operation,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope transform peer."); }
         private static object CreateWall(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope wall peer."); }
         private static object CreatePipe(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope pipe peer."); }
@@ -128,25 +141,30 @@ namespace RevitLocalCodex {
     internal static class NativeParameterWritePeerProgram {
         private static object Value(Dictionary<string,object> args,string key,object fallback) { object result;return args.TryGetValue(key,out result)?result:fallback; }
         private static string Text(Dictionary<string,object> args,string key,string fallback) { return Convert.ToString(Value(args,key,fallback),CultureInfo.InvariantCulture); }
-        private static object Facts(Document doc) { return new { doc.IsModified,parameters=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>new { parameter_id=p.Id.Value,storage_type=p.StorageType.ToString(),p.HasValue,value=p.Value is ElementId?(object)((ElementId)p.Value).Value:p.Value,p.SetCalls,p.ReadCalls }).ToArray() }; }
+        private static object Facts(Document doc) { return new { doc.IsModified,source_ids=doc.Elements.Select(element=>element.Id.Value.ToString(CultureInfo.InvariantCulture)).ToArray(),parameters=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>new { parameter_id=p.Id.Value,id_exact=p.Id.Value.ToString(CultureInfo.InvariantCulture),storage_type=p.StorageType.ToString(),data_type=p.Definition.DataType==null?null:p.Definition.DataType.TypeId,owner_id=p.Element==null?null:p.Element.Id.Value.ToString(CultureInfo.InvariantCulture),owner_is_type=p.Element is ElementType,p.HasValue,value=p.Value is ElementId?(object)((ElementId)p.Value).Value:p.Value,p.SetCalls,p.ReadCalls }).ToArray() }; }
         public static int Main() {
             Console.InputEncoding=new UTF8Encoding(false);Console.OutputEncoding=new UTF8Encoding(false);var json=new JavaScriptSerializer { MaxJsonLength=1024*1024,RecursionLimit=40 };
             var input=json.Deserialize<Dictionary<string,object>>(Console.In.ReadToEnd());var doc=new Document { CommitBehavior=Text(input,"commitBehavior","normal"),RegenerateBehavior=Text(input,"regenerateBehavior","normal"),GroupBehavior=Text(input,"groupBehavior","normal"),StartBehavior=Text(input,"startBehavior","normal"),IsModified=(bool)Value(input,"modifiedBefore",false) };
-            var element=new Element { Id=new ElementId(100),IsValidObject=!(bool)Value(input,"invalidElement",false) };doc.Elements.Add(element);
+            Element element=(bool)Value(input,"sourceIsType",false)?new ElementType():new Element();element.Id=new ElementId(Convert.ToInt64(Value(input,"sourceId",100),CultureInfo.InvariantCulture));element.Document=doc;element.IsValidObject=!(bool)Value(input,"invalidElement",false);doc.Elements.Add(element);
+            element.TypeId=new ElementId(Convert.ToInt64(Value(input,"typeId",-1),CultureInfo.InvariantCulture));element.LevelId=new ElementId(Convert.ToInt64(Value(input,"levelId",-1),CultureInfo.InvariantCulture));if(input.ContainsKey("categoryId"))element.Category=new Category { Id=new ElementId(Convert.ToInt64(input["categoryId"],CultureInfo.InvariantCulture)),Name="Controlled category" };
             var rawParameters=(IList)Value(input,"parameters",new object[0]);
             foreach(Dictionary<string,object> raw in rawParameters) {
                 StorageType storage=(StorageType)Enum.Parse(typeof(StorageType),Text(raw,"storage","Double"));object value=Value(raw,"value",null);if(storage==StorageType.Double&&value!=null)value=Convert.ToDouble(value);if(storage==StorageType.Integer&&value!=null)value=Convert.ToInt32(value);if(storage==StorageType.ElementId&&value!=null)value=new ElementId(Convert.ToInt64(value));
-                element.Parameters.Add(new Parameter { Id=new ElementId(Convert.ToInt64(Value(raw,"id",1))),StorageType=storage,Value=value,HasValue=(bool)Value(raw,"hasValue",value!=null),IsReadOnly=(bool)Value(raw,"readOnly",false),Behavior=Text(raw,"behavior","normal"),Definition=new Definition { Name=Text(raw,"name","同名参数"),DataType=new ForgeTypeId(Text(raw,"dataType",storage==StorageType.Double?"length":"text")) },Document=doc });
+                object dataType=Value(raw,"dataType",storage==StorageType.Double?"length":"text");string owner=Text(raw,"owner","instance");Element parameterOwner=owner=="null"?null:owner=="type"?new ElementType { Id=element.Id,Document=doc }:owner=="otherElement"?new Element { Id=new ElementId(999),Document=doc }:owner=="otherDocument"?new Element { Id=element.Id,Document=new Document() }:owner=="invalid"?new Element { Id=element.Id,Document=doc,IsValidObject=false }:element;
+                element.Parameters.Add(new Parameter { Id=new ElementId(Convert.ToInt64(Value(raw,"id",1),CultureInfo.InvariantCulture)),StorageType=storage,Value=value,HasValue=(bool)Value(raw,"hasValue",value!=null),IsReadOnly=(bool)Value(raw,"readOnly",false),Behavior=Text(raw,"behavior","normal"),Definition=new Definition { Name=Text(raw,"name","同名参数"),DataType=dataType==null?null:new ForgeTypeId((string)dataType) },Document=doc,Element=parameterOwner });
             }
             var app=new UIApplication { ActiveUIDocument=new UIDocument { Document=doc } };var args=(Dictionary<string,object>)Value(input,"args",new Dictionary<string,object>());
-            if(!args.ContainsKey("expected_document"))args["expected_document"]=doc.PathName;if(!args.ContainsKey("mode"))args["mode"]="commit";
+            string operation=Text(input,"operation","set_parameters");
+            if(!args.ContainsKey("expected_document"))args["expected_document"]=doc.PathName;if(!args.ContainsKey("mode")&&operation=="set_parameters")args["mode"]="commit";
+            if(input.ContainsKey("parameterIdAsDouble"))((Dictionary<string,object>)((IList)args["changes"])[0])["parameter_id"]=Convert.ToDouble(((Dictionary<string,object>)((IList)args["changes"])[0])["parameter_id"],CultureInfo.InvariantCulture);
+            if(input.ContainsKey("elementIdAsDouble"))((Dictionary<string,object>)((IList)args["changes"])[0])["element_id"]=Convert.ToDouble(((Dictionary<string,object>)((IList)args["changes"])[0])["element_id"],CultureInfo.InvariantCulture);
             // JSON cannot encode non-finite numbers; this controlled API input
             // injection exercises the unchanged production finite-number guard.
             string nonFinite=Text(input,"nonFiniteValue","");if(nonFinite!="")((Dictionary<string,object>)((IList)args["changes"])[0])["value"]=nonFinite=="nan"?Double.NaN:nonFinite=="negativeInfinity"?Double.NegativeInfinity:Double.PositiveInfinity;
             object before=Facts(doc),result=null,error=null;
-            try { result=(bool)Value(input,"innerOnly",false)?WorkbenchActions.Write(app,"set_parameters",args):new Producer().Produce(app,"set_parameters",args); }
+            try { result=(bool)Value(input,"describeOnly",false)?WorkbenchActions.DescribeForPeer(element):(bool)Value(input,"innerOnly",false)?WorkbenchActions.Write(app,operation,args):new Producer().Produce(app,operation,args); }
             catch(Exception failure) { error=new { type=failure.GetType().Name,message=failure.Message }; }
-            Console.WriteLine(json.Serialize(new { ok=error==null,result,error,before,after=Facts(doc),transactions=new { doc.InnerStarts,doc.InnerCommits,doc.InnerRollbacks,doc.Regenerates,doc.GroupStarts,doc.GroupCommits,doc.GroupRollbacks,events=doc.Events.ToArray() },scope="Controlled API peers executing actual production setter/transaction/Host group branch; no real Revit/model" }));return 0;
+            Console.WriteLine(json.Serialize(new { ok=error==null,result,result_json=(bool)Value(input,"describeOnly",false)?json.Serialize(result):null,error,before,after=Facts(doc),transactions=new { doc.InnerStarts,doc.InnerCommits,doc.InnerRollbacks,doc.Regenerates,doc.GroupStarts,doc.GroupCommits,doc.GroupRollbacks,events=doc.Events.ToArray() },scope="Controlled API peers executing actual production setter/transaction/Host group branch or DescribeElement; no real Revit/model" }));return 0;
         }
     }
 }

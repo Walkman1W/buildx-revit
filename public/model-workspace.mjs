@@ -428,7 +428,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         const id=command.id === 'search' && ['keyword','category'].includes(key) ? 'model-command-'+key : 'model-command-'+command.id+'-'+key;
         const label=key==='parameters' && command.tool==='revit_run_command'?'参数值':COMMAND_PARAMETER_LABELS[key] || key;
         const options={document,Event,id,key,rule,label,required:required.has(key),value:draft?.values[key],onChange:invalidate,onCommand};
-        const field=command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
+        const field=command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
           (rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);
         const input=field.input;inputs[key]=input;formFields.push(field);
         for(const control of field.controls){control.dataset.commandEnabled=String(command.enabled !== false);parameterInputs.push(control);}

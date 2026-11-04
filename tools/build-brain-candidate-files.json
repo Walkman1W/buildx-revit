@@ -257,5 +257,12 @@
   "command-fields.test.mjs",
   "model-command-workspace-ui.test.mjs",
   "model-workspace.test.mjs",
-  "test-support/model-input-ui-fixture.mjs"
+  "test-support/model-input-ui-fixture.mjs",
+  "lib/native-parameter-writes.mjs",
+  "native-single-parameter-write-contract.test.mjs",
+  "native-single-parameter-write-producer.test.mjs",
+  "native-single-parameter-write-transport.test.mjs",
+  "native-single-parameter-write-ui.test.mjs",
+  "codex-profile.test.mjs",
+  "test-support/native-single-parameter-write-fixtures.mjs"
 ]

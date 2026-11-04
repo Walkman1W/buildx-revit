@@ -7,7 +7,8 @@ import { CodexClient } from './lib/codex-client.mjs';
 import { createCodexSessionProfile, buildSourceInvestigatorInstructions,
   SOURCE_SESSION_PROFILE, MODEL_SESSION_PROFILE } from './lib/codex-profile.mjs';
 import { buildAssistantInstructions } from './lib/assistant-instructions.mjs';
-import { READ_TOOLS, PANEL_WORKBENCH_TOOLS, ALL_PANEL_TOOLS } from './lib/panel-tools.mjs';
+import { NATIVE_MODEL_QUERY_NAMES as READ_TOOLS } from './lib/native-model-queries.mjs';
+import { LEGACY_PANEL_WORKBENCH_TOOLS as PANEL_WORKBENCH_TOOLS, LEGACY_PANEL_TOOL_NAMES as ALL_PANEL_TOOLS } from './lib/panel-tools.mjs';
 import { SOURCE_TOOLS } from './lib/source-tools.mjs';
 
 const root = process.cwd();
