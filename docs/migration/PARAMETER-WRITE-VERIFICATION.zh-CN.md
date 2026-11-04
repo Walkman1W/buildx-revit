@@ -2,6 +2,8 @@
 
 日期：2026 年 11 月 5 日。已用实际生产 setter、内层事务和 Host 外层事务组代码，在受控 API peers 复现并修复 Double、Integer、String 三类错误成功：`Set` 返回 true，但参数仍为旧值时，原实现仍返回 `committed:true`。相同三份输入在修复后均拒绝成功。宿主和程序集升至 **0.8.3**。
 
+本文与 `parameter-write-verification.json` 保留 0.8.3 切片的历史证据。后续单参数查询、精确 ID 控件及 Double 解析修正见 [0.8.4 单参数验证](SINGLE-PARAMETER-VERIFICATION.zh-CN.md)；原写入验证和产物保留。
+
 本轮只改新工程；没有加载新插件、替换用户 DLL/Addins、重启既有服务、执行真实 Revit/模型操作或公开发布。新内部候选 **`releaseReady:false`，仍不能安装**。原 0.8.2 查询候选及修复前失败证据保留。
 
 ## 实际变化

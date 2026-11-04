@@ -28,6 +28,12 @@ namespace RevitLocalCodex
         internal static bool IsRead(string operation) { return Operations.Contains(operation, StringComparer.Ordinal); }
         internal static string SignedId(ElementId id) { return id.Value.ToString(CultureInfo.InvariantCulture); }
         internal static long ExactId(Dictionary<string, object> args, string key) { return RequiredId(args, key); }
+        internal static long ExactSignedId(Dictionary<string, object> args, string key)
+        {
+            long id = RequiredId(args, key, true);
+            if (id == 0 || id == -1) throw new InvalidOperationException("Parameter id must not be 0 or -1.");
+            return id;
+        }
         private static string PositiveId(ElementId id) { return id == null || id.Value <= 0 ? null : SignedId(id); }
 
         internal static object Read(UIApplication uiapp, string operation, Dictionary<string, object> args)
@@ -236,18 +242,26 @@ namespace RevitLocalCodex
             if (double.IsNaN(x) || double.IsInfinity(x) || double.IsNaN(y) || double.IsInfinity(y) || double.IsNaN(z) || double.IsInfinity(z)) throw new InvalidOperationException("Nonfinite coordinate cannot be published.");
             return new { x, y, z };
         }
-        private static long RequiredId(Dictionary<string, object> args, string key)
+        private static long RequiredId(Dictionary<string, object> args, string key, bool signed = false)
         {
             object value; if (!args.TryGetValue(key, out value)) throw new InvalidOperationException("Missing argument: " + key);
             string text = value as string; long parsed;
             if (text != null)
             {
-                if (text.Length == 0 || text[0] < '1' || text[0] > '9' || !text.All(c => c >= '0' && c <= '9') || !long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out parsed) || parsed <= 0) throw new InvalidOperationException("Invalid precise ElementId: " + key);
+                bool negative = signed && text.Length > 0 && text[0] == '-';
+                string digits = negative ? text.Substring(1) : text;
+                if (digits.Length == 0 || digits[0] < '1' || digits[0] > '9' || !digits.All(c => c >= '0' && c <= '9') || !long.TryParse(text, negative ? NumberStyles.AllowLeadingSign : NumberStyles.None, CultureInfo.InvariantCulture, out parsed) || !signed && parsed <= 0) throw new InvalidOperationException("Invalid precise ElementId: " + key);
                 return parsed;
             }
             if (!(value is int || value is long || value is double || value is decimal)) throw new InvalidOperationException("ElementId must be an integer or decimal string.");
+            if (value is double)
+            {
+                double floating = (double)value;
+                if (double.IsNaN(floating) || double.IsInfinity(floating) || floating < (signed ? -9007199254740991d : 1d) || floating > 9007199254740991d || Math.Truncate(floating) != floating) throw new InvalidOperationException("Unsafe numeric ElementId; provide a precise decimal string.");
+                return (long)floating;
+            }
             decimal number = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-            if (number < 1 || number > 9007199254740991m || decimal.Truncate(number) != number) throw new InvalidOperationException("Unsafe numeric ElementId; provide a precise decimal string.");
+            if (number < (signed ? -9007199254740991m : 1m) || number > 9007199254740991m || decimal.Truncate(number) != number) throw new InvalidOperationException("Unsafe numeric ElementId; provide a precise decimal string.");
             return (long)number;
         }
         private static Element RequiredElement(Document doc, long id)

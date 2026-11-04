@@ -247,5 +247,15 @@
   "native-parameter-write-transport.test.mjs",
   "test-support/native-parameter-write-producer.mjs",
   "test-support/native-parameter-write-peers.cs",
-  "model-write-publication.test.mjs"
+  "model-write-publication.test.mjs",
+  "native-single-parameter-contract.test.mjs",
+  "native-single-parameter-producer.test.mjs",
+  "native-single-parameter-transport.test.mjs",
+  "test-support/native-single-parameter-producer.mjs",
+  "test-support/native-single-parameter-peers.cs",
+  "exact-id-fields.test.mjs",
+  "command-fields.test.mjs",
+  "model-command-workspace-ui.test.mjs",
+  "model-workspace.test.mjs",
+  "test-support/model-input-ui-fixture.mjs"
 ]

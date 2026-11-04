@@ -1,4 +1,4 @@
-import {createCommandField,COMMAND_PARAMETER_LABELS} from './command-fields.mjs';
+import {createCommandField,COMMAND_PARAMETER_LABELS,isExactIdRule,parseExactIdValue} from './command-fields.mjs';
 import {createCommandChoiceField} from './command-choice-field.mjs';
 import {createParameterChangeField} from './parameter-change-field.mjs';
 import {createPersonalCommandFields} from './personal-command-fields.mjs';
@@ -49,6 +49,16 @@ export function modelCommandCatalog(value) {
     icon:item.readOnly === true ? '⌕' : '◇'}));
 }
 
+function exclusiveSelectorKeys(schema) {
+  if(!Array.isArray(schema?.oneOf)||schema.oneOf.length<2)return [];
+  const keys=[];
+  for(const branch of schema.oneOf){
+    if(!branch||Object.keys(branch).some(key=>!['required','properties'].includes(key))||!Array.isArray(branch.required)||branch.required.length!==1||!Object.hasOwn(schema.properties||{},branch.required[0]))return [];
+    keys.push(branch.required[0]);
+  }
+  return new Set(keys).size===keys.length?keys:[];
+}
+
 export function modelSchemaParameters(command, values) {
   if (!command?.inputSchema || !values || typeof values !== 'object' || Array.isArray(values)) return {ok:false,error:'此命令的参数定义尚未就绪。'};
   const parameters = {}, properties = command.inputSchema.properties || {}, required = new Set(command.inputSchema.required || []);
@@ -62,7 +72,9 @@ export function modelSchemaParameters(command, values) {
       else continue;
     }
     try {
-      if (rule.type === 'number' || rule.type === 'integer') {
+      if (isExactIdRule(rule)) {
+        value=parseExactIdValue(rule,value);
+      } else if (rule.type === 'number' || rule.type === 'integer') {
         value = typeof value === 'number' ? value : Number(value);
         if (!Number.isFinite(value) || rule.type === 'integer' && !Number.isSafeInteger(value)) throw new Error();
         if (rule.minimum !== undefined && value < rule.minimum || rule.maximum !== undefined && value > rule.maximum || rule.exclusiveMinimum !== undefined && value <= rule.exclusiveMinimum) throw new Error();
@@ -80,6 +92,8 @@ export function modelSchemaParameters(command, values) {
     } catch { return {ok:false,error:label + '的值或格式不正确。'}; }
     parameters[key] = value;
   }
+  const selectors=exclusiveSelectorKeys(command.inputSchema);
+  if(selectors.length&&selectors.filter(key=>Object.hasOwn(parameters,key)).length!==1)return {ok:false,error:selectors.map(key=>COMMAND_PARAMETER_LABELS[key]||key).join('或')+'，二选一。'};
   if (command.tool === 'revit_save_command') {
     if (Object.hasOwn(parameters,'code') === Object.hasOwn(parameters,'steps')) return {ok:false,error:'请填写 C# 方法体或只读步骤，二选一。'};
     if (Object.hasOwn(parameters,'code') && new TextEncoder().encode(parameters.code).length > 64000) return {ok:false,error:'C# 方法体最多 64000 UTF-8 字节。'};
@@ -405,7 +419,8 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       }
       if(command.tool === 'revit_run_command') parameters.append(el('p','model-command-draft-help','请先读取准确版本，核对完整源码及当前模型。C# 使用 Revit 当前用户权限，回滚不能撤销文件、网络等事务外副作用。结果未知时请先核对回执，勿重复执行。'));
       if(command.tool === 'revit_family_load_job') parameters.append(el('p','model-command-draft-help','请先读取作业并核对 RFA 文件及 SHA；加载的模型改动按选择回滚或应用，RFA 文件不会因回滚而删除。'));
-      const inputs={}, draft=drafts.get(command.id),formFields=[],required=new Set(command.inputSchema?.required || []);
+      const inputs={}, draft=drafts.get(command.id),formFields=[],required=new Set(command.inputSchema?.required || []),selectors=new Set(exclusiveSelectorKeys(command.inputSchema));
+      if(selectors.size)parameters.append(el('small','command-field-help',[...selectors].map(key=>COMMAND_PARAMETER_LABELS[key]||key).join('或')+'，二选一。'));
       const advanced=el('details','model-command-advanced');advanced.append(el('summary','','更多选项'));
       const invalidate=()=>{if(inputs.$confirmation)inputs.$confirmation.checked=false;};
       const onCommand=detail=>{if(!commandActionAvailable(detail.commandId))return false;window.dispatchEvent(new CustomEvent('buildx-model-command',{detail}));return true;};
@@ -418,7 +433,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         const input=field.input;inputs[key]=input;formFields.push(field);
         for(const control of field.controls){control.dataset.commandEnabled=String(command.enabled !== false);parameterInputs.push(control);}
         const personalIdentity=['revit_get_command','revit_run_command'].includes(command.tool)&&['command_id','revision'].includes(key);
-        const optional=personalIdentity||!required.has(key)&&key!=='mode'&&key!=='keyword'&&key!=='category'&&key!=='name_contains'&&!(command.tool==='revit_run_command'&&key==='parameters')&&
+        const optional=personalIdentity||!selectors.has(key)&&!required.has(key)&&key!=='mode'&&key!=='keyword'&&key!=='category'&&key!=='name_contains'&&!(command.tool==='revit_run_command'&&key==='parameters')&&
           (['limit','offset','structural','source_request_id','parameters'].includes(key)||!Object.hasOwn(rule,'default'));
         (optional?advanced:parameters).append(field.element);
       }

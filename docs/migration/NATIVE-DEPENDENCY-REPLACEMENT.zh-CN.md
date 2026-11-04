@@ -10,6 +10,8 @@
 
 后续 0.8.3 已为已有 `set_parameters` 增加实际生产 setter/事务组受控覆盖，修复 Set 返回值与实际值脱节、Regenerate/内层提交后值漂移未复验的成功路径，Node 另核对原请求与逐行回读；见 `PARAMETER-WRITE-VERIFICATION.zh-CN.md`。通用失败仍不推断已回滚，实机写入尚未执行。
 
+0.8.4 新增具名 `revit_get_parameter_value`，ID/名称显式二选一、同元素有界扫描证明唯一性，参数事实复用原 owner；旧类型查询保持 0.8.2/v1 可用，新操作独立要求 0.8.4。精确 ID 文本控件及公共 Double ID 解析边界一同验证；见 `SINGLE-PARAMETER-VERIFICATION.zh-CN.md`。台账原来源记录保留，当前实现映射及未验层面在新记录单列。
+
 ## 原生架构与实现边界
 
 ```text

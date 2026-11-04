@@ -2,7 +2,7 @@
 // own validation and execution; controls only collect explicit user choices.
 export const COMMAND_PARAMETER_LABELS = Object.freeze({
   keyword:'关键词',category:'类别',name_contains:'名称包含',limit:'每页数量',offset:'起始位置',
-  element_id:'构件',element_ids:'构件',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
+  element_id:'构件',element_ids:'构件',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
   name:'名称',description:'说明',parameters:'参数定义',parameter_labels:'输入项名称',parameter_options:'下拉选项与模型来源',steps:'只读步骤',source_request_id:'关联执行请求 ID',
   revision:'命令版本',job_handle:'族作业标识',level_id:'标高',wall_type_id:'墙类型',pipe_type_id:'管类型',
   floor_type_id:'楼板类型',symbol_id:'族类型',system_type_id:'系统类型',width_mm:'宽度（mm）',
@@ -28,6 +28,28 @@ const has = (value,key) => Object.prototype.hasOwnProperty.call(value,key);
 const textValue = value => value === undefined || value === null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 const pointRule = rule => rule.type === 'object' && ['x','y','z'].every(axis => rule.properties?.[axis]?.type === 'number') && Object.keys(rule.properties).length === 3;
 
+// Recognize only the published decimal-ID union. Other structured schemas
+// retain their existing controls; the server still owns the ID's domain.
+export function isExactIdRule(rule) {
+  if(!Array.isArray(rule?.anyOf)||rule.anyOf.length!==2)return false;
+  const numeric=rule.anyOf.find(entry=>entry?.type==='integer'),decimal=rule.anyOf.find(entry=>entry?.type==='string');
+  return Boolean(numeric&&decimal&&['^[1-9]\\d{0,18}$','^-?(?:0|[1-9]\\d{0,18})$'].includes(decimal.pattern));
+}
+
+export function parseExactIdValue(rule,value) {
+  if(!isExactIdRule(rule)||typeof value!=='string'&&typeof value!=='number'||typeof value==='number'&&!Number.isSafeInteger(value))throw new Error('Invalid exact ID');
+  const raw=String(value),decimal=rule.anyOf.find(entry=>entry.type==='string'),numeric=rule.anyOf.find(entry=>entry.type==='integer');
+  if(!new RegExp(decimal.pattern).test(raw)||decimal.maxLength!==undefined&&raw.length>decimal.maxLength||decimal.minLength!==undefined&&raw.length<decimal.minLength)throw new Error('Invalid exact ID');
+  const exact=BigInt(raw);
+  if(exact.toString()!==raw||(rule.not?.enum||[]).some(entry=>entry===raw||typeof entry==='number'&&Number.isSafeInteger(entry)&&BigInt(entry)===exact))throw new Error('Invalid exact ID');
+  if(exact>=BigInt(Number.MIN_SAFE_INTEGER)&&exact<=BigInt(Number.MAX_SAFE_INTEGER)){
+    const number=Number(exact);
+    if((numeric.minimum===undefined||number>=numeric.minimum)&&(numeric.maximum===undefined||number<=numeric.maximum)&&
+      (numeric.exclusiveMinimum===undefined||number>numeric.exclusiveMinimum)&&(numeric.exclusiveMaximum===undefined||number<numeric.exclusiveMaximum))return number;
+  }
+  return raw;
+}
+
 export function createCommandField({document,Event=globalThis.Event,id,key,rule,label=COMMAND_PARAMETER_LABELS[key] ?? key,required=false,value,onChange=()=>{}}) {
   const make = (tag,className,text) => {
     const node=document.createElement(tag);
@@ -36,7 +58,7 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
     return node;
   };
   const initial=value === undefined ? has(rule,'default') ? rule.default : '' : value;
-  const complex=rule.type === 'array' || rule.type === 'object' || rule.anyOf || rule.oneOf;
+  const exactId=isExactIdRule(rule),complex=!exactId&&(rule.type === 'array' || rule.type === 'object' || rule.anyOf || rule.oneOf);
   const isPoint=pointRule(rule),isIds=rule.type === 'array' && rule.items?.type === 'integer';
   const element=make(isPoint ? 'div' : 'label','command-field'+(isPoint?' command-field-point':isIds?' command-field-ids':''));
   const title=make('span','command-field-label',label);
@@ -123,6 +145,7 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
     for(const choice of choices) {const option=make('option','',commandChoiceLabel(choice,key));option.value=String(choice);input.append(option);}
   }else if(!complex && key !== 'code') {
     input.type=rule.type === 'number' || rule.type === 'integer' ? 'number' : 'text';
+    if(exactId){input.inputMode='numeric';const maxLength=rule.anyOf.find(entry=>entry.type==='string').maxLength;if(maxLength!==undefined)input.maxLength=maxLength;}
     if(input.type === 'number')input.step=rule.type === 'integer'?'1':'any';
     if(rule.minimum !== undefined)input.min=String(rule.minimum);
     if(rule.maximum !== undefined)input.max=String(rule.maximum);

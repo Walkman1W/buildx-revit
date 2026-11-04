@@ -51,10 +51,10 @@
       "title": "常用参数与建模命令迁移",
       "status": "in_progress",
       "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收",
-      "currentSlice": "Existing set_parameters readback validation after Set/regeneration/inner Commit, plus exact Node receipt reconciliation; host 0.8.3; original permissions and generic failure uncertainty preserved",
-      "evidence": "PARAMETER-WRITE-VERIFICATION.zh-CN.md; parameter-write-verification.json; 3 original wrong-success assertions reproduced then fixed; write group 117/117 including 110 controlled producer fixtures, type reads 24/24, query/catalog 182/182, layout 105/105, host 80/80; 249-file snapshot and real Revit 2024 API compilation, 33 C# inputs",
-      "milestone": "parameter_write_readback_source_and_isolated_validation_complete",
-      "remaining": "Other P1 named single-parameter selectors/read/write semantics, common modelling commands and real Revit acceptance",
+      "currentSlice": "P1 revit_get_parameter_value: exact signed ID or ordinal name XOR, ambiguity rejection, selected-element-only facts, per-operation host capability; host 0.8.4; lossless text ID controls",
+      "evidence": "SINGLE-PARAMETER-VERIFICATION.zh-CN.md; single-parameter-verification.json; new read/field/UI group 79/79, query/catalog 182/182, type reads 24/24, writes 117/117, layout 105/105, host 80/80; boxed Double ID precision regression reproduced and fixed; 259-file snapshot and 33-source Revit 2024 API compilation",
+      "milestone": "single_parameter_read_source_and_isolated_validation_complete",
+      "remaining": "P1 named parameter writes and type-wide impact/approval semantics, common modelling commands and real Revit acceptance",
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false
     },
@@ -75,15 +75,15 @@
       "title": "清理已替代模块与专属依赖",
       "status": "in_progress",
       "acceptance": "消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留",
-      "evidence": "Built-in-only Node runtime; official pinned private C# compiler; latest 249-file source closure and 17-file compiler layout verified. Parameter read/write checks share existing identities and units. Argus/ScriptRunner consumers preserved; no 103-tool expansion. Remaining blockers recorded in PARAMETER-WRITE-VERIFICATION.zh-CN.md."
+      "evidence": "Built-in-only Node runtime; pinned private compiler; latest 259-file source closure and 17-file compiler layout verified. Single/type parameter reads reuse shared identity/value/unit owners. Argus/ScriptRunner consumers preserved; no 103-tool expansion. Remaining blockers recorded in SINGLE-PARAMETER-VERIFICATION.zh-CN.md."
     },
     {
       "id": "BX-010",
       "title": "Revit 2024 安装候选与客户验收",
       "status": "in_progress",
       "acceptance": "来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex",
-      "evidence": "PARAMETER-WRITE-VERIFICATION.zh-CN.md; parameter-write-verification.json; 0.8.3-internal-parameter-write candidate, 144 runtime files and 249-file source snapshot; actual 33-source Revit 2024 API build; pinned compiler retained; releaseReady:false. Previous candidates and failed baseline evidence preserved.",
-      "milestone": "parameter_write_validated_internal_candidate_generated",
+      "evidence": "SINGLE-PARAMETER-VERIFICATION.zh-CN.md; single-parameter-verification.json; 0.8.4-internal-single-parameter candidate, 144 runtime files and 259-file source snapshot; actual 33-source Revit 2024 API build; pinned compiler and all installation blockers retained; releaseReady:false. Previous candidates/precision baseline preserved.",
+      "milestone": "single_parameter_internal_candidate_generated",
       "internalCandidateGenerated": true,
       "installable": false,
       "realRevitLoadVerified": false,
