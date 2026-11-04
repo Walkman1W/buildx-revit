@@ -21,10 +21,11 @@
 - 已执行 `node --check server.mjs`、`node --check source-panel.mjs`、`node --check public/app.js`，三项语法检查通过；这不证明运行依赖完整或真实 Revit 可用。
 - 原提取宿主为 0.8.0；本工程新源码为 0.8.1，`nativeModelQueriesVersion:1` 和具名操作均在入队前及原子回执校验。新 DLL 只在隔离目录编译，未替换已安装插件。
 - 独立运行布局源码已完成：schema 2 程序/私有执行资源/数据/队列分离，Node、MCP、命令库与 C# 使用同一配置；schema 1 保留原数据位置。旧开发根、个人 Node 例外和 Python 私有缓存兜底已退出生产启动路径。见 `RUNTIME-LAYOUT.zh-CN.md`。
-- 布局修改后六查询 **181/181** 保持通过，布局/安装相关组 **93/93**，受控宿主 **80/80**；最终源码以官方 NuGet WebView2 SDK 重新通过 Revit 2024 API 编译。首次六查询记录的摘要属于 93b324c 历史切片，后续源码变更及当前构建另留记录。
+- 布局修改后六查询 **181/181** 保持通过，布局/安装/归属相关组 **105/105**，受控宿主 **80/80**；227 文件完整源码快照以官方 NuGet WebView2 SDK 独立通过 Revit 2024 API 编译。首次六查询记录的摘要属于 93b324c 历史切片，当前构建和包摘要见 `internal-candidate-verification.json`。
+- 内部候选已完成：运行包 ZIP 1,086,373 字节（123 产品文件及清单），源码 ZIP 983,301 字节（227 源文件及两份清单），全部条目回读与解压验证通过。无 node_modules 的解压运行包能启动生产 MCP 目录并保留六项契约，未创建队列。详见 `INTERNAL-CANDIDATE-20261105.zh-CN.md`。
 - 去掉 AEC 后，资料解析和 Codex TOML 配置读取仍依赖 Python；C# 用户命令的编译器来源单独处理。
 - 真实 Revit/WebView/Codex、模型效果、客户安装升级和恢复尚未验收。
 
 ## 下一步
 
-正在完成独立可重建的 Revit 2024 内部候选：运行包已按显式清单生成且 `releaseReady:false`，源码快照的缺失 import/资源正在补齐并验证。候选不包含研究程序集、模型、账号、历史或凭证；Node/Python/Codex 与 WebView2 Runtime 的外部前提和其他阻塞如实保留。真实安装/加载与模型效果尚未验收，不能用在线旧 AEC 或旧插件状态替代。
+本轮已完成独立可重建的内部审阅候选，`releaseReady:false` 且安装器仍阻止 Apply。下一步先收敛首版未替代执行资源与功能边界，并核实运行时、许可及数据升级恢复条件；不扩展成 103 项全量迁移，不盲删仍有消费者的 Argus/ScriptRunner。真实安装/加载需要覆盖指定目录与 Revit 实例的具体授权，当前未请求或执行该操作。真实 Revit/WebView/Codex 与客户机验收仍单列，不能用在线旧 AEC、目录握手或隔离编译替代。

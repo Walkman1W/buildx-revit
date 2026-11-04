@@ -54,7 +54,7 @@ static async Task Run(string[] args) {
   const cs=path.join(directory,'probe.cs'),exe=path.join(directory,'probe.exe');
   writeFileSync(cs,program);
   const framework='C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319';
-  execFileSync(path.join(framework,'csc.exe'),['/nologo','/langversion:5',`/out:${exe}`,`/reference:${framework}\\System.Net.Http.dll`,`/reference:${framework}\\System.Runtime.Serialization.dll`,cs]);
+  execFileSync(path.join(framework,'csc.exe'),['/nologo','/langversion:5',`/out:${exe}`,`/reference:${framework}\\System.Net.Http.dll`,`/reference:${framework}\\System.Runtime.Serialization.dll`,`/reference:${framework}\\System.Web.Extensions.dll`,cs]);
   async function run(url,{start=false,restart=false,id=installationId}={}){
     writeFileSync(path.join(directory,'buildx-installation.json'),JSON.stringify({schemaVersion:1,installationId:id,nodeExecutable:process.execPath,pythonExecutable:path.join(runtime,'python.exe'),codexExecutable:path.join(runtime,'codex.exe')}));
     return await new Promise((resolve,reject)=>{

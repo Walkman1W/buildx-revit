@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {resolveBuildxPaths,normalizeInstallationConfiguration,readBuildxInstallation} from './lib/buildx-paths.mjs';
@@ -24,22 +25,24 @@ test('unconfigured source and schema1 retain their exact legacy data roots witho
 
 test('schema2 places mutable data outside program resources and private runtimes',{skip:process.platform!=='win32'},async t=>{
   const f=await fixture(t),config={...base,schemaVersion:2,dataRoot:f.dataRoot};await fs.writeFile(f.file,JSON.stringify(config));
+  await fs.writeFile(path.join(f.dataRoot,'buildx-data-owner.json'),JSON.stringify({schemaVersion:1,installationId:base.installationId}));
   const paths=resolveBuildxPaths(f.programRoot),normalized=normalizeInstallationConfiguration(config,{programRoot:f.programRoot});
   assert.equal(paths.mode,'installed');assert.equal(paths.programRoot,f.programRoot);assert.equal(paths.dataRoot,f.dataRoot);
   for(const [key,relative] of Object.entries({workbenchRoot:'workbench',runtimeDirectory:'runtime',historyDirectory:'runtime-history',projectHistoryDirectory:'project-history',webViewDirectory:'WebView2'}))assert.equal(paths[key],path.join(f.dataRoot,relative));
   assert.equal(paths.privateRuntimeDirectory,path.join(f.programRoot,'private-runtime'));assert.ok(Object.isFrozen(normalized));assert.deepEqual(readBuildxInstallation(f.programRoot),normalized);
-  assert.deepEqual(await fs.readdir(f.dataRoot),[],'resolving layout must not create state');
+  assert.deepEqual(await fs.readdir(f.dataRoot),['buildx-data-owner.json'],'resolving layout must not create state');
 });
 
-test('a schema2 missing data directory keeps its selected location instead of falling back',{skip:process.platform!=='win32'},async t=>{
+test('a schema2 missing data directory fails startup without creating or falling back',{skip:process.platform!=='win32'},async t=>{
   const f=await fixture(t),selected=path.join(f.stage,'not-created','owned-data');await fs.writeFile(f.file,JSON.stringify({...base,schemaVersion:2,dataRoot:selected}));
-  const paths=resolveBuildxPaths(f.programRoot);assert.equal(paths.dataRoot,selected);assert.equal(paths.workbenchRoot,path.join(selected,'workbench'));
+  const planned=normalizeInstallationConfiguration({...base,schemaVersion:2,dataRoot:selected},{programRoot:f.programRoot});assert.equal(planned.dataRoot,selected);
+  assert.throws(()=>resolveBuildxPaths(f.programRoot),/configuration is invalid/);
   await assert.rejects(fs.stat(selected),error=>error.code==='ENOENT');assert.deepEqual(await fs.readdir(f.programRoot),['buildx-installation.json']);
 });
 
 test('invalid configuration is never interpreted as an absent source configuration',async t=>{
   const f=await fixture(t);
-  const invalid=['{broken',JSON.stringify({...base,schemaVersion:3}),JSON.stringify({...base,schemaVersion:2}),JSON.stringify({...base,unexpected:'ignored?'}),JSON.stringify({...base,nodeExecutable:'node.exe'}),JSON.stringify({...base,installationId:base.installationId.toUpperCase()}),Buffer.from([0xff,0xfe,0xfa]),'x'.repeat(4097)];
+  const invalid=['{broken','null',JSON.stringify({...base,schemaVersion:3}),JSON.stringify({...base,schemaVersion:2}),JSON.stringify({...base,unexpected:'ignored?'}),JSON.stringify({...base,nodeExecutable:'node.exe'}),JSON.stringify({...base,installationId:base.installationId.toUpperCase()}),Buffer.from([0xff,0xfe,0xfa]),'x'.repeat(4097)];
   for(const value of invalid){await fs.writeFile(f.file,value);assert.throws(()=>readBuildxInstallation(f.programRoot),/configuration is invalid/);assert.throws(()=>resolveBuildxPaths(f.programRoot),/configuration is invalid/);}
   assert.throws(()=>normalizeInstallationConfiguration({...base,dataRoot:f.dataRoot},{programRoot:f.programRoot}),/configuration is invalid/,'schema1 cannot silently accept a new data-root field');
 });
@@ -52,9 +55,33 @@ test('duplicate configuration keys, including escaped names, are rejected like t
   }
 });
 
+test('schema2 verifies data ownership before any queue or history can be selected',async t=>{
+  const f=await fixture(t),ownerFile=path.join(f.dataRoot,'buildx-data-owner.json');
+  await fs.writeFile(f.file,JSON.stringify({...base,schemaVersion:2,dataRoot:f.dataRoot}));
+  assert.throws(()=>readBuildxInstallation(f.programRoot),/configuration is invalid/,'missing owner');
+  const correct={schemaVersion:1,installationId:base.installationId};
+  for(const value of [null,{...correct,schemaVersion:2},{...correct,installationId:'another-installation'},{...correct,extra:true}]){
+    await fs.writeFile(ownerFile,JSON.stringify(value));assert.throws(()=>resolveBuildxPaths(f.programRoot),/configuration is invalid/);
+  }
+  for(const bytes of ['{bad','{"schemaVersion":1,"schemaVersion":1,"installationId":"'+base.installationId+'"}',Buffer.from([0xff]),'x'.repeat(4097)]){
+    await fs.writeFile(ownerFile,bytes);assert.throws(()=>readBuildxInstallation(f.programRoot),/configuration is invalid/);
+  }
+  await fs.writeFile(ownerFile,JSON.stringify(correct));assert.equal(readBuildxInstallation(f.programRoot).dataRoot,f.dataRoot);
+  for(const selected of [f.programRoot,f.dataRoot])for(const child of ['workbench','runtime-history'])await assert.rejects(fs.stat(path.join(selected,child)),error=>error.code==='ENOENT');
+  await fs.unlink(ownerFile);await fs.mkdir(ownerFile);assert.throws(()=>readBuildxInstallation(f.programRoot),/configuration is invalid/);
+});
+
+test('configuration disappearing after observation never becomes an unconfigured source checkout',async t=>{
+  const f=await fixture(t);await fs.writeFile(f.file,JSON.stringify(base));
+  const original=fsSync.openSync;
+  fsSync.openSync=(file,...args)=>{if(file===f.file){const error=new Error('simulated disappearance');error.code='ENOENT';throw error;}return original(file,...args);};
+  try{assert.throws(()=>readBuildxInstallation(f.programRoot),/configuration is invalid/);}
+  finally{fsSync.openSync=original;}
+});
+
 test('schema2 rejects missing, overlapping, relative, root-volume and noncanonical data locations',{skip:process.platform!=='win32'},async t=>{
   const f=await fixture(t);
-  for(const dataRoot of [undefined,null,'','relative-data',path.parse(f.stage).root,f.programRoot,f.programRoot.toUpperCase(),path.join(f.programRoot,'state'),f.stage,path.join(f.dataRoot,'..','data')+'\\',f.dataRoot+'\\',f.dataRoot+'\\..\\data'])assert.throws(()=>normalizeInstallationConfiguration({...base,schemaVersion:2,dataRoot},{programRoot:f.programRoot}),/configuration is invalid/,String(dataRoot));
+  for(const dataRoot of [undefined,null,'','relative-data',path.parse(f.stage).root,f.programRoot,f.programRoot.toUpperCase(),path.join(f.programRoot,'state'),f.stage,path.join(f.dataRoot,'..','data')+'\\',f.dataRoot+'\\',f.dataRoot+'\\..\\data',f.dataRoot+'.',f.dataRoot+' ',path.join(f.dataRoot,'folder.'),path.join(f.dataRoot,'folder ')])assert.throws(()=>normalizeInstallationConfiguration({...base,schemaVersion:2,dataRoot},{programRoot:f.programRoot}),/configuration is invalid/,String(dataRoot));
 });
 
 test('configuration files and data ancestors reject symbolic links or junctions',{skip:process.platform!=='win32'},async t=>{

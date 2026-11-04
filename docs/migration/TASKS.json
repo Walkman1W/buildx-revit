@@ -34,7 +34,7 @@
       "title": "新项目路径与数据布局独立",
       "status": "completed",
       "acceptance": "程序、状态、队列、命令和历史路径有统一owner；不依赖旧开发根和桌面缓存",
-      "evidence": "RUNTIME-LAYOUT.zh-CN.md; schema2 separate dataRoot and private-runtime; real Node/MCP external queue+commands; 93 layout checks and 181 native regression checks passed",
+      "evidence": "RUNTIME-LAYOUT.zh-CN.md; schema2 source/config and data-owner validation before startup; true external-queue MCP/command integration; final 105 layout checks and 181 native regressions passed; no migration/install",
       "validationScope": "Source/configuration and isolated integration; schema1 paths preserved, no migration",
       "realRevitLoadVerified": false,
       "dataMigrationVerified": false
@@ -69,14 +69,20 @@
       "title": "清理已替代模块与专属依赖",
       "status": "in_progress",
       "acceptance": "消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留",
-      "evidence": "AEC query exclusive files removed in prior slice; old development root/cache fallback removed; execution resources redirected to program private-runtime. Argus/ScriptRunner consumers remain and no recovered runtime is packaged."
+      "evidence": "Runtime candidate has built-in-only Node graph, only shipped npm scripts, complete registration assets, no AEC provider or research payload. 227-file source closure verified; remaining Argus/ScriptRunner consumers preserved, no 103-tool expansion."
     },
     {
       "id": "BX-010",
       "title": "Revit 2024 安装候选与客户验收",
       "status": "in_progress",
       "acceptance": "来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex",
-      "evidence": "Official NuGet SDK API build and explicit runtime candidate created; source snapshot closure and final audit in progress; releaseReady:false; no actual installation/load"
+      "evidence": "INTERNAL-CANDIDATE-20261105.zh-CN.md; internal-candidate-verification.json; runtime/source ZIPs built and all 124/229 entries verified; actual API build from 227-file source snapshot; releaseReady:false",
+      "milestone": "internal_review_candidate_generated",
+      "internalCandidateGenerated": true,
+      "installable": false,
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false,
+      "customerMachineVerified": false
     }
   ]
 }

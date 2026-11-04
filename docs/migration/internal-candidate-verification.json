@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "version": "0.8.1-internal",
+  "sourceBaseCommit": "b2856fc",
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-internal-20261105-03",
+    "productVersion": "0.8.1-internal",
+    "releaseReady": false,
+    "files": 123,
+    "totalBytes": 3150406,
+    "manifestSha256": "45007b007d3bbb78838eaace4e14ff5cd079d8780a65ae7bd9da2515ea8edecf",
+    "modules": 95,
+    "imports": 297,
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "hashMismatches": [],
+    "unsafeFiles": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "728dbffd2d8806d41f2da2955a6c1660b732417fb231696031cb9fba04846de4",
+    "registrationAssetsIncluded": true,
+    "runtimeScripts": [
+      "start",
+      "check"
+    ],
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "file": "private-runtime/script-compiler/csc.exe",
+        "reason": "external_compiler_not_packaged"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "sourceSnapshot": "artifacts/buildx-source-20261105-02",
+    "sourceFiles": 227,
+    "sourceManifestSha256": "fa830f2830e2128ae64b33b561f550003541bccfd6f061719ba1a2edb1782f3a",
+    "currentSourceMismatches": []
+  },
+  "archives": {
+    "runtime": {
+      "path": "artifacts/BuildX-Revit2024-0.8.1-internal-20261105.zip",
+      "sha256": "9b97e3cec2ea0ada76d066b260f43c5a1c2869ff7538bd2d4b8531ddb92c93ec",
+      "bytes": 1086373,
+      "verifiedFiles": 124
+    },
+    "source": {
+      "path": "artifacts/BuildX-Source-0.8.1-internal-20261105.zip",
+      "sha256": "86001cd54bff1ab07759f79638f24c4271d29687052e2a7a17c89c5d450c5afb",
+      "bytes": 983301,
+      "verifiedFiles": 229
+    }
+  },
+  "archiveRoundtrip": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "runtimeArchiveExtractionVerified": true,
+    "productionMcpCatalogVerified": true,
+    "nativeQueries": 6,
+    "defaultTools": 42,
+    "workspaceTools": 20,
+    "nodeModulesPresent": false,
+    "queueCreated": false,
+    "sourceArchiveExtractionVerified": true,
+    "sourceFiles": 227,
+    "sourceManifestSha256": "fa830f2830e2128ae64b33b561f550003541bccfd6f061719ba1a2edb1782f3a",
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false
+  },
+  "checks": {
+    "native": {
+      "command": "npm run test:native-queries",
+      "tests": 181,
+      "pass": 181,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "log": "artifacts/layout-validation-20261105-02/native.tap.log",
+      "sha256": "36f7aca98a7f6b7b39cc2f4d36e8335345eb51c0933f537637b24e336f44f5c0"
+    },
+    "layout": {
+      "command": "npm run test:layout",
+      "tests": 105,
+      "pass": 105,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "log": "artifacts/layout-validation-20261105-02/layout.tap.log",
+      "sha256": "024f3851f1f61d76555ea73ad237b2347599d88a401bfba339081233fc7a8538"
+    },
+    "syntax": {
+      "passed": true,
+      "log": "artifacts/layout-validation-20261105-02/syntax.log",
+      "sha256": "ed77a1a356d5ee3a60c33e9b42b36e781efa3ad3923c6909abc851a0dfe4bcf5"
+    },
+    "managedHost": {
+      "checks": 80,
+      "currentHostSourceMatches": true,
+      "evidence": "artifacts/layout-managed-20261105-01/source-proof.json"
+    }
+  },
+  "apiCompilation": {
+    "fromVerifiedSourceSnapshot": true,
+    "exitCode": 0,
+    "sourceFiles": 32,
+    "currentSourceMismatches": 0,
+    "dllSha256": "728dbffd2d8806d41f2da2955a6c1660b732417fb231696031cb9fba04846de4",
+    "compilerOptions": [
+      "/target:library",
+      "/platform:x64",
+      "/langversion:5",
+      "/optimize+",
+      "/debug-"
+    ],
+    "officialWebView2Sdk": {
+      "id": "Microsoft.Web.WebView2",
+      "version": "1.0.2478.35",
+      "source": "https://api.nuget.org/v3/index.json",
+      "packageSha256": "b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96",
+      "payloadVerifiedAgainstPackage": true,
+      "runtimeBundled": false
+    },
+    "record": "artifacts/buildx-source-20261105-02/build/build-record.json"
+  },
+  "installationData": {
+    "schemaVersion": 2,
+    "dataOwnerRequiredBeforeStartup": true,
+    "legacySchema1PathsPreserved": true,
+    "automaticDataMigration": false,
+    "installed": false
+  },
+  "realRevitLoadVerified": false,
+  "realModelExecutionVerified": false,
+  "realServiceWebViewCodexVerified": false,
+  "customerMachineVerified": false,
+  "releaseReady": false,
+  "installable": false,
+  "additionalInstallPolicyBlockers": [
+    "script_compiler_portable_layout_unverified",
+    "argus_runtime_distribution_rights_unverified",
+    "plugin_distribution_rights_unverified",
+    "customer_data_root_and_upgrade_unverified",
+    "license_backend_and_customer_configuration_unverified",
+    "python_pypdf_unavailable_or_unverified"
+  ],
+  "limitations": [
+    "Runtime package and source snapshot are review artifacts; actual install remains blocked.",
+    "Portable JavaScript cannot eliminate all operating-system TOCTOU windows.",
+    "Rebuild verified from complete source; bit-for-bit DLL reproducibility is not claimed."
+  ]
+}

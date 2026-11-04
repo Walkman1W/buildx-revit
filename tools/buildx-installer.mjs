@@ -16,7 +16,7 @@ const SETUP=['tools/buildx-installer.mjs','tools/buildx-setup.ps1','tools/buildx
 // Include the HTTP-served assets explicitly, including modules that are
 // currently imported by another asset: the route itself remains public even
 // if an import changes. This list is independently checked during planning.
-const WEB=['index.html','style.css','app.js','chat-view.mjs','account.js','codex-account.js','model-picker.css','model-picker.mjs','model-workspace.css','model-workspace.mjs','command-form-source.mjs','personal-command-fields.mjs','command-fields.mjs','command-parameter-options.mjs','command-choice-field.mjs','parameter-change-field.mjs','account-license.mjs','project-knowledge-ui.mjs','project-files.css','model-viewer.mjs','model-viewer.css','model-viewer-ui.mjs'];
+const WEB=['index.html','style.css','register.html','register.css','app.js','chat-view.mjs','account.js','codex-account.js','model-picker.css','model-picker.mjs','model-workspace.css','model-workspace.mjs','command-form-source.mjs','personal-command-fields.mjs','command-fields.mjs','command-parameter-options.mjs','command-choice-field.mjs','parameter-change-field.mjs','account-license.mjs','project-knowledge-ui.mjs','project-files.css','model-viewer.mjs','model-viewer.css','model-viewer-ui.mjs'];
 const MODULES=['native-model-queries.mjs','assistant-instructions.mjs','buildx-auth.mjs','buildx-runtime-config.mjs','cad-candidates.mjs','cad-document-path.mjs','cad-dxf-reader.mjs','cad-inventory.mjs','cad-read-report.mjs','cad-tools.mjs','chat-context.mjs','chat-session.mjs','chat-store.mjs','codex-client-core.mjs','codex-client.mjs','codex-confirmation.mjs','codex-profile.mjs','command-sequence.mjs','command-store.mjs','family-template-preflight.mjs','family-tools.mjs','installation-identity.mjs','local-runtimes.mjs','model-command-catalog.mjs','model-tool-dispatch.mjs','model-viewer-service.mjs','modelling-tools.mjs','native-schematic-tools.mjs','panel-accounts.mjs','panel-audit.mjs','panel-chat-format.mjs','panel-profile.mjs','panel-server-core.mjs','panel-server.mjs','panel-tools.mjs','parse-project-document.mjs','project-agent-bridge.mjs','project-files.mjs','project-files-picker.mjs','project-files-store.mjs','project-history.mjs','project-knowledge.mjs','source-tools.mjs','turn-attachments.mjs','workbench-client.mjs','workbench-contracts.mjs','workbench-receipt.mjs'];
 const NON_JS_ASSETS=['lib/project-knowledge-parser.py','lib/chat-lock-recovery.ps1','lib/project-files-lock-recovery.ps1','lib/access-lock-recovery.cs','prompts/buildx-assistant.zh-CN.md','.agents/skills/buildx-project-research/SKILL.md'];
 const THIRD_PARTY_NOTICES=['licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'];
@@ -68,17 +68,22 @@ async function packageFiles(root,manifest){
   return seen;
 }
 async function importClosure(sourceRoot,initial){
-  const queue=[...initial],seen=new Set(),missing=[];
+  const queue=[...initial],seen=new Set(),missing=[],externalDependencies=new Set();
   while(queue.length){
     const rel=queue.shift();if(seen.has(rel))continue;seen.add(rel);
     try{
       const file=path.join(sourceRoot,...rel.split('/'));await checkedDirectory(path.dirname(file));const info=await plainFile(file);if(info.size>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');const text=await fs.readFile(file,'utf8');
       // Static ES imports and literal dynamic imports used by this application.
-      const imports=/(?:\bfrom\s*|\bimport\s*\(|\bimport\s*)(['"])(\.{1,2}\/[^'"]+)\1/g;let match;
-      while((match=imports.exec(text))){const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(rel),match[2]));if(!safeRelative(resolved)||!resolved.endsWith('.mjs'))throw fail('IMPORT_INVALID','模块导入越界或格式未知。');if(!seen.has(resolved))queue.push(resolved);}
+      const imports=[...text.matchAll(/(?:^|\n)[\t ]*(?:import\s+(?:[\w*$,{}\s]+?\s+from\s*)?|export\s+[\w*$,{}\s]+?\s+from\s*)(['"])([^'"]+)\1/g),...text.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1/g)];
+      for(const match of imports){
+        if(match[2].startsWith('node:'))continue;
+        if(!match[2].startsWith('.')){externalDependencies.add(match[2]);continue;}
+        const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(rel),match[2]));if(!safeRelative(resolved)||!resolved.endsWith('.mjs'))throw fail('IMPORT_INVALID','模块导入越界或格式未知。');if(!seen.has(resolved))queue.push(resolved);
+      }
+      if(/\bimport\s*\(\s*[^'"\s]/.test(text)||/\brequire\s*\(|\bcreateRequire\s*\(|\beval\s*\(|\bnew\s+Function\s*\(/.test(text))missing.push({file:rel,reason:'dynamic_module_loading_unverified'});
     }catch(error){missing.push({file:rel,reason:error.code==='ENOENT'?'missing_module':'unverified_module'});}
   }
-  return {files:[...seen],missing};
+  return {files:[...seen],missing,externalDependencies:[...externalDependencies].sort()};
 }
 // The complete 37-tool product has additional owners outside the JS import
 // graph. These cannot be proven by a package's own missing/ready flags. Keep
@@ -89,7 +94,6 @@ async function verifyCompleteToolDependencies(root,present){
   issues.push({reason:'argus_runtime_distribution_rights_unverified'},
     {file:'private-runtime/script-compiler/csc.exe',reason:'script_compiler_portable_layout_unverified'},
     {reason:'plugin_distribution_rights_unverified'},
-    {reason:'external_mcp_sdk_and_distribution_unverified'},
     {reason:'installer_bootstrap_requires_external_node'},
     {reason:'private_node_python_runtime_distribution_unverified'},
     {reason:'webview2_runtime_presence_unverified'},
@@ -126,17 +130,28 @@ export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,pro
   const graph=await importClosure(sourceRoot,['server.mjs','workbench-mcp.mjs','tools/buildx-installer.mjs',...MODULES.map(p=>'lib/'+p),...WEB.filter(p=>/\.(mjs|js)$/.test(p)).map(p=>'public/'+p)]);
   const runtimeFiles=[...new Set([...ENTRY,...SETUP,...graph.files,...WEB.map(p=>'public/'+p),...NON_JS_ASSETS])];
   const specs=[...runtimeFiles.map(p=>[p,p]),['tools/buildx-package-entry.cmd','BuildX-Setup.cmd'],...PLUGIN.map(p=>[p,'revit-addin/bin/'+p]),...THIRD_PARTY_NOTICES.map(p=>[p,p])];
-  const checked=[],missing=[...graph.missing];
+  const checked=[],missing=[...graph.missing,...graph.externalDependencies.map(module=>({module,reason:'runtime_npm_dependency_not_bundled'}))];
   for(const [src,dst] of specs){const base=dst.startsWith('revit-addin/')||dst.startsWith('licenses/webview2/')?pluginDirectory:sourceRoot;try{const f=path.join(base,...src.split('/'));await checkedDirectory(path.dirname(f));const info=await plainFile(f);if(info.size>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');const data=await fs.readFile(f);if(data.length>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');checked.push({src:f,dst,data,sha256:sha(data)});}catch(e){missing.push({file:dst,reason:e.code==='ENOENT'?'missing':'not_readable_or_invalid'});}}
   // Reconstructed third-party components and the external compiler have not
   // been cleared for distribution; native query migration does not clear them.
-  missing.push({file:'private-runtime/argus/2024/ArgusLearning.Core.dll',reason:'distribution_and_runtime_not_verified'},{file:'private-runtime/script-compiler/csc.exe',reason:'external_compiler_not_packaged'},{reason:'external_mcp_sdk_and_distribution_unverified'},{reason:'installer_bootstrap_requires_external_node'},{reason:'private_node_python_runtime_distribution_unverified'},{reason:'webview2_runtime_presence_unverified'});
+  missing.push({file:'private-runtime/argus/2024/ArgusLearning.Core.dll',reason:'distribution_and_runtime_not_verified'},{file:'private-runtime/script-compiler/csc.exe',reason:'external_compiler_not_packaged'},{reason:'installer_bootstrap_requires_external_node'},{reason:'private_node_python_runtime_distribution_unverified'},{reason:'webview2_runtime_presence_unverified'});
   const buildEvidence=await pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing);
   for(const item of checked){await checkedDirectory(path.dirname(item.src));await plainFile(item.src);if(sha(await fs.readFile(item.src))!==item.sha256)throw fail('SOURCE_CHANGED','源文件在候选整理期间变化，未确认本次候选。');}
+  // The runtime graph currently uses Node built-ins only. The source lock and
+  // tests stay in the source snapshot; do not publish scripts for absent tests,
+  // source/customer entry points, or npm dependencies with no runtime consumer.
+  const builtinOnly=graph.externalDependencies.length===0&&graph.missing.length===0;
+  const packageMetadata={name:'buildx-revit',version:productVersion,private:true,type:'module',engines:{node:'>=22.17.0'},scripts:{start:'node server.mjs',check:'node --check server.mjs && node --check workbench-mcp.mjs && node --check public/app.js'},dependencies:{}};
+  const packageLock={name:packageMetadata.name,version:productVersion,lockfileVersion:3,requires:true,packages:{'':{name:packageMetadata.name,version:productVersion,engines:packageMetadata.engines}}};
+  const sourcePackageHashes={};
+  for(const item of checked)if(['package.json','package-lock.json'].includes(item.dst)){
+    sourcePackageHashes[item.dst]=item.sha256;
+    if(builtinOnly){item.data=Buffer.from(JSON.stringify(item.dst==='package.json'?packageMetadata:packageLock,null,2)+'\n');item.sha256=sha(item.data);}
+  }
   await fs.mkdir(output);for(const x of checked){const target=path.join(output,...x.dst.split('/'));await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,x.data,{flag:'wx'});}
   const manifest={schemaVersion:1,stage:'candidate',releaseReady:false,productVersion,target:{platform:'win32',architecture:'x64',revit:'2024'},
     installationSchemaVersion:2,runtimePolicy:{node:{minimumVersion:'22.17.0',bundled:false},python:{minimumVersion:'3.11.0',bundled:false},codex:{bundled:false,upgrade:false},privateRuntimeDirectory:'private-runtime',webView2Runtime:{bundled:false,required:true,verified:false}},
-    buildEvidence,files:checked.map(x=>({path:x.dst,sha256:x.sha256})),missing};
+    buildEvidence,nodeModuleClosure:{builtinOnly,externalDependencies:graph.externalDependencies,sourcePackageHashes,testingDependenciesBundled:false},files:checked.map(x=>({path:x.dst,sha256:x.sha256})),missing};
   await fs.writeFile(path.join(output,'buildx-package.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
   return {ok:true,output,releaseReady:false,missing};
 }
@@ -161,6 +176,7 @@ export async function planInstall({packageRoot,installRoot,addinDirectory,nodeEx
   if(manifest.stage==='candidate'){
     const graph=await importClosure(pkg,['server.mjs','workbench-mcp.mjs','tools/buildx-installer.mjs',...MODULES.map(p=>'lib/'+p),...WEB.filter(p=>/\.(mjs|js)$/.test(p)).map(p=>'public/'+p)]);
     blockers.push(...graph.missing);
+    blockers.push(...graph.externalDependencies.map(module=>({module,reason:'runtime_npm_dependency_not_bundled'})));
     for(const file of [...ENTRY,...graph.files,...SETUP,'BuildX-Setup.cmd',...WEB.map(p=>'public/'+p),...NON_JS_ASSETS,...THIRD_PARTY_NOTICES])if(!present.has(file.toLowerCase()))blockers.push({file,reason:'required_asset_not_in_package'});
     blockers.push(...await verifyCompleteToolDependencies(pkg,present));
     if(runtimeVersions.pypdfAvailable!==true)blockers.push({reason:'python_pypdf_unavailable_or_unverified'});
@@ -209,28 +225,74 @@ async function windowsRevitCheck(){
   return lines.some(line=>/^"Revit\.exe",/i.test(line));
 }
 function xml(s){return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&apos;');}
+const sameInstallIdentity=(first,second)=>first.dev===second.dev&&first.ino===second.ino&&first.birthtimeNs===second.birthtimeNs;
+async function rememberInstallDirectory(directory,owners){
+  const absolute=path.resolve(directory),volume=path.parse(absolute).root;
+  let current=volume;
+  for(const component of [null,...absolute.slice(volume.length).split(path.sep).filter(Boolean)]){
+    if(component!==null)current=path.join(current,component);
+    let observed;try{observed=await fs.lstat(current,{bigint:true});}catch{throw fail('INSTALL_DIRECTORY_CHANGED','安装目录或其上级目录已变化，未继续写入。');}
+    const prior=owners.get(current);
+    if(!observed.isDirectory()||observed.isSymbolicLink()||observed.ino===0n||prior&&!sameInstallIdentity(prior,observed))throw fail('INSTALL_DIRECTORY_CHANGED','安装目录或其上级目录已变化，未继续写入。');
+    if(!prior)owners.set(current,{dev:observed.dev,ino:observed.ino,birthtimeNs:observed.birthtimeNs});
+  }
+}
+async function verifyInstallDirectories(owners){
+  for(const [directory,prior] of owners){
+    let observed;try{observed=await fs.lstat(directory,{bigint:true});}catch{throw fail('INSTALL_DIRECTORY_CHANGED','安装目录或其上级目录已变化，未继续写入。');}
+    if(!observed.isDirectory()||observed.isSymbolicLink()||!sameInstallIdentity(prior,observed))throw fail('INSTALL_DIRECTORY_CHANGED','安装目录或其上级目录已变化，未继续写入。');
+  }
+}
 export async function applyInstall(options){
   const plan=await planInstall(options);if(!plan.readyToApply)throw fail('NOT_READY',plan.reason);
-  // Recheck immediately before publication. A failure retains only our new
-  // installation directory; it never removes an existing tree or user data.
-  await fs.mkdir(plan.installRoot);let published=false,temp=null;
+  // Capture plain directory identities, then recheck around every mutation.
+  // These checks detect replacement; portable JS cannot remove every OS race.
+  // A failure retains the generated trees and never deletes a replaced root.
+  let published=false,temp=null,tempIdentity=null;
+  const owners=new Map(),created=new Set();
+  const verify=()=>verifyInstallDirectories(owners);
+  const create=async directory=>{await verify();await fs.mkdir(directory);await rememberInstallDirectory(directory,owners);created.add(directory);await verify();};
+  const createProgramDirectories=async directory=>{
+    const relative=path.relative(plan.installRoot,directory);
+    if(relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw fail('INSTALL_DIRECTORY_CHANGED','目标目录不属于本次安装。');
+    let current=plan.installRoot;
+    for(const component of relative.split(path.sep).filter(Boolean)){
+      current=path.join(current,component);
+      if(!created.has(current))await create(current);else await verify();
+    }
+  };
+  const write=async(filename,bytes)=>{await verify();await fs.writeFile(filename,bytes,{flag:'wx'});await verify();};
   try{
-    for(const item of plan.files){const src=path.join(plan.packageRoot,...item.path.split('/')),dest=path.join(plan.installRoot,...item.path.split('/'));await plainFile(src);const data=await fs.readFile(src);if(sha(data)!==item.sha256)throw fail('PACKAGE_CHANGED','组件在安装期间发生变化。');await fs.mkdir(path.dirname(dest),{recursive:true});await fs.writeFile(dest,data,{flag:'wx'});}
+    for(const directory of [path.dirname(plan.installRoot),path.dirname(plan.dataRoot),path.dirname(plan.addin)])await rememberInstallDirectory(directory,owners);
+    await create(plan.installRoot);
+    for(const item of plan.files){
+      const src=path.join(plan.packageRoot,...item.path.split('/')),dest=path.join(plan.installRoot,...item.path.split('/'));
+      await verify();await plainFile(src);const data=await fs.readFile(src);if(sha(data)!==item.sha256)throw fail('PACKAGE_CHANGED','组件在安装期间发生变化。');
+      await verify();await createProgramDirectories(path.dirname(dest));await write(dest,data);
+    }
     // This exact directory was selected for the new installation. Never adopt
     // a directory created by another process while the program was copied.
-    await checkedDirectory(path.dirname(plan.dataRoot));
-    await fs.mkdir(plan.dataRoot);
+    await create(plan.dataRoot);
     const config={schemaVersion:2,installationId:randomUUID(),...plan.runtimes,dataRoot:plan.dataRoot};
-    await fs.writeFile(path.join(plan.dataRoot,'buildx-data-owner.json'),JSON.stringify({schemaVersion:1,installationId:config.installationId},null,2)+'\n',{flag:'wx'});
-    await fs.writeFile(path.join(plan.installRoot,'buildx-installation.json'),JSON.stringify(config,null,2)+'\n',{flag:'wx'});
+    await write(path.join(plan.dataRoot,'buildx-data-owner.json'),JSON.stringify({schemaVersion:1,installationId:config.installationId},null,2)+'\n');
+    await write(path.join(plan.installRoot,'buildx-installation.json'),JSON.stringify(config,null,2)+'\n');
     if(await (options.checkRevit??windowsRevitCheck)())throw fail('REVIT_RUNNING','Revit 在安装期间启动；未发布插件清单。');
-    await assertNoBuildxManifest(path.dirname(plan.addin),plan.addin);
+    await verify();await assertNoBuildxManifest(path.dirname(plan.addin),plan.addin);await verify();
     const assembly=path.join(plan.installRoot,'revit-addin','bin','LocalCodexRevit.dll');
     const body='<?xml version="1.0" encoding="utf-8"?>\n<RevitAddIns><AddIn Type="Application"><Name>BuildX</Name><Assembly>'+xml(assembly)+'</Assembly><AddInId>62680901-6718-4cbc-a115-9383f35b782c</AddInId><FullClassName>RevitLocalCodex.App</FullClassName><VendorId>LCLX</VendorId><VendorDescription>BuildX</VendorDescription></AddIn></RevitAddIns>\n';
-    temp=path.join(path.dirname(plan.addin),'.buildx-'+randomUUID()+'.tmp');await fs.writeFile(temp,body,{flag:'wx'});await fs.link(temp,plan.addin);published=true;await fs.unlink(temp);temp=null;
+    temp=path.join(path.dirname(plan.addin),'.buildx-'+randomUUID()+'.tmp');await write(temp,body);
+    tempIdentity=await fs.lstat(temp,{bigint:true});if(!tempIdentity.isFile()||tempIdentity.isSymbolicLink()||tempIdentity.ino===0n)throw fail('INSTALL_DIRECTORY_CHANGED','插件清单临时文件身份已变化。');
+    await verify();await fs.link(temp,plan.addin);published=true;await verify();
+    const named=await fs.lstat(temp,{bigint:true});if(!named.isFile()||named.isSymbolicLink()||!sameInstallIdentity(tempIdentity,named))throw fail('INSTALL_DIRECTORY_CHANGED','插件清单临时文件身份已变化。');
+    await verify();await fs.unlink(temp);temp=null;
     return {ok:true,installRoot:plan.installRoot,dataRoot:plan.dataRoot,addin:plan.addin,installationId:config.installationId,releaseReady:!plan.experimental};
   }catch(error){error.retainedInstallRoot=plan.installRoot;error.retainedDataRoot=plan.dataRoot;error.manifestPublished=published;throw error;}
-  finally{if(temp)await fs.unlink(temp).catch(()=>{});}
+  finally{
+    if(temp&&tempIdentity)try{
+      await verify();const named=await fs.lstat(temp,{bigint:true});
+      if(named.isFile()&&!named.isSymbolicLink()&&sameInstallIdentity(tempIdentity,named))await fs.unlink(temp);
+    }catch{/* A replaced path or uncertain temporary is retained, never adopted. */}
+  }
 }
 
 async function main(){

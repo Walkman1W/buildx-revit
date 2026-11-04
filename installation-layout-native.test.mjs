@@ -17,10 +17,21 @@ test('actual C# installation owner separates configured data and rejects ambiguo
     assert.equal(result.schemaVersion,1);assert.equal(result.developmentMode,false);assert.equal(result.matchesSelf,true);assert.equal(result.matchesMissing,false);assert.equal(result.matchesOther,false);
     assert.equal(result.webViewUserDataFolder,path.join(process.env.LOCALAPPDATA,'RevitLocalCodex','WebView2'));
   });
-  await t.test('schema 2 binds program, data, queue and browser roots without creating state',async()=>{
-    const dataRoot=path.join(produce.directory,'data'),result=await run({...config,schemaVersion:2,dataRoot});
+  await t.test('schema 2 binds owned program, data, queue and browser roots without creating state',async()=>{
+    const dataRoot=path.join(produce.directory,'data'),marker=path.join(dataRoot,'buildx-data-owner.json');
+    await fs.mkdir(dataRoot);await fs.writeFile(marker,JSON.stringify({schemaVersion:1,installationId:id}));
+    const before=await fs.readFile(marker),result=await run({...config,schemaVersion:2,dataRoot});
     assert.equal(result.ok,true);assert.equal(result.root,produce.root);assert.equal(result.dataRoot,dataRoot);assert.equal(result.workbenchRoot,path.join(dataRoot,'workbench'));assert.equal(result.webViewUserDataFolder,path.join(dataRoot,'WebView2'));assert.equal(result.schemaVersion,2);
-    await assert.rejects(fs.stat(dataRoot),{code:'ENOENT'});assert.equal(result.nodeExecutable,config.nodeExecutable);assert.equal(result.pythonExecutable,config.pythonExecutable);assert.equal(result.codexExecutable,config.codexExecutable);
+    assert.deepEqual(await fs.readdir(dataRoot),['buildx-data-owner.json']);assert.deepEqual(await fs.readFile(marker),before);assert.equal(result.nodeExecutable,config.nodeExecutable);assert.equal(result.pythonExecutable,config.pythonExecutable);assert.equal(result.codexExecutable,config.codexExecutable);
+  });
+  await t.test('missing, foreign and malformed data ownership never creates a queue or alters the marker',async()=>{
+    const absentRoot=path.join(produce.directory,'absent-data');assert.equal((await run({...config,schemaVersion:2,dataRoot:absentRoot})).ok,false);await assert.rejects(fs.stat(absentRoot),{code:'ENOENT'});
+    const dataRoot=path.join(produce.directory,'ownership-cases'),marker=path.join(dataRoot,'buildx-data-owner.json');await fs.mkdir(dataRoot);
+    assert.equal((await run({...config,schemaVersion:2,dataRoot})).ok,false);assert.deepEqual(await fs.readdir(dataRoot),[]);
+    const invalid=['', 'x'.repeat(4097), '{bad', JSON.stringify({schemaVersion:2,installationId:id}),JSON.stringify({schemaVersion:1,installationId:'ba159a01-0b21-4da8-95ab-8f2488a24ffe'}),JSON.stringify({schemaVersion:1}),JSON.stringify({schemaVersion:1,installationId:id,extra:true}),`{"schemaVersion":1,"schemaVersion":1,"installationId":"${id}"}`];
+    for(const text of invalid){await fs.writeFile(marker,text);const before=await fs.readFile(marker);assert.equal((await run({...config,schemaVersion:2,dataRoot})).ok,false,text);assert.deepEqual(await fs.readFile(marker),before);await assert.rejects(fs.stat(path.join(dataRoot,'workbench')),{code:'ENOENT'});}
+    await fs.unlink(marker);const target=path.join(produce.directory,'marker-link-target');await fs.mkdir(target);await fs.symlink(target,marker,'junction');
+    assert.equal((await run({...config,schemaVersion:2,dataRoot})).ok,false);assert.deepEqual(await fs.readdir(target),[]);await assert.rejects(fs.stat(path.join(dataRoot,'workbench')),{code:'ENOENT'});
   });
   await t.test('overlap, aliases, root paths and malformed identities remain rejected',async()=>{
     const dataRoot=path.join(produce.directory,'data');

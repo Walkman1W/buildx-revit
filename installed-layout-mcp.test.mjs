@@ -19,6 +19,7 @@ async function fixture(t,{schemaVersion=2,invalidConfiguration=false}={}){
   for(const directory of ['lib','public','release'])await fs.cp(path.join(project,directory),path.join(programRoot,directory),{recursive:true,filter:async filename=>{const entry=await fs.lstat(filename);return entry.isDirectory()||entry.isFile()&&['.mjs','.json'].includes(path.extname(filename));}});
   await fs.writeFile(path.join(programRoot,'package.json'),JSON.stringify({private:true,type:'module'}));
   const config={...base,schemaVersion,...schemaVersion===2&&!invalidConfiguration?{dataRoot}:{}};await fs.writeFile(path.join(programRoot,'buildx-installation.json'),JSON.stringify(config));
+  if(schemaVersion===2&&!invalidConfiguration)await fs.writeFile(path.join(dataRoot,'buildx-data-owner.json'),JSON.stringify({schemaVersion:1,installationId:base.installationId}));
   const queue=path.join(dataRoot,'workbench','queue');
   if(!invalidConfiguration){
     for(const directory of ['inbox','processing','outbox'])await fs.mkdir(path.join(queue,directory),{recursive:true});

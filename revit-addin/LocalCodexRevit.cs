@@ -635,6 +635,13 @@ namespace RevitLocalCodex
             [DataMember(Name = "dataRoot")] public string DataRoot { get; set; }
         }
 
+        [DataContract]
+        private sealed class DataOwnership
+        {
+            [DataMember(Name = "schemaVersion", IsRequired = true)] public int SchemaVersion { get; set; }
+            [DataMember(Name = "installationId", IsRequired = true)] public string InstallationId { get; set; }
+        }
+
         private BuildXInstallation(string root, string dataRoot, string id, string node, string python, string codex, int schemaVersion)
         {
             Root = root; DataRoot = dataRoot; InstallationId = id; NodeExecutable = node;
@@ -689,6 +696,41 @@ namespace RevitLocalCodex
             return true;
         }
 
+        private static void RequireDataOwnership(string dataRoot, string installationId)
+        {
+            string file = Path.Combine(dataRoot, "buildx-data-owner.json");
+            FileAttributes attributes = File.GetAttributes(file);
+            if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0) throw new BuildXInstallationException();
+            byte[] bytes;
+            using (FileStream stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                if (stream.Length < 1 || stream.Length > 4096) throw new BuildXInstallationException();
+                bytes = new byte[(int)stream.Length];
+                int offset = 0;
+                while (offset < bytes.Length)
+                {
+                    int read = stream.Read(bytes, offset, bytes.Length - offset);
+                    if (read == 0) throw new BuildXInstallationException();
+                    offset += read;
+                }
+                if (stream.ReadByte() != -1 || stream.Length != bytes.Length) throw new BuildXInstallationException();
+                attributes = File.GetAttributes(file);
+                if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0) throw new BuildXInstallationException();
+            }
+            DataOwnership ownership;
+            using (MemoryStream stream = new MemoryStream(bytes))
+                ownership = new DataContractJsonSerializer(typeof(DataOwnership)).ReadObject(stream) as DataOwnership;
+            // The data-contract reader rejects missing/duplicate named members;
+            // also reject unknown members instead of silently accepting a
+            // marker whose format belongs to a different owner/version.
+            string text = new System.Text.UTF8Encoding(false, true).GetString(bytes).TrimStart('\uFEFF');
+            var fields = new System.Web.Script.Serialization.JavaScriptSerializer().DeserializeObject(text)
+                as System.Collections.Generic.Dictionary<string, object>;
+            if (fields == null || fields.Count != 2 || !fields.ContainsKey("schemaVersion") || !fields.ContainsKey("installationId") ||
+                ownership == null || ownership.SchemaVersion != 1 || !String.Equals(ownership.InstallationId, installationId, StringComparison.Ordinal))
+                throw new BuildXInstallationException();
+        }
+
         internal static BuildXInstallation FromAssemblyLocation(string assemblyLocation)
         {
             try
@@ -715,6 +757,7 @@ namespace RevitLocalCodex
                     !ValidExecutable(configuration.CodexExecutable, "codex.exe")) throw new BuildXInstallationException();
                 if (configuration.SchemaVersion == 1 && configuration.DataRoot != null ||
                     configuration.SchemaVersion == 2 && !ValidDataRoot(configuration.DataRoot, root)) throw new BuildXInstallationException();
+                if (configuration.SchemaVersion == 2) RequireDataOwnership(configuration.DataRoot, configuration.InstallationId);
                 // A schema-1 configuration retains its original state paths.
                 // Upgrading the format never silently relocates old receipts.
                 return new BuildXInstallation(root, configuration.SchemaVersion == 1 ? root : configuration.DataRoot,

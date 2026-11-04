@@ -97,6 +97,11 @@ test('candidate build excludes runtime state and cannot authorize actual install
   await fs.mkdir(path.join(plugin,'licenses','webview2'),{recursive:true});for(const name of ['LICENSE.txt','NOTICE.txt'])await fs.writeFile(path.join(plugin,'licenses','webview2',name),'fixture notice');
   const out=path.join(f.base,'candidate'),built=await buildCandidate({output:out,pluginDirectory:plugin});assert.equal(built.releaseReady,false);assert.ok(!built.missing.some(x=>String(x.file??'').includes('aec-')||String(x.reason).startsWith('aec_')));assert.ok(built.missing.some(x=>x.reason==='external_compiler_not_packaged'));
   const packageManifest=JSON.parse(await fs.readFile(path.join(out,'buildx-package.json'),'utf8'));assert.ok(packageManifest.files.every(x=>sha.test(x.sha256)&&!x.path.startsWith('runtime/')&&!x.path.startsWith('runtime-history/')));
+  const packaged=JSON.parse(await fs.readFile(path.join(out,'package.json'),'utf8')),lock=JSON.parse(await fs.readFile(path.join(out,'package-lock.json'),'utf8'));
+  assert.deepEqual(Object.keys(packaged.scripts),['start','check']);assert.deepEqual(packaged.dependencies,{});assert.equal(lock.version,packaged.version);assert.deepEqual(Object.keys(lock.packages),['']);
+  assert.equal(packageManifest.nodeModuleClosure.builtinOnly,true);assert.equal(packageManifest.nodeModuleClosure.testingDependenciesBundled,false);
+  for(const asset of ['public/register.html','public/register.css'])assert.ok(packageManifest.files.some(item=>item.path===asset),asset);
+  assert.match(await fs.readFile(path.join(out,'public','register.html'),'utf8'),/href="\/register\.css"/);
   assert.ok(packageManifest.files.some(x=>x.path==='lib/native-model-queries.mjs'));
   for(const old of ['lib/aec-model-adapter.mjs','lib/aec-read-relay.py','lib/aec-read-contracts.json','tools/refresh-aec-contracts.mjs'])assert.ok(!packageManifest.files.some(x=>x.path===old));
   for(const filename of ['package-lock.json','THIRD-PARTY-NOTICES.md','buildx-installation.example.json','BuildX-Setup.cmd','tools/buildx-setup.cmd','tools/buildx-setup.ps1','tools/buildx-installer.mjs','lib/project-knowledge-parser.py','lib/access-lock-recovery.mjs','lib/access-lock-recovery.cs','lib/project-knowledge.mjs','lib/project-history.mjs','lib/project-agent-bridge.mjs','lib/buildx-skills.mjs','.agents/skills/buildx-project-research/SKILL.md','lib/command-sequence.mjs','lib/model-viewer-service.mjs','public/project-knowledge-ui.mjs','public/model-viewer.mjs','public/model-viewer-ui.mjs','public/model-viewer.css','public/account-license.mjs','public/command-form-source.mjs','public/personal-command-fields.mjs','public/command-fields.mjs','public/command-choice-field.mjs','public/parameter-change-field.mjs','licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'])assert.ok(packageManifest.files.some(item=>item.path===filename),`candidate includes ${filename}`);
@@ -109,7 +114,7 @@ test('candidate build excludes runtime state and cannot authorize actual install
   assert.ok(tamperedPlan.blockers.some(x=>x.reason==='customer_data_root_and_upgrade_unverified'));
   assert.ok(tamperedPlan.blockers.some(x=>x.reason==='license_backend_and_customer_configuration_unverified'));
   assert.ok(tamperedPlan.blockers.some(x=>x.reason==='plugin_distribution_rights_unverified'));
-  assert.ok(tamperedPlan.blockers.some(x=>x.reason==='external_mcp_sdk_and_distribution_unverified'));
+  assert.equal(tamperedPlan.blockers.some(x=>x.reason==='external_mcp_sdk_and_distribution_unverified'),false);
   assert.ok(tamperedPlan.blockers.some(x=>x.reason==='installer_bootstrap_requires_external_node'));
   assert.ok(tamperedPlan.blockers.some(x=>x.reason==='private_node_python_runtime_distribution_unverified'));
   // A tampered list cannot turn an omitted non-JS parser or UI asset into a complete package.
@@ -119,6 +124,19 @@ test('candidate build excludes runtime state and cannot authorize actual install
   for(const file of ['lib/project-knowledge-parser.py','lib/access-lock-recovery.cs','public/model-viewer.css','public/command-form-source.mjs','licenses/webview2/LICENSE.txt','.agents/skills/buildx-project-research/SKILL.md'])assert.ok(omitted.blockers.some(x=>x.file===file&&x.reason==='required_asset_not_in_package'));
   assert.ok(!omitted.blockers.some(x=>x.reason==='python_pypdf_unavailable_or_unverified'));
   assert.equal(omitted.readyToApply,false);
+});
+
+test('new runtime npm imports remain explicit blockers and cannot use the built-in-only projection',async t=>{
+  const f=await fixture(t),source=path.join(f.base,'npm-source'),plugin=path.join(f.base,'npm-plugin');
+  await fs.mkdir(source);await fs.mkdir(plugin);
+  await fs.writeFile(path.join(source,'server.mjs'),"import 'fixture-runtime-module';\n");
+  await fs.writeFile(path.join(source,'package.json'),JSON.stringify({private:true,type:'module',dependencies:{'fixture-runtime-module':'1.0.0'}}));
+  await fs.writeFile(path.join(source,'package-lock.json'),'{}');
+  const output=path.join(f.base,'npm-candidate'),built=await buildCandidate({sourceRoot:source,pluginDirectory:plugin,output});
+  assert.ok(built.missing.some(item=>item.reason==='runtime_npm_dependency_not_bundled'&&item.module==='fixture-runtime-module'));
+  const manifest=JSON.parse(await fs.readFile(path.join(output,'buildx-package.json'),'utf8'));
+  assert.equal(manifest.nodeModuleClosure.builtinOnly,false);assert.equal(manifest.releaseReady,false);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(output,'package.json'),'utf8')).dependencies,{'fixture-runtime-module':'1.0.0'});
 });
 
 test('candidate refuses files reached through linked source directories',async t=>{
