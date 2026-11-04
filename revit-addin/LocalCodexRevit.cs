@@ -26,8 +26,8 @@ using WpfVisibility = System.Windows.Visibility;
 
 [assembly: AssemblyTitle("BuildX")]
 [assembly: AssemblyDescription("BuildX workspace for Revit 2024")]
-[assembly: AssemblyVersion("0.6.4.0")]
-[assembly: AssemblyFileVersion("0.6.4.0")]
+[assembly: AssemblyVersion("0.8.1.0")]
+[assembly: AssemblyFileVersion("0.8.1.0")]
 [assembly: TargetFramework(".NETFramework,Version=v4.8")]
 
 namespace RevitLocalCodex
@@ -406,9 +406,7 @@ namespace RevitLocalCodex
                 {
                     if (environment == null)
                     {
-                        string userDataFolder = Path.Combine(
-                            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                            "RevitLocalCodex", "WebView2");
+                        string userDataFolder = LocalService.WebViewUserDataFolder;
                         environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, null);
                     }
                     if (disposed) return;
@@ -611,14 +609,20 @@ namespace RevitLocalCodex
 
     internal sealed class BuildXInstallation
     {
-        private const string DevelopmentRoot = @"D:\code\REA\local-codex-panel";
-        private const string DevelopmentNode = @"C:\Users\LENOVO\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe";
         internal readonly string Root;
+        internal readonly string DataRoot;
         internal readonly string InstallationId;
         internal readonly string NodeExecutable;
         internal readonly string PythonExecutable;
         internal readonly string CodexExecutable;
-        internal readonly bool DevelopmentMode;
+        internal readonly int SchemaVersion;
+        // Compatibility for the schema-1 identity reader; no production
+        // configuration can enable the former development-mode exception.
+        internal readonly bool DevelopmentMode = false;
+        internal string WorkbenchRoot { get { return Path.Combine(DataRoot, "workbench"); } }
+        internal string WebViewUserDataFolder { get { return SchemaVersion == 1
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitLocalCodex", "WebView2")
+            : Path.Combine(DataRoot, "WebView2"); } }
 
         [DataContract]
         private sealed class Configuration
@@ -628,12 +632,13 @@ namespace RevitLocalCodex
             [DataMember(Name = "nodeExecutable")] public string NodeExecutable { get; set; }
             [DataMember(Name = "pythonExecutable")] public string PythonExecutable { get; set; }
             [DataMember(Name = "codexExecutable")] public string CodexExecutable { get; set; }
+            [DataMember(Name = "dataRoot")] public string DataRoot { get; set; }
         }
 
-        private BuildXInstallation(string root, string id, string node, string python, string codex, bool developmentMode)
+        private BuildXInstallation(string root, string dataRoot, string id, string node, string python, string codex, int schemaVersion)
         {
-            Root = root; InstallationId = id; NodeExecutable = node;
-            PythonExecutable = python; CodexExecutable = codex; DevelopmentMode = developmentMode;
+            Root = root; DataRoot = dataRoot; InstallationId = id; NodeExecutable = node;
+            PythonExecutable = python; CodexExecutable = codex; SchemaVersion = schemaVersion;
         }
 
         private static bool ValidExecutable(string value, string name)
@@ -652,6 +657,38 @@ namespace RevitLocalCodex
                 value[14] == '4' && "89ab".IndexOf(value[19]) >= 0;
         }
 
+        private static bool ValidDataRoot(string value, string programRoot)
+        {
+            if (String.IsNullOrEmpty(value) || value.Length > 1024 || value.Length < 4 ||
+                !((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) ||
+                value[1] != ':' || value[2] != '\\' || value[value.Length - 1] == '\\' ||
+                !String.Equals(Path.GetFullPath(value), value, StringComparison.OrdinalIgnoreCase)) return false;
+            foreach (string segment in value.Substring(3).Split('\\'))
+            {
+                if (segment.Length == 0 || segment == "." || segment == ".." || segment.EndsWith(".", StringComparison.Ordinal) ||
+                    segment.EndsWith(" ", StringComparison.Ordinal) || segment.IndexOfAny(new[] { '<', '>', ':', '"', '/', '|', '?', '*', '\0' }) >= 0) return false;
+            }
+            string program = programRoot.TrimEnd('\\');
+            if (String.Equals(value, program, StringComparison.OrdinalIgnoreCase) ||
+                value.StartsWith(program + "\\", StringComparison.OrdinalIgnoreCase) ||
+                program.StartsWith(value + "\\", StringComparison.OrdinalIgnoreCase)) return false;
+            // Lexical separation alone cannot establish that a configured
+            // directory does not redirect into the program or another tree.
+            string current = value;
+            while (current != null)
+            {
+                try
+                {
+                    FileAttributes attributes = File.GetAttributes(current);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0 || (attributes & FileAttributes.Directory) == 0) return false;
+                }
+                catch (FileNotFoundException) { }
+                catch (DirectoryNotFoundException) { }
+                current = Path.GetDirectoryName(current);
+            }
+            return true;
+        }
+
         internal static BuildXInstallation FromAssemblyLocation(string assemblyLocation)
         {
             try
@@ -665,29 +702,24 @@ namespace RevitLocalCodex
                     String.IsNullOrEmpty(root) || !File.Exists(Path.Combine(root, "server.mjs"))) throw new BuildXInstallationException();
 
                 string file = Path.Combine(root, "buildx-installation.json");
-                bool missing = false;
-                try { File.GetAttributes(file); }
-                catch (FileNotFoundException) { missing = true; }
-                catch (DirectoryNotFoundException) { missing = true; }
-                if (missing)
-                {
-                    // This exception is explicitly limited to the prior local
-                    // developer checkout. Packaged installations fail closed.
-                    if (String.Equals(root, DevelopmentRoot, StringComparison.OrdinalIgnoreCase))
-                        return new BuildXInstallation(root, null, DevelopmentNode, null, null, true);
-                    throw new BuildXInstallationException();
-                }
+                FileAttributes configurationAttributes = File.GetAttributes(file);
+                if ((configurationAttributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0) throw new BuildXInstallationException();
                 Configuration configuration;
                 using (FileStream stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     if (stream.Length == 0 || stream.Length > 4096) throw new BuildXInstallationException();
                     configuration = new DataContractJsonSerializer(typeof(Configuration)).ReadObject(stream) as Configuration;
                 }
-                if (configuration == null || configuration.SchemaVersion != 1 || !ValidInstallationId(configuration.InstallationId) ||
+                if (configuration == null || (configuration.SchemaVersion != 1 && configuration.SchemaVersion != 2) || !ValidInstallationId(configuration.InstallationId) ||
                     !ValidExecutable(configuration.NodeExecutable, "node.exe") || !ValidExecutable(configuration.PythonExecutable, "python.exe") ||
                     !ValidExecutable(configuration.CodexExecutable, "codex.exe")) throw new BuildXInstallationException();
-                return new BuildXInstallation(root, configuration.InstallationId, configuration.NodeExecutable,
-                    configuration.PythonExecutable, configuration.CodexExecutable, false);
+                if (configuration.SchemaVersion == 1 && configuration.DataRoot != null ||
+                    configuration.SchemaVersion == 2 && !ValidDataRoot(configuration.DataRoot, root)) throw new BuildXInstallationException();
+                // A schema-1 configuration retains its original state paths.
+                // Upgrading the format never silently relocates old receipts.
+                return new BuildXInstallation(root, configuration.SchemaVersion == 1 ? root : configuration.DataRoot,
+                    configuration.InstallationId, configuration.NodeExecutable, configuration.PythonExecutable,
+                    configuration.CodexExecutable, configuration.SchemaVersion);
             }
             catch (BuildXInstallationException) { throw; }
             catch (Exception) { throw new BuildXInstallationException(); }
@@ -695,8 +727,7 @@ namespace RevitLocalCodex
 
         internal bool MatchesService(string service, string id)
         {
-            return service == "revit-local-codex" && (DevelopmentMode
-                ? id == null : String.Equals(InstallationId, id, StringComparison.Ordinal));
+            return service == "revit-local-codex" && InstallationId != null && String.Equals(InstallationId, id, StringComparison.Ordinal);
         }
     }
     // END BUILDX INSTALLATION
@@ -714,6 +745,9 @@ namespace RevitLocalCodex
         }
         internal static void ValidateInstallation() { BuildXInstallation value = Installation; }
         internal static string ServiceDirectory { get { return Installation.Root; } }
+        internal static string DataDirectory { get { return Installation.DataRoot; } }
+        internal static string WorkbenchDirectory { get { return Installation.WorkbenchRoot; } }
+        internal static string WebViewUserDataFolder { get { return Installation.WebViewUserDataFolder; } }
         private static ServiceStartupProcess launchedProcess;
 
         [DataContract]
@@ -797,7 +831,7 @@ namespace RevitLocalCodex
             string script = Path.Combine(ServiceDirectory, "server.mjs");
             BuildXInstallation config = Installation;
             if (!File.Exists(config.NodeExecutable) || !File.Exists(script) ||
-                (!config.DevelopmentMode && (!File.Exists(config.PythonExecutable) || !File.Exists(config.CodexExecutable))))
+                !File.Exists(config.PythonExecutable) || !File.Exists(config.CodexExecutable))
                 return "BuildX 所需的运行环境未找到，请运行安装检查。";
             try
             {
@@ -817,11 +851,9 @@ namespace RevitLocalCodex
                         CreateNoWindow = true,
                         WindowStyle = ProcessWindowStyle.Hidden
                     };
-                    if (!config.DevelopmentMode)
-                    {
-                        start.EnvironmentVariables["BUILDX_PYTHON_EXE"] = config.PythonExecutable;
-                        start.EnvironmentVariables["BUILDX_CODEX_EXE"] = config.CodexExecutable;
-                    }
+                    start.EnvironmentVariables["BUILDX_PYTHON_EXE"] = config.PythonExecutable;
+                    start.EnvironmentVariables["BUILDX_CODEX_EXE"] = config.CodexExecutable;
+                    start.EnvironmentVariables["BUILDX_DATA_ROOT"] = config.DataRoot;
                     launchedProcess = ServiceStartupProcess.Start(start);
                 }
                 for (int attempt = 0; attempt < 8; attempt++)

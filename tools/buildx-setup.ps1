@@ -140,6 +140,7 @@ $script:AutoCodexPath = $null
       <TextBlock Text="安装位置" FontWeight="Bold" FontSize="16" Margin="0,0,0,7"/>
       <TextBlock Text="BuildX 候选组件目录"/><DockPanel Margin="0,3,0,7"><Button x:Name="BrowsePackage" DockPanel.Dock="Right" Content="选择…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="PackagePath" Padding="5"/></DockPanel>
       <TextBlock Text="新的 BuildX 安装目录"/><DockPanel Margin="0,3,0,7"><Button x:Name="BrowseInstall" DockPanel.Dock="Right" Content="选择父目录…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="InstallPath" Padding="5"/></DockPanel>
+      <TextBlock Text="新的独立数据目录（聊天、资料引用、队列与回执；不会接管已有目录）" TextWrapping="Wrap"/><DockPanel Margin="0,3,0,7"><Button x:Name="BrowseData" DockPanel.Dock="Right" Content="选择父目录…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="DataPath" Padding="5"/></DockPanel>
       <TextBlock Text="Revit 2024 Addins 目录（必须已存在）"/><DockPanel Margin="0,3,0,9"><Button x:Name="BrowseAddins" DockPanel.Dock="Right" Content="选择…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="AddinsPath" Padding="5"/></DockPanel>
       <Button x:Name="Plan" Content="检查安装计划" HorizontalAlignment="Left" Padding="12,5" Margin="0,0,0,8"/>
       <TextBlock x:Name="Result" Text="检查会列出缺项和冲突，不会安装程序。" TextWrapping="Wrap"/>
@@ -150,17 +151,18 @@ $script:AutoCodexPath = $null
 '@
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $script:Window = [Windows.Markup.XamlReader]::Load($reader)
-foreach ($name in @('NodePath','CodexPath','PythonPath','PackagePath','InstallPath','AddinsPath','BrowseNode','BrowseCodex','BrowsePython','BrowsePackage','BrowseInstall','BrowseAddins','Detect','InstallHelp','Plan','Install','Detection','Result','Progress')) {
+foreach ($name in @('NodePath','CodexPath','PythonPath','PackagePath','InstallPath','DataPath','AddinsPath','BrowseNode','BrowseCodex','BrowsePython','BrowsePackage','BrowseInstall','BrowseData','BrowseAddins','Detect','InstallHelp','Plan','Install','Detection','Result','Progress')) {
     Set-Variable -Scope Script -Name $name -Value $script:Window.FindName($name)
 }
 $script:NodePath.Text = Find-ExistingNode
 $script:PackagePath.Text = Find-AdjacentPackage $PSScriptRoot
-$script:InstallPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX'
+$script:InstallPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Program'
+$script:DataPath.Text = ''
 $script:AddinsPath.Text = Join-Path $env:APPDATA 'Autodesk\Revit\Addins\2024'
 
 function Get-Inputs {
     return @($script:PackagePath.Text.Trim(), $script:InstallPath.Text.Trim(), $script:AddinsPath.Text.Trim(),
-        $script:NodePath.Text.Trim(), $script:PythonPath.Text.Trim(), $script:CodexPath.Text.Trim())
+        $script:NodePath.Text.Trim(), $script:PythonPath.Text.Trim(), $script:CodexPath.Text.Trim(), $script:DataPath.Text.Trim())
 }
 function Get-Fingerprint { return [string]::Join([char]0x1f, [string[]](Get-Inputs)) }
 function Clear-Plan {
@@ -169,7 +171,7 @@ function Clear-Plan {
     if (-not $script:Updating) { $script:Result.Text = '输入已更改，请重新检查安装计划。' }
 }
 function Set-Busy([bool]$Busy) {
-    foreach ($item in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:AddinsPath,$script:BrowseNode,$script:BrowseCodex,$script:BrowsePython,$script:BrowsePackage,$script:BrowseInstall,$script:BrowseAddins,$script:Detect,$script:Plan,$script:InstallHelp)) { $item.IsEnabled = -not $Busy }
+    foreach ($item in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:DataPath,$script:AddinsPath,$script:BrowseNode,$script:BrowseCodex,$script:BrowsePython,$script:BrowsePackage,$script:BrowseInstall,$script:BrowseData,$script:BrowseAddins,$script:Detect,$script:Plan,$script:InstallHelp)) { $item.IsEnabled = -not $Busy }
     $script:Install.IsEnabled = (-not $Busy -and $null -ne $script:PlanFingerprint -and $script:PlanFingerprint -eq (Get-Fingerprint))
 }
 function Choose-Executable($Target,[string]$Expected) {
@@ -182,13 +184,13 @@ function Choose-Executable($Target,[string]$Expected) {
         if ([object]::ReferenceEquals($Target, $script:CodexPath)) { $script:AutoCodexPath = $null }
     }
 }
-function Choose-Directory($Target,[bool]$InstallParent) {
+function Choose-Directory($Target,[bool]$InstallParent,[string]$Leaf='BuildX') {
     $dialog = New-Object Windows.Forms.FolderBrowserDialog
     try {
         $dialog.Description = if ($InstallParent) { '选择 BuildX 安装目录的父目录' } else { '选择已有目录' }
         $dialog.ShowNewFolderButton = $false
         if ($dialog.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) {
-            $Target.Text = if ($InstallParent) { [IO.Path]::Combine($dialog.SelectedPath, 'BuildX') } else { $dialog.SelectedPath }
+            $Target.Text = if ($InstallParent) { [IO.Path]::Combine($dialog.SelectedPath, $Leaf) } else { $dialog.SelectedPath }
         }
     } finally { $dialog.Dispose() }
 }
@@ -255,10 +257,12 @@ function Complete-Installer([string]$Action,[int]$ExitCode,[string]$Out,[string]
         if ($Action -eq 'apply' -and $null -ne $result) {
             $publishedProperty = $result.PSObject.Properties['manifestPublished']
             $rootProperty = $result.PSObject.Properties['retainedInstallRoot']
+            $dataProperty = $result.PSObject.Properties['retainedDataRoot']
             if ($null -ne $publishedProperty -and $publishedProperty.Value -is [bool]) {
                 $message += if ($publishedProperty.Value) { "`n插件入口已发布，请核对安装结果，勿重复安装。" } else { "`n插件入口未发布。" }
             } else { $message += "`n插件入口状态未知，请检查后再决定下一步。" }
             if ($null -ne $rootProperty -and -not [string]::IsNullOrWhiteSpace([string]$rootProperty.Value)) { $message += "`n安装目录已保留：" + [string]$rootProperty.Value }
+            if ($null -ne $dataProperty -and -not [string]::IsNullOrWhiteSpace([string]$dataProperty.Value)) { $message += "`n数据目录位置已保留供核对：" + [string]$dataProperty.Value }
         }
         $script:Result.Text = $message; $script:Progress.Text = '未确认完成。'; return
     }
@@ -309,13 +313,14 @@ $script:Timer.Add_Tick({
         $worker.Dispose(); Complete-Installer $action $code $out $err; Set-Busy $false
     } catch { $script:Timer.Stop(); $script:Worker = $null; $script:PlanFingerprint = $null; $script:Progress.Text = '操作结果无法确认，请检查后再决定下一步。'; Set-Busy $false }
 })
-foreach ($field in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:AddinsPath)) { $field.Add_TextChanged({ Clear-Plan }) }
+foreach ($field in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:DataPath,$script:AddinsPath)) { $field.Add_TextChanged({ Clear-Plan }) }
 $script:CodexPath.Add_TextChanged({ if (-not $script:Updating) { $script:AutoCodexPath = $null } })
 $script:BrowseNode.Add_Click({ Choose-Executable $script:NodePath 'node.exe' })
 $script:BrowseCodex.Add_Click({ Choose-Executable $script:CodexPath 'codex.exe' })
 $script:BrowsePython.Add_Click({ Choose-Executable $script:PythonPath 'python.exe' })
 $script:BrowsePackage.Add_Click({ Choose-Directory $script:PackagePath $false })
 $script:BrowseInstall.Add_Click({ Choose-Directory $script:InstallPath $true })
+$script:BrowseData.Add_Click({ Choose-Directory $script:DataPath $true 'BuildX-Data' })
 $script:BrowseAddins.Add_Click({ Choose-Directory $script:AddinsPath $false })
 $script:Detect.Add_Click({ Clear-Plan; Start-Installer 'detect' @('--detect') })
 $script:InstallHelp.Add_Click({
@@ -330,7 +335,7 @@ $script:Plan.Add_Click({
 })
 $script:Install.Add_Click({
     if ($null -eq $script:PlanFingerprint -or $script:PlanFingerprint -ne (Get-Fingerprint)) { Clear-Plan; return }
-    $question = '将在以下目录安装 BuildX：' + "`n" + $script:InstallPath.Text.Trim() + "`n`n" + '并在 Revit Addins 目录发布插件入口。是否继续？'
+    $question = '将在以下目录安装 BuildX：' + "`n" + $script:InstallPath.Text.Trim() + "`n`n" + '独立数据目录：' + "`n" + $script:DataPath.Text.Trim() + "`n`n" + '并在 Revit Addins 目录发布插件入口。是否继续？'
     if ([Windows.MessageBox]::Show($script:Window,$question,'确认安装',[Windows.MessageBoxButton]::YesNo,[Windows.MessageBoxImage]::Question) -ne [Windows.MessageBoxResult]::Yes) { return }
     Start-Installer 'apply' (@('--apply') + (Get-Inputs))
 })
@@ -355,6 +360,7 @@ if ($UiSelfTest) {
     Complete-Installer 'detect' 0 $found ''
     if ($script:CodexPath.Text -ne 'C:\user\codex.exe' -or $script:Detection.Text -notmatch '保留手动') { throw 'Manual Codex selection was overwritten.' }
     $script:PackagePath.Text = 'C:\test\package'; $script:InstallPath.Text = 'C:\test\install'; $script:AddinsPath.Text = 'C:\test\addins'
+    $script:DataPath.Text = 'C:\test\data'
     $script:PythonPath.Text = 'C:\test\python.exe'; $script:CodexPath.Text = 'C:\test\codex.exe'
     Complete-Installer 'plan' 0 '{"ok":true,"readyToApply":false,"reason":"缺项","blockers":[{"reason":"missing_test"}]}' ''
     Set-Busy $false
@@ -362,7 +368,7 @@ if ($UiSelfTest) {
     Complete-Installer 'plan' 0 '{"ok":true,"readyToApply":true,"blockers":[]}' ''
     Set-Busy $false
     if (-not $script:Install.IsEnabled) { throw 'Ready plan was not shown.' }
-    $script:InstallPath.Text = 'C:\test\changed'
+    $script:DataPath.Text = 'C:\test\changed-data'
     if ($script:Install.IsEnabled -or $null -ne $script:PlanFingerprint) { throw 'Changed input did not invalidate plan.' }
     Complete-Installer 'detect' 1 '' '{"ok":false,"code":"TEST","message":"test failure"}'
     if ($script:Result.Text -ne 'test failure') { throw 'Error mapping failed.' }

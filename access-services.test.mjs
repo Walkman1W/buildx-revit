@@ -23,6 +23,20 @@ test('scope identity, protected authorization files and policy replay remain enf
   const restored=await service.activate(scope);assert.equal(restored.ok,true);assert.equal(restored.value.mode,'full-access');assert.equal(service.current(scope,full.value),true);
 });
 
+test('installed program resources and data ownership stay protected with a separate data root',async t=>{
+  const stage=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-access-layout-')),programRoot=path.join(stage,'program'),dataRoot=path.join(stage,'data');
+  await fs.mkdir(programRoot);await fs.mkdir(path.join(dataRoot,'workbench'),{recursive:true});
+  const resource=path.join(programRoot,'server.mjs'),marker=path.join(dataRoot,'buildx-data-owner.json'),ordinary=path.join(stage,'user.txt');
+  await fs.writeFile(resource,'program');await fs.writeFile(marker,'owner');await fs.writeFile(ordinary,'user');
+  const service=createAccessServices({root:dataRoot,programRoot,stateDirectory:path.join(dataRoot,'history','access')});
+  t.after(async()=>{assert.equal((await service.close()).closed,true);const target=path.resolve(stage);assert.equal(path.dirname(target),path.resolve(os.tmpdir()));assert.ok(path.basename(target).startsWith('buildx-access-layout-'));await fs.rm(target,{recursive:true,force:true});});
+  assert.equal((await service.activate('layout-account')).ok,true);
+  assert.equal((await service.select('layout-account',{mode:'full-access',confirmed:true,expectedRevision:0})).ok,true);
+  for(const target of [resource,marker,path.join(dataRoot,'workbench','access-policy.json')])assert.equal((await service.authorize('layout-account',target,{write:true})).ok,false);
+  assert.equal((await service.authorize('layout-account',ordinary,{write:true})).ok,true);
+  assert.equal(await fs.readFile(resource,'utf8'),'program');
+});
+
 test('legacy lock activation settles with its explicit cause and cannot remove an unowned lock',async t=>{
   const {root,service}=await fixture(t),stateDirectory=path.join(root,'state'),scope='legacy-lock';await fs.mkdir(stateDirectory);
   const layout=createAccessPolicy({stateDirectory,accountScope:scope});await fs.mkdir(layout.storageDirectory);const filename=path.join(layout.storageDirectory,'.owner.lock'),bytes=JSON.stringify({schema:1,owner:'previous-owner'});await fs.writeFile(filename,bytes);

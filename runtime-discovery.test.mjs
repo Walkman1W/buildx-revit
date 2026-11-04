@@ -69,7 +69,7 @@ test('installer refuses a manually selected WindowsApps Python alias before runn
   const pkg=path.join(f.home,'package'),addin=path.join(f.home,'addins'),target=path.join(f.home,'installed');
   await fs.mkdir(pkg);await fs.mkdir(addin);
   const entry=path.join(process.cwd(),'tools','buildx-installer.mjs');
-  await assert.rejects(promisify(execFile)(process.execPath,[entry,'--plan',pkg,target,addin,node,alias,codex],{
+  await assert.rejects(promisify(execFile)(process.execPath,[entry,'--plan',pkg,target,addin,node,alias,codex,path.join(f.home,'data')],{
     windowsHide:true,timeout:10000,env:{...f.env,...(process.env.SystemRoot?{SystemRoot:process.env.SystemRoot}:{})}
   }),error=>JSON.parse(error.stderr).code==='PYTHON_PATH_UNVERIFIED');
   await assert.rejects(fs.stat(target),{code:'ENOENT'});

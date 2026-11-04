@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
-import {buildCandidate,planInstall,applyInstall,inspectDataLayout} from './tools/buildx-installer.mjs';
+import {buildCandidate,planInstall,applyInstall,inspectDataLayout,validateRuntimeVersionOutputs} from './tools/buildx-installer.mjs';
 const hash=data=>createHash('sha256').update(data).digest('hex');
 const sha=/^[a-f0-9]{64}$/;
 async function fixture(t){
@@ -15,18 +15,20 @@ async function fixture(t){
   const files=[];for(const f of filenames){const p=path.join(pkg,...f.split('/'));await fs.mkdir(path.dirname(p),{recursive:true});const data=Buffer.from('fixture '+f);await fs.writeFile(p,data);files.push({path:f,sha256:hash(data)});}
   const manifest={schemaVersion:1,stage:'test_fixture',releaseReady:false,files,missing:[]};await fs.writeFile(path.join(pkg,'buildx-package.json'),JSON.stringify(manifest));
   for(const name of ['node.exe','python.exe','codex.exe'])await fs.writeFile(path.join(runtimes,name),'fixture');
-  const options={packageRoot:pkg,installRoot:path.join(base,'installed'),addinDirectory:addin,nodeExecutable:path.join(runtimes,'node.exe'),pythonExecutable:path.join(runtimes,'python.exe'),codexExecutable:path.join(runtimes,'codex.exe'),allowTestFixture:true,checkRevit:async()=>false,probeRuntimes:async()=>({node:'v24.0.0',python:'3.11.0',codex:'1.0.0'})};
+  const options={packageRoot:pkg,installRoot:path.join(base,'installed'),dataRoot:path.join(base,'data'),addinDirectory:addin,nodeExecutable:path.join(runtimes,'node.exe'),pythonExecutable:path.join(runtimes,'python.exe'),codexExecutable:path.join(runtimes,'codex.exe'),allowTestFixture:true,checkRevit:async()=>false,probeRuntimes:async()=>({node:'v22.17.0',python:'3.11.0',codex:'1.0.0'})};
   return {base,pkg,addin,manifest,options};
 }
 test('sandbox install plans before writing, copies only verified files and publishes one addin',async t=>{
   const f=await fixture(t);const plan=await planInstall(f.options);assert.equal(plan.readyToApply,true);await assert.rejects(fs.stat(f.options.installRoot),{code:'ENOENT'});
-  assert.deepEqual(plan.dataLayout,{chatHistory:{path:path.join(f.options.installRoot,'runtime-history'),location:'inside_install_root'},workbench:{path:path.join(f.options.installRoot,'workbench'),location:'inside_install_root'},projectHistory:{status:'not_provided'},upgradeSupported:false,restoreVerified:false});
+  assert.equal(plan.dataLayout.schemaVersion,2);assert.equal(plan.dataLayout.dataRoot,f.options.dataRoot);assert.equal(plan.dataLayout.chatHistory.path,path.join(f.options.dataRoot,'runtime-history'));assert.equal(plan.dataLayout.workbench.path,path.join(f.options.dataRoot,'workbench'));assert.equal(plan.dataLayout.chatHistory.location,'separate_data_root');assert.equal(plan.dataLayout.privateRuntime.status,'not_bundled');
   const result=await applyInstall(f.options);assert.equal(result.releaseReady,false);assert.match(result.installationId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  const config=JSON.parse(await fs.readFile(path.join(f.options.installRoot,'buildx-installation.json'),'utf8'));assert.equal(config.installationId,result.installationId);assert.equal(config.nodeExecutable,f.options.nodeExecutable);assert.equal(config.pythonExecutable,f.options.pythonExecutable);assert.equal(config.codexExecutable,f.options.codexExecutable);
+  const config=JSON.parse(await fs.readFile(path.join(f.options.installRoot,'buildx-installation.json'),'utf8'));assert.equal(config.schemaVersion,2);assert.equal(config.dataRoot,f.options.dataRoot);assert.equal(config.installationId,result.installationId);assert.equal(config.nodeExecutable,f.options.nodeExecutable);assert.equal(config.pythonExecutable,f.options.pythonExecutable);assert.equal(config.codexExecutable,f.options.codexExecutable);
+  assert.equal(JSON.parse(await fs.readFile(path.join(f.options.dataRoot,'buildx-data-owner.json'),'utf8')).installationId,result.installationId);
+  await assert.rejects(fs.stat(path.join(f.options.installRoot,'workbench')),{code:'ENOENT'});
   assert.match(await fs.readFile(result.addin,'utf8'),/LocalCodexRevit\.dll/);await assert.rejects(applyInstall(f.options),{code:'INSTALL_EXISTS'});
 });
 test('data layout inspection is read-only and exposes overlap and unknowns',async t=>{
-  const f=await fixture(t),data=path.join(f.base,'data');await fs.mkdir(data);const marker=path.join(data,'preserve.txt');await fs.writeFile(marker,'original');
+  const f=await fixture(t),data=path.join(f.base,'existing-project-history');await fs.mkdir(data);const marker=path.join(data,'preserve.txt');await fs.writeFile(marker,'original');
   const args={installRoot:f.options.installRoot,packageRoot:f.pkg,addinDirectory:f.addin};
   const separate=await inspectDataLayout({...args,projectHistoryRoot:data});
   assert.deepEqual(separate.projectHistory,{path:data,status:'separate_location_unverified'});
@@ -36,6 +38,23 @@ test('data layout inspection is read-only and exposes overlap and unknowns',asyn
   await assert.rejects(inspectDataLayout({...args,projectHistoryRoot:'relative'}),{code:'DATA_LAYOUT_INVALID'});
   const plan=await planInstall({...f.options,projectHistoryRoot:data});assert.deepEqual(plan.dataLayout.projectHistory,separate.projectHistory);
   assert.equal(await fs.readFile(marker,'utf8'),'original');await assert.rejects(fs.stat(f.options.installRoot),{code:'ENOENT'});
+});
+
+test('new data roots are explicit, separate, unowned and free of linked ancestors',async t=>{
+  const f=await fixture(t);let probes=0;const options={...f.options,probeRuntimes:async()=>{probes++;return {};}};
+  await assert.rejects(planInstall({...options,dataRoot:undefined}),{code:'DATA_ROOT_REQUIRED'});
+  for(const dataRoot of [f.pkg,path.join(f.pkg,'child'),f.options.installRoot,path.join(f.options.installRoot,'child'),f.addin,f.base])await assert.rejects(planInstall({...options,dataRoot}),{code:'DATA_ROOT_OVERLAP'});
+  const sentinel=path.join(f.base,'existing');await fs.mkdir(sentinel);await fs.writeFile(path.join(sentinel,'keep.txt'),'keep');
+  await assert.rejects(planInstall({...options,dataRoot:sentinel}),{code:'DATA_ROOT_EXISTS'});
+  const alias=path.join(f.base,'alias');await fs.symlink(sentinel,alias,process.platform==='win32'?'junction':'dir');
+  await assert.rejects(planInstall({...options,dataRoot:path.join(alias,'new-data')}),{code:'UNSAFE_DIRECTORY'});
+  assert.equal(probes,0);assert.equal(await fs.readFile(path.join(sentinel,'keep.txt'),'utf8'),'keep');await assert.rejects(fs.stat(f.options.installRoot),{code:'ENOENT'});
+});
+
+test('runtime version admission matches the validated Node 22.17 floor and keeps Python/Codex requirements',()=>{
+  const supported={node:'v22.17.0',python:'Python 3.11.0',codex:'codex-cli 1.0.0'};
+  assert.deepEqual(validateRuntimeVersionOutputs(supported),{node:'v22.17.0',python:'3.11.0',codex:'1.0.0'});
+  for(const change of [{node:'v22.16.9'},{node:'v20.19.0'},{python:'Python 3.10.11'},{codex:'wrapper.cmd'}])assert.throws(()=>validateRuntimeVersionOutputs({...supported,...change}),{code:'RUNTIME_VERSION'});
 });
 test('existing addin and changed package are rejected without installation',async t=>{
   const f=await fixture(t);const existing=path.join(f.addin,'BuildX.addin');await fs.writeFile(existing,'keep');await assert.rejects(applyInstall(f.options),{code:'MANIFEST_EXISTS'});assert.equal(await fs.readFile(existing,'utf8'),'keep');await fs.unlink(existing);
@@ -49,6 +68,29 @@ test('if Revit appears before publication retain owned files and publish no mani
   await assert.rejects(applyInstall(f.options),e=>e.code==='REVIT_RUNNING'&&e.manifestPublished===false&&e.retainedInstallRoot===f.options.installRoot);
   assert.equal((await fs.stat(path.join(f.options.installRoot,'buildx-installation.json'))).isFile(),true);await assert.rejects(fs.stat(path.join(f.addin,'BuildX.addin')),{code:'ENOENT'});
 });
+
+test('a data directory appearing after preflight is retained without adoption or addin publication',async t=>{
+  const f=await fixture(t);f.options.probeRuntimes=async()=>{await fs.mkdir(f.options.dataRoot);await fs.writeFile(path.join(f.options.dataRoot,'keep.txt'),'another owner');return {};};
+  await assert.rejects(applyInstall(f.options),error=>error.code==='EEXIST'&&error.manifestPublished===false&&error.retainedDataRoot===f.options.dataRoot);
+  assert.equal(await fs.readFile(path.join(f.options.dataRoot,'keep.txt'),'utf8'),'another owner');
+  await assert.rejects(fs.stat(path.join(f.options.dataRoot,'buildx-data-owner.json')),{code:'ENOENT'});
+  await assert.rejects(fs.stat(path.join(f.addin,'BuildX.addin')),{code:'ENOENT'});
+});
+
+test('candidate records only bounded relative build provenance and rejects stale source evidence',async t=>{
+  const f=await fixture(t),plugin=path.join(f.base,'plugin');await fs.mkdir(path.join(plugin,'runtimes','win-x64','native'),{recursive:true});
+  for(const name of ['LocalCodexRevit.dll','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wpf.dll','runtimes/win-x64/native/WebView2Loader.dll'])await fs.writeFile(path.join(plugin,...name.split('/')),'fixture plugin');
+  const source=path.join(process.cwd(),'revit-addin','NativeModelQueries.cs');
+  const record={compiler_exit_code:0,output_sha256:hash('fixture plugin'),output:'PRIVATE_DEVELOPMENT_PATH',sources:[{path:source,sha256:hash(await fs.readFile(source))}],
+    webview2_sdk:{package_id:'Microsoft.Web.WebView2',version:'1.0.2478.35',source:'https://api.nuget.org/v3/index.json',package_sha256:'b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96',payload_verified_against_package:true},privateEnvironment:'PRIVATE_ENVIRONMENT'};
+  await fs.writeFile(path.join(plugin,'build-record.json'),JSON.stringify(record));
+  const out=path.join(f.base,'provenance');await buildCandidate({output:out,pluginDirectory:plugin});
+  const raw=await fs.readFile(path.join(out,'buildx-package.json'),'utf8'),manifest=JSON.parse(raw);
+  assert.deepEqual(manifest.buildEvidence.sources,[{path:'revit-addin/NativeModelQueries.cs',sha256:record.sources[0].sha256}]);assert.equal(raw.includes('PRIVATE_'),false);assert.equal(raw.includes(process.cwd().replaceAll('\\','\\\\')),false);
+  assert.equal(manifest.buildEvidence.realRevitLoadVerified,false);assert.equal(manifest.runtimePolicy.codex.bundled,false);assert.equal(manifest.releaseReady,false);
+  record.sources[0].sha256='a'.repeat(64);await fs.writeFile(path.join(plugin,'build-record.json'),JSON.stringify(record));
+  const stale=await buildCandidate({output:path.join(f.base,'stale-provenance'),pluginDirectory:plugin});assert.ok(stale.missing.some(item=>item.reason==='plugin_build_provenance_unverified'));
+});
 test('candidate build excludes runtime state and cannot authorize actual install',async t=>{
   const f=await fixture(t),plugin=path.join(f.base,'plugin');await fs.mkdir(path.join(plugin,'runtimes','win-x64','native'),{recursive:true});
   for(const name of ['LocalCodexRevit.dll','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wpf.dll','runtimes/win-x64/native/WebView2Loader.dll'])await fs.writeFile(path.join(plugin,...name.split('/')),'placeholder');
@@ -57,7 +99,7 @@ test('candidate build excludes runtime state and cannot authorize actual install
   const packageManifest=JSON.parse(await fs.readFile(path.join(out,'buildx-package.json'),'utf8'));assert.ok(packageManifest.files.every(x=>sha.test(x.sha256)&&!x.path.startsWith('runtime/')&&!x.path.startsWith('runtime-history/')));
   assert.ok(packageManifest.files.some(x=>x.path==='lib/native-model-queries.mjs'));
   for(const old of ['lib/aec-model-adapter.mjs','lib/aec-read-relay.py','lib/aec-read-contracts.json','tools/refresh-aec-contracts.mjs'])assert.ok(!packageManifest.files.some(x=>x.path===old));
-  for(const filename of ['BuildX-Setup.cmd','tools/buildx-setup.cmd','tools/buildx-setup.ps1','tools/buildx-installer.mjs','lib/project-knowledge-parser.py','lib/access-lock-recovery.mjs','lib/access-lock-recovery.cs','lib/project-knowledge.mjs','lib/project-history.mjs','lib/project-agent-bridge.mjs','lib/buildx-skills.mjs','.agents/skills/buildx-project-research/SKILL.md','lib/command-sequence.mjs','lib/model-viewer-service.mjs','public/project-knowledge-ui.mjs','public/model-viewer.mjs','public/model-viewer-ui.mjs','public/model-viewer.css','public/account-license.mjs','public/command-form-source.mjs','public/personal-command-fields.mjs','public/command-fields.mjs','public/command-choice-field.mjs','public/parameter-change-field.mjs','licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'])assert.ok(packageManifest.files.some(item=>item.path===filename),`candidate includes ${filename}`);
+  for(const filename of ['package-lock.json','THIRD-PARTY-NOTICES.md','buildx-installation.example.json','BuildX-Setup.cmd','tools/buildx-setup.cmd','tools/buildx-setup.ps1','tools/buildx-installer.mjs','lib/project-knowledge-parser.py','lib/access-lock-recovery.mjs','lib/access-lock-recovery.cs','lib/project-knowledge.mjs','lib/project-history.mjs','lib/project-agent-bridge.mjs','lib/buildx-skills.mjs','.agents/skills/buildx-project-research/SKILL.md','lib/command-sequence.mjs','lib/model-viewer-service.mjs','public/project-knowledge-ui.mjs','public/model-viewer.mjs','public/model-viewer-ui.mjs','public/model-viewer.css','public/account-license.mjs','public/command-form-source.mjs','public/personal-command-fields.mjs','public/command-fields.mjs','public/command-choice-field.mjs','public/parameter-change-field.mjs','licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'])assert.ok(packageManifest.files.some(item=>item.path===filename),`candidate includes ${filename}`);
   const plan=await planInstall({...f.options,packageRoot:out});assert.equal(plan.readyToApply,false);await assert.rejects(applyInstall({...f.options,packageRoot:out}),{code:'NOT_READY'});
   // Removing a package's self-declared missing list must never make the 37-tool
   // product eligible without its independently checked owners and assets.

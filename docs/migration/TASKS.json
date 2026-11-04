@@ -3,15 +3,80 @@
   "project": "BuildX",
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
-    {"id":"BX-001","title":"白名单提取源码并核对哈希","status":"completed","acceptance":"来源清单、目标摘要和排除范围可核对，旧项目未修改","evidence":"source-baseline.json: 507 files, 5602302 bytes, sourceStableDuringCopy=true; 3 entry syntax checks passed"},
-    {"id":"BX-002","title":"建立完整 Revit 命令迁移清单","status":"completed","acceptance":"AEC 工具按业务分组，与 BuildX 已有能力映射；标注迁移优先级和未核实项","evidence":"aec-revit-command-inventory.json: 103 tools/103 mappings; groups and P0=6/P1=18/P2=70/P3=9; static source inventory only"},
-    {"id":"BX-003","title":"六项查询原生化","status":"completed","acceptance":"自有具名契约、C#读取、宿主能力版本、统一原子队列和结果校验；无需AEC provider；旧DLL入队前拒绝","ownerThreadId":"01a1a752-4305-77f1-8b04-e8a1b338c1d0","handoff":"IMPLEMENTATION-HANDOFF.md","evidence":"NATIVE-SIX-VERIFICATION.zh-CN.md; native-six-verification.json; npm target suite 181/181; host checks 80/80; actual Revit2024 API reference compilation succeeded","validationScope":"source/contracts; actual C# producers with controlled Revit peers; real temporary Node queue and installed MCP client; API compilation","realRevitLoadVerified":false,"realModelExecutionVerified":false},
-    {"id":"BX-004","title":"新项目路径与数据布局独立","status":"pending","acceptance":"程序、状态、队列、命令和历史路径有统一owner；不依赖旧开发根和桌面缓存"},
-    {"id":"BX-005","title":"私有 GitHub 源码基线","status":"completed","acceptance":"Git待提交清单经过来源和敏感配置核对；私有仓库可重建；无运行数据或研究二进制","evidence":"BASELINE-AUDIT.zh-CN.md; THIRD-PARTY-NOTICES.md; private Walkman1W/buildx-revit branch codex/native-foundation; locked npm ci and import closure checked; no runtime/binary/model data staged"},
-    {"id":"BX-006","title":"常用参数与建模命令迁移","status":"pending","acceptance":"以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收"},
-    {"id":"BX-007","title":"原生系统图完善并替换恢复入口","status":"pending","acceptance":"物理连接与源事实复验、预览导出及重复请求处理可验证"},
-    {"id":"BX-008","title":"原生规则标注","status":"pending","acceptance":"兼容标签族、视图和类别范围明确，布局冲突、已有标签、回滚与未知结果受控"},
-    {"id":"BX-009","title":"清理已替代模块与专属依赖","status":"pending","acceptance":"消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留"},
-    {"id":"BX-010","title":"Revit 2024 安装候选与客户验收","status":"pending","acceptance":"来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex"}
+    {
+      "id": "BX-001",
+      "title": "白名单提取源码并核对哈希",
+      "status": "completed",
+      "acceptance": "来源清单、目标摘要和排除范围可核对，旧项目未修改",
+      "evidence": "source-baseline.json: 507 files, 5602302 bytes, sourceStableDuringCopy=true; 3 entry syntax checks passed"
+    },
+    {
+      "id": "BX-002",
+      "title": "建立完整 Revit 命令迁移清单",
+      "status": "completed",
+      "acceptance": "AEC 工具按业务分组，与 BuildX 已有能力映射；标注迁移优先级和未核实项",
+      "evidence": "aec-revit-command-inventory.json: 103 tools/103 mappings; groups and P0=6/P1=18/P2=70/P3=9; static source inventory only"
+    },
+    {
+      "id": "BX-003",
+      "title": "六项查询原生化",
+      "status": "completed",
+      "acceptance": "自有具名契约、C#读取、宿主能力版本、统一原子队列和结果校验；无需AEC provider；旧DLL入队前拒绝",
+      "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
+      "handoff": "IMPLEMENTATION-HANDOFF.md",
+      "evidence": "NATIVE-SIX-VERIFICATION.zh-CN.md; native-six-verification.json; npm target suite 181/181; host checks 80/80; actual Revit2024 API reference compilation succeeded",
+      "validationScope": "source/contracts; actual C# producers with controlled Revit peers; real temporary Node queue and installed MCP client; API compilation",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
+    },
+    {
+      "id": "BX-004",
+      "title": "新项目路径与数据布局独立",
+      "status": "completed",
+      "acceptance": "程序、状态、队列、命令和历史路径有统一owner；不依赖旧开发根和桌面缓存",
+      "evidence": "RUNTIME-LAYOUT.zh-CN.md; schema2 separate dataRoot and private-runtime; real Node/MCP external queue+commands; 93 layout checks and 181 native regression checks passed",
+      "validationScope": "Source/configuration and isolated integration; schema1 paths preserved, no migration",
+      "realRevitLoadVerified": false,
+      "dataMigrationVerified": false
+    },
+    {
+      "id": "BX-005",
+      "title": "私有 GitHub 源码基线",
+      "status": "completed",
+      "acceptance": "Git待提交清单经过来源和敏感配置核对；私有仓库可重建；无运行数据或研究二进制",
+      "evidence": "BASELINE-AUDIT.zh-CN.md; THIRD-PARTY-NOTICES.md; private Walkman1W/buildx-revit branch codex/native-foundation; locked npm ci and import closure checked; no runtime/binary/model data staged"
+    },
+    {
+      "id": "BX-006",
+      "title": "常用参数与建模命令迁移",
+      "status": "pending",
+      "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收"
+    },
+    {
+      "id": "BX-007",
+      "title": "原生系统图完善并替换恢复入口",
+      "status": "pending",
+      "acceptance": "物理连接与源事实复验、预览导出及重复请求处理可验证"
+    },
+    {
+      "id": "BX-008",
+      "title": "原生规则标注",
+      "status": "pending",
+      "acceptance": "兼容标签族、视图和类别范围明确，布局冲突、已有标签、回滚与未知结果受控"
+    },
+    {
+      "id": "BX-009",
+      "title": "清理已替代模块与专属依赖",
+      "status": "in_progress",
+      "acceptance": "消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留",
+      "evidence": "AEC query exclusive files removed in prior slice; old development root/cache fallback removed; execution resources redirected to program private-runtime. Argus/ScriptRunner consumers remain and no recovered runtime is packaged."
+    },
+    {
+      "id": "BX-010",
+      "title": "Revit 2024 安装候选与客户验收",
+      "status": "in_progress",
+      "acceptance": "来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex",
+      "evidence": "Official NuGet SDK API build and explicit runtime candidate created; source snapshot closure and final audit in progress; releaseReady:false; no actual installation/load"
+    }
   ]
 }

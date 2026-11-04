@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "installationId": "00000000-0000-4000-8000-000000000000",
+  "nodeExecutable": "C:\\BuildX\\Program\\private-runtime\\node\\node.exe",
+  "pythonExecutable": "C:\\BuildX\\Program\\private-runtime\\python\\python.exe",
+  "codexExecutable": "C:\\ExistingTools\\Codex\\codex.exe",
+  "dataRoot": "C:\\BuildX\\UserData"
+}

@@ -18,7 +18,8 @@ namespace RevitLocalCodex
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
         private const string HostVersion = "0.8.1";
-        internal static readonly string Root = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "workbench"));
+        internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
+        internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");
         private readonly string session = Guid.NewGuid().ToString("N");
         private readonly JavaScriptSerializer json = new JavaScriptSerializer { MaxJsonLength = 1024 * 1024, RecursionLimit = 40 };
@@ -339,7 +340,7 @@ namespace RevitLocalCodex
             string name = new AssemblyName(args.Name).Name;
             bool ownsRequest = name == "ArgusLearning.Core" || (args.RequestingAssembly != null && args.RequestingAssembly.GetName().Name == "ArgusLearning.Core");
             if (!ownsRequest || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return null;
-            string file = Path.Combine(Root, "runtime", "2024", name + ".dll");
+            string file = Path.Combine(PrivateRuntimeRoot, "argus", "2024", name + ".dll");
             if (!File.Exists(file)) return null;
             AssemblyName actual = AssemblyName.GetAssemblyName(file);
             // Do not redirect other addins or substitute incompatible assembly identities.
@@ -830,8 +831,8 @@ namespace RevitLocalCodex
 
         private object Status(Document doc, AccessPolicy.Binding access)
         {
-            string core = Path.Combine(Root, "runtime", "2024", "ArgusLearning.Core.dll");
-            string inference = Path.Combine(Root, "runtime", "Shared", "BIMLOGiQ.SmartAnnotation.inference.exe");
+            string core = Path.Combine(PrivateRuntimeRoot, "argus", "2024", "ArgusLearning.Core.dll");
+            string inference = Path.Combine(PrivateRuntimeRoot, "argus", "Shared", "BIMLOGiQ.SmartAnnotation.inference.exe");
             return new {
                 hostSession = session,
                 hostVersion = HostVersion,

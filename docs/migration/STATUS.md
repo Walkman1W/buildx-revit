@@ -20,10 +20,11 @@
 - 每小时自检任务 `buildx` 已启用，目标为本项目聊天，配置读回确认；自动化尚未经历一次实际定时触发。
 - 已执行 `node --check server.mjs`、`node --check source-panel.mjs`、`node --check public/app.js`，三项语法检查通过；这不证明运行依赖完整或真实 Revit 可用。
 - 原提取宿主为 0.8.0；本工程新源码为 0.8.1，`nativeModelQueriesVersion:1` 和具名操作均在入队前及原子回执校验。新 DLL 只在隔离目录编译，未替换已安装插件。
-- 独立工程尚待完成安装布局与运行路径改造，不能直接替换现有插件。
+- 独立运行布局源码已完成：schema 2 程序/私有执行资源/数据/队列分离，Node、MCP、命令库与 C# 使用同一配置；schema 1 保留原数据位置。旧开发根、个人 Node 例外和 Python 私有缓存兜底已退出生产启动路径。见 `RUNTIME-LAYOUT.zh-CN.md`。
+- 布局修改后六查询 **181/181** 保持通过，布局/安装相关组 **93/93**，受控宿主 **80/80**；最终源码以官方 NuGet WebView2 SDK 重新通过 Revit 2024 API 编译。首次六查询记录的摘要属于 93b324c 历史切片，后续源码变更及当前构建另留记录。
 - 去掉 AEC 后，资料解析和 Codex TOML 配置读取仍依赖 Python；C# 用户命令的编译器来源单独处理。
 - 真实 Revit/WebView/Codex、模型效果、客户安装升级和恢复尚未验收。
 
 ## 下一步
 
-按用户最新顺序，六查询完成上述源码/隔离验证后，再推进后续瘦身和 Revit 插件安装候选；本轮未展开其他瘦身、安装包或建模迁移。真实 Revit 加载/执行、WebView/Codex 和客户机验证继续单列，不能用在线旧 AEC 或旧插件状态替代。当前隔离构建仍引用既有 WebView2 目录，DevelopmentRoot、研究编译器和数据布局尚待独立处理。
+正在完成独立可重建的 Revit 2024 内部候选：运行包已按显式清单生成且 `releaseReady:false`，源码快照的缺失 import/资源正在补齐并验证。候选不包含研究程序集、模型、账号、历史或凭证；Node/Python/Codex 与 WebView2 Runtime 的外部前提和其他阻塞如实保留。真实安装/加载与模型效果尚未验收，不能用在线旧 AEC 或旧插件状态替代。

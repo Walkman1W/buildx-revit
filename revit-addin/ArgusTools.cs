@@ -23,7 +23,7 @@ namespace RevitLocalCodex
         // Only call our public facade in our private assembly; no vendor auth/container reflection.
         private static object Call(string method, object[] args)
         {
-            string file = Path.Combine(WorkbenchHost.Root, "runtime", "2024", "ArgusLearning.Core.dll");
+            string file = Path.Combine(WorkbenchHost.PrivateRuntimeRoot, "argus", "2024", "ArgusLearning.Core.dll");
             Assembly assembly = Assembly.LoadFrom(file);
             return Parse((string)assembly.GetType("RevitWorkbench.RecoveredTools", true).GetMethod(method, BindingFlags.Public | BindingFlags.Static).Invoke(null, args));
         }

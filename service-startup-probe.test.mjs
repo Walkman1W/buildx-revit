@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {spawn,execFileSync} from 'node:child_process';
-import {mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 
@@ -10,6 +10,11 @@ import path from 'node:path';
 // substituting HttpClient. Temporary evidence is retained for inspection.
 test('production .NET launcher checks identity and recovers an absent service', {skip:process.platform!=='win32',timeout:45000},async t=>{
   const directory=mkdtempSync(path.join(tmpdir(),'buildx-service-probe-'));
+  const installationId='aa159a01-0b21-4da8-95ab-8f2488a24ffe';
+  const runtime=path.join(directory,'runtime');
+  mkdirSync(path.join(directory,'revit-addin','bin'),{recursive:true});mkdirSync(runtime);
+  for(const name of ['python.exe','codex.exe'])writeFileSync(path.join(runtime,name),'controlled runtime path fixture');
+  writeFileSync(path.join(directory,'server.mjs'),'// controlled service fixture is populated only for start tests\n');
   const source=readFileSync(new URL('./revit-addin/LocalCodexRevit.cs',import.meta.url),'utf8');
   const begin=source.indexOf('    // BEGIN SERVICE STARTUP DIAGNOSTIC');
   assert.ok(begin>0);
@@ -23,8 +28,7 @@ static int Main(string[] args) { try { Run(args).GetAwaiter().GetResult(); retur
 static async Task Run(string[] args) {
  App.PanelAddress=args[0];
  var flags=BindingFlags.Static|BindingFlags.NonPublic;
- var constructor=typeof(BuildXInstallation).GetConstructors(BindingFlags.Instance|BindingFlags.NonPublic)[0];
- var config=constructor.Invoke(new object[]{args[1],args[4]=="null"?null:args[4],args[2],null,null,args[4]=="null"});
+ var config=BuildXInstallation.FromAssemblyLocation(Path.Combine(args[1],"revit-addin","bin","LocalCodexRevit.dll"));
  typeof(LocalService).GetField("installation",flags).SetValue(null,config);
  int absent=0;
  try {
@@ -51,7 +55,8 @@ static async Task Run(string[] args) {
   writeFileSync(cs,program);
   const framework='C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319';
   execFileSync(path.join(framework,'csc.exe'),['/nologo','/langversion:5',`/out:${exe}`,`/reference:${framework}\\System.Net.Http.dll`,`/reference:${framework}\\System.Runtime.Serialization.dll`,cs]);
-  async function run(url,{start=false,restart=false,id=null}={}){
+  async function run(url,{start=false,restart=false,id=installationId}={}){
+    writeFileSync(path.join(directory,'buildx-installation.json'),JSON.stringify({schemaVersion:1,installationId:id,nodeExecutable:process.execPath,pythonExecutable:path.join(runtime,'python.exe'),codexExecutable:path.join(runtime,'codex.exe')}));
     return await new Promise((resolve,reject)=>{
       const child=spawn(exe,[url,directory,process.execPath,restart?'restart':start?'start':'probe',id??'null'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
       let stdout='',stderr='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);
@@ -66,13 +71,13 @@ static async Task Run(string[] args) {
     return {url:`http://127.0.0.1:${server.address().port}/`,requests,close:()=>new Promise(resolve=>{for(const socket of sockets)socket.destroy();server.close(resolve);})};
   }
   await t.test('large dynamic status does not participate in service identity',async()=>{
-    const f=await fixture((req,res)=>res.end(JSON.stringify({service:'revit-local-codex',installationId:null,...req.url==='/api/status'?{toolCatalog:'x'.repeat(12000)}:{}})));
+    const f=await fixture((req,res)=>res.end(JSON.stringify({service:'revit-local-codex',installationId,...req.url==='/api/status'?{toolCatalog:'x'.repeat(12000)}:{}})));
     try {assert.deepEqual(await run(f.url),{ok:true,again:true,absent:0});assert.deepEqual(f.requests,['/api/service-identity','/api/service-identity']);} finally {await f.close();}
   });
   await t.test('installed identity must match exactly',async()=>{
     const id='aa159a01-0b21-4da8-95ab-8f2488a24ffe';
     const f=await fixture((req,res)=>res.end(JSON.stringify({service:'revit-local-codex',installationId:id})));
-    try {assert.equal((await run(f.url,{id})).ok,true);assert.deepEqual(await run(f.url,{start:true}),{ok:false,again:false,absent:0});} finally {await f.close();}
+    try {assert.equal((await run(f.url,{id})).ok,true);assert.deepEqual(await run(f.url,{start:true,id:'ba159a01-0b21-4da8-95ab-8f2488a24ffe'}),{ok:false,again:false,absent:0});} finally {await f.close();}
   });
   for(const mode of ['wrong-service','missing-installation','malformed','oversized','redirect','timeout'])await t.test(mode+' never starts another service',async()=>{
     const f=await fixture((req,res)=>{
@@ -86,7 +91,7 @@ static async Task Run(string[] args) {
   await t.test('connection refusal starts the configured child once, then reuses it',async()=>{
     const free=await fixture((req,res)=>res.end());const url=free.url;await free.close();
     assert.deepEqual(await run(url),{ok:false,again:false,absent:1});
-    writeFileSync(path.join(directory,'server.mjs'),`import http from 'node:http';http.createServer((req,res)=>res.end(JSON.stringify({service:'revit-local-codex',installationId:null}))).listen(${new URL(url).port},'127.0.0.1');`);
+    writeFileSync(path.join(directory,'server.mjs'),`import http from 'node:http';http.createServer((req,res)=>res.end(JSON.stringify({service:'revit-local-codex',installationId:${JSON.stringify(installationId)}}))).listen(${new URL(url).port},'127.0.0.1');`);
     assert.deepEqual(await run(url,{start:true}),{ok:true,again:true,absent:1});
     assert.deepEqual(await run(url,{restart:true}),{ok:true,again:true,absent:2});
   });

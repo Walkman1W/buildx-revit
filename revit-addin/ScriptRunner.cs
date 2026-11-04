@@ -11,10 +11,11 @@ namespace RevitLocalCodex
 {
     internal static class ScriptRunner
     {
-        internal static readonly string Compiler = Path.GetFullPath(Path.Combine(WorkbenchHost.Root, "..", "..", "_reference", "argus-source-reconstruction-20261019", "toolchain", "roslyn-5.0.0", "tasks", "net472", "csc.exe"));
+        internal static readonly string Compiler = Path.Combine(WorkbenchHost.PrivateRuntimeRoot, "script-compiler", "csc.exe");
         internal static object Execute(UIApplication uiapp, string code, string requestId, IDictionary<string, object> parameters)
         {
             if (string.IsNullOrWhiteSpace(code) || Encoding.UTF8.GetByteCount(code) > 64000) throw new InvalidOperationException("C# body must contain 1 to 64000 UTF-8 bytes.");
+            if (!File.Exists(Compiler)) throw new InvalidOperationException("The private BuildX script compiler has not been provisioned; no script was executed.");
             string directory = Path.Combine(WorkbenchHost.Root, "scripts", requestId);
             Directory.CreateDirectory(directory);
             string source = Path.Combine(directory, "Script.cs");
