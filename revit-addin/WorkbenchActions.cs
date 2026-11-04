@@ -12,7 +12,7 @@ namespace RevitLocalCodex
     // Explicit, typed Revit operations. All methods are called from ExternalEvent.Execute.
     internal static class WorkbenchActions
     {
-        internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" };
+        internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_type_parameters" };
         internal static readonly string[] WriteOperations = { "set_parameters", "move_elements", "copy_elements", "create_wall", "create_pipe" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
@@ -20,6 +20,7 @@ namespace RevitLocalCodex
         internal static object Read(UIApplication uiapp, string operation, Dictionary<string, object> args)
         {
             if (NativeModelQueries.IsRead(operation)) return NativeModelQueries.Read(uiapp, operation, args);
+            if (NativeParameterQueries.IsRead(operation)) return NativeParameterQueries.Read(uiapp, operation, args);
             Document doc = uiapp.ActiveUIDocument.Document;
             if (operation == "capture_model_snapshot")
             {

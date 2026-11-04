@@ -4,6 +4,7 @@ import {PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
 import {isCommandTool,invokeCommand} from './lib/command-store.mjs';
 import {sanitizePanelAudit} from './lib/panel-audit.mjs';
 import {isNativeModelQuery} from './lib/native-model-queries.mjs';
+import {isNativeParameterQuery} from './lib/native-parameter-queries.mjs';
 
 const flags=process.argv.slice(2);
 if(flags.length!==0&&(flags.length!==1||!['--read-only','--workspace'].includes(flags[0]))){
@@ -38,7 +39,7 @@ input.on('line',async line=>{
         if(!exposedNames.has(name)||readOnly&&!readOnlyNames.has(name))throw new Error('此会话不提供该工具。');
         const onTiming=value=>{const data=sanitizePanelAudit('phase-timing.jsonl',value);if(data&&events.length<8)events.push(data);};
         const value=workspace?await workspaceDispatch(name,args,{onTiming}):isCommandTool(name)?await invokeCommand(name,args,{execute:invokeWorkbench}):await invokeWorkbench(name,args,readOnly?{onTiming}:{});
-        result={content:[{type:'text',text:JSON.stringify(value)}],...(isNativeModelQuery(name)?{structuredContent:value}:{}),isError:false};
+        result={content:[{type:'text',text:JSON.stringify(value)}],...(isNativeModelQuery(name)||isNativeParameterQuery(name)?{structuredContent:value}:{}),isError:false};
       }
       catch(error){
         // MCP's isError describes a failed tool call, not necessarily a failed

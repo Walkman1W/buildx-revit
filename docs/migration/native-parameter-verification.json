@@ -1,0 +1,593 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-04T19:32:07.381Z",
+  "sourceBaseCommit": "03cd322858e62cd379c035fe4804b7667b26692c",
+  "version": "0.8.2-internal-parameters",
+  "slice": {
+    "task": "BX-006",
+    "priority": "P1",
+    "tool": "revit_get_type_parameters",
+    "operation": "get_type_parameters",
+    "sourceImplemented": true,
+    "legacyInventory": "docs/migration/aec-revit-command-inventory.json",
+    "legacyStaticMapping": "related-only",
+    "currentMapping": "Named owned C# type query, instance-to-ElementType or direct type self, shared bounded parameter facts, atomic transport and explicit source/type identity; no external provider or script compilation.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "expected_document": {
+          "type": "string",
+          "maxLength": 32768,
+          "description": "Exact current document path; empty means the current unsaved document. The atomic queue can bind an omitted path."
+        },
+        "element_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9]\\d{0,18}$",
+              "maxLength": 19
+            }
+          ]
+        }
+      },
+      "required": [
+        "element_id"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string",
+          "enum": [
+            "get_type_parameters"
+          ]
+        },
+        "hostSession": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "document": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 32768
+            }
+          },
+          "required": [
+            "title",
+            "path"
+          ],
+          "additionalProperties": true
+        },
+        "modifiedByOperation": {
+          "type": "boolean",
+          "enum": [
+            false
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "schema_version": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "element_id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[1-9]\\d{0,18}$",
+                  "maxLength": 19
+                }
+              ]
+            },
+            "element_name": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "source_is_type": {
+              "type": "boolean"
+            },
+            "type_id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[1-9]\\d{0,18}$",
+                  "maxLength": 19
+                }
+              ]
+            },
+            "type_name": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "parameters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "parameter_id": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d{0,18})$",
+                        "maxLength": 20
+                      }
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "storage_type": {
+                    "type": "string",
+                    "enum": [
+                      "None",
+                      "Integer",
+                      "Double",
+                      "String",
+                      "ElementId"
+                    ]
+                  },
+                  "is_read_only": {
+                    "type": "boolean"
+                  },
+                  "has_value": {
+                    "type": "boolean"
+                  },
+                  "data_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 1024
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "unit_type": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 1024
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "value_internal": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 64000
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "value_display": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "parameter_id",
+                  "name",
+                  "storage_type",
+                  "is_read_only",
+                  "has_value",
+                  "data_type",
+                  "unit_type",
+                  "value_internal",
+                  "value_display"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 2000
+            }
+          },
+          "required": [
+            "schema_version",
+            "element_id",
+            "element_name",
+            "source_is_type",
+            "type_id",
+            "type_name",
+            "parameters"
+          ],
+          "additionalProperties": false
+        },
+        "snapshot": {
+          "type": "object"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "operation",
+        "hostSession",
+        "document",
+        "modifiedByOperation",
+        "value",
+        "snapshot",
+        "request_id"
+      ],
+      "additionalProperties": true
+    },
+    "minimumHost": "0.8.2",
+    "capability": {
+      "nativeParameterQueriesVersion": 1,
+      "nativeParameterQueryOperations": [
+        "get_type_parameters"
+      ]
+    },
+    "existingSixCapabilityVersion": 1,
+    "modelWorkspaceReadTools": 21,
+    "baseReadTools": 7,
+    "legacyExternalReadTools": 6,
+    "modifiedByOperation": false,
+    "modelWriteSemanticsChanged": false,
+    "realRevitExecutionVerified": false
+  },
+  "checks": [
+    {
+      "name": "native-type-parameters",
+      "record": "artifacts/native-parameters-validation-20261105-01/parameters-final.tap.log",
+      "sha256": "e45c71235a4867ba55209cb7fbb5567aef31420a0bc30c7cbf93cab38d33bb6d",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-queries-and-catalog",
+      "record": "artifacts/native-parameters-validation-20261105-01/native-merged-final.tap.log",
+      "sha256": "9cfedbc093d4291da467ec981038cc5c7d9315e308f45699e8eb560c560a3fa0",
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "layout",
+      "record": "artifacts/native-parameters-validation-20261105-01/layout-final.tap.log",
+      "sha256": "557b12349d3c4bd23d032217f673220a4ca9952d4f0321a1852bfbff847d7dc3",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "producerSourceEvidence": {
+    "typeSource": "revit-addin/NativeParameterQueries.cs",
+    "typeSourceSha256": "25f22adf7dc19aa077367baf2128ca6cb37d8927fe41ef738a8e3f30411b5e64",
+    "sharedQuerySourceSha256": "a356cbdde9a4e32da39f24c95d144363760552a78fa67b17419b7c508000df19",
+    "parameterDescriptorSha256": "599abb309c3dcf7a8f1d8ca6296d8b252441186608c7e1aa986d67ca8f64292b",
+    "internalValueSha256": "2c73a83ebcf92b1e67db11b6dcff09f3a532c8e4ad61d900cba7cc551d21e3fe",
+    "sharedPeersSha256": "ca42b2b119604ff626d21333a52e95d8c90d92dfe54b0d3a854cd43f67607198",
+    "scope": "Actual unchanged C# type query, shared parameter rows and descriptor executed with controlled read-only API peers; no Autodesk loads or real model."
+  },
+  "hostChecks": {
+    "record": "artifacts/native-parameters-validation-20261105-01/host-final-summary.json",
+    "checks": 80,
+    "passed": 80,
+    "failed": 0,
+    "staticFacts": {
+      "hostVersion_0_8_2": true,
+      "assemblyVersion_0_8_2_0": true,
+      "parameterCapabilityVersion1Count": 2,
+      "parameterCapabilityOperationCount": 2,
+      "modelCapabilityVersion1Count": 2,
+      "sixModelOperationsUnchanged": true,
+      "typeQueryInAtomicReads": true,
+      "typeQueryInActionReads": true,
+      "hostRoutesReadThroughActions": true,
+      "actionsRoutesToParameterProducer": true
+    },
+    "sources": [
+      {
+        "path": "revit-addin/WorkbenchHost.cs",
+        "sha256": "b40d7188590eecf9a114b989a7bf9e4d9a5d9305436b7e5760f62b94c3f72628"
+      },
+      {
+        "path": "revit-addin/WorkbenchActions.cs",
+        "sha256": "63a0f3aeeb62f1ae9aa6aa12c9a812bc5bf7bb0b7f89b53878eaf78b4ba899c3"
+      },
+      {
+        "path": "revit-addin/LocalCodexRevit.cs",
+        "sha256": "f6ba6e6ec77be1eeb7e7bdbb81b0822d66acdf4ef400944dbb82c12dd11f4ac2"
+      }
+    ],
+    "scope": "Exact production scheduler, request/access validation, operation classification and native document identity owners with controlled Revit/business peers; static new parameter-read composition facts. No real Revit process, service, API load or model execution."
+  },
+  "additionalDtoCheck": {
+    "record": "artifacts/native-parameters-validation-20261105-01/direct-type-name-consistency.json",
+    "sameTypeNullNamesAccepted": true,
+    "contradictorySameTypeNamesRejected": true,
+    "scope": "In-memory named DTO validator; no host or queue operation."
+  },
+  "productionApiBuild": {
+    "record": "artifacts/buildx-source-20261105-05/build/build-record.json",
+    "compilerExit": 0,
+    "sources": 33,
+    "dllSha256": "e0d386d7292900762cb1dbc21a9fe5880d25a0b4d241e3cdbfe78f74a9225d03",
+    "apiAssemblies": [
+      {
+        "name": "RevitAPI.dll",
+        "fileVersion": "24.3.30.11",
+        "sha256": "eb3ade235237b300e699176ed91786b3998cc30d889b95a2e45f84d556b6df0d"
+      },
+      {
+        "name": "RevitAPIUI.dll",
+        "fileVersion": "24.3.30.11",
+        "sha256": "a7dc0e93ba4c29fad6549262b611a3231b9f0b9e5739e69381d1d2f08d8e7097"
+      }
+    ],
+    "realRevitLoadVerified": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-native-parameters-20261105-01",
+    "productVersion": "0.8.2-internal-parameters",
+    "releaseReady": false,
+    "files": 143,
+    "totalBytes": 19382744,
+    "manifestSha256": "f86f17ee2386c45b5450722d38a7492860a66c5a504d900b7a2cf03b7355421d",
+    "modules": 97,
+    "imports": 307,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "e0d386d7292900762cb1dbc21a9fe5880d25a0b4d241e3cdbfe78f74a9225d03",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-05",
+    "sourceFiles": 242,
+    "sourceModules": 171,
+    "sourceReferences": 506,
+    "sourceManifestSha256": "3ba2ec60f904a5fb83637bf8332e3c6ad8fcc87653673c9dc2614cd5c3420a53",
+    "currentSourceMismatches": [],
+    "buildSources": 33,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false
+  },
+  "archives": {
+    "schemaVersion": 1,
+    "scope": "0.8.2 frozen package/source ZIP construction and every-entry SHA256 readback",
+    "archives": [
+      {
+        "kind": "runtime",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Revit2024-0.8.2-internal-parameters-20261105.zip",
+        "sha256": "20028b7aa7dc125cf24f59e23ebb49e5b469cbdfde74b592a602127c0d3372be",
+        "bytes": 7641604,
+        "files": 144,
+        "manifestPayloadFiles": 143,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true
+      },
+      {
+        "kind": "source",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Source-0.8.2-internal-parameters-20261105.zip",
+        "sha256": "8468dbee3dab323576d0c2ada4ed53e0ad4cafcc329434393ee64a794caffdf4",
+        "bytes": 1028560,
+        "files": 244,
+        "manifestPayloadFiles": 242,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true
+      }
+    ],
+    "runtimeNoPeerOrTemporaryPayload": true,
+    "sourceBuildExcluded": true,
+    "realRevitExecuted": false,
+    "sourceModified": false
+  },
+  "archiveRoundTrip": {
+    "schemaVersion": 1,
+    "kind": "native-type-parameters-zip-roundtrip",
+    "archives": [
+      {
+        "kind": "runtime",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Revit2024-0.8.2-internal-parameters-20261105.zip",
+        "sha256": "20028b7aa7dc125cf24f59e23ebb49e5b469cbdfde74b592a602127c0d3372be",
+        "bytes": 7641604,
+        "files": 144,
+        "manifestPayloadFiles": 143,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true
+      },
+      {
+        "kind": "source",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Source-0.8.2-internal-parameters-20261105.zip",
+        "sha256": "8468dbee3dab323576d0c2ada4ed53e0ad4cafcc329434393ee64a794caffdf4",
+        "bytes": 1028560,
+        "files": 244,
+        "manifestPayloadFiles": 242,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true
+      }
+    ],
+    "runtimeNoPeerOrTemporaryPayload": true,
+    "realRevitExecuted": false,
+    "modelToolsCalled": false,
+    "roundtrip": {
+      "runtime": {
+        "ok": true,
+        "filesVerified": 144,
+        "manifestPayloadFiles": 143,
+        "scriptCompiler": {
+          "ok": true,
+          "version": "5.0.0",
+          "files": 17,
+          "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627"
+        },
+        "noNodeModules": true,
+        "catalog": {
+          "ok": true,
+          "methods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list"
+          ],
+          "toolCount": 21,
+          "nativeModelTools": [
+            "revit_health",
+            "revit_get_document_info",
+            "revit_list_views",
+            "revit_get_element_parameters",
+            "revit_get_elements_by_type",
+            "revit_get_element_geometry"
+          ],
+          "typeParameterTool": "revit_get_type_parameters",
+          "typeParameterOutputSchemaCompiled": true,
+          "schemaCompiler": "workspace Ajv (not a dependency of the extracted runtime child)",
+          "modelToolsCalled": false,
+          "exitCode": 0
+        },
+        "queueCreated": false
+      },
+      "source": {
+        "ok": true,
+        "filesVerified": 244,
+        "snapshotFiles": 242,
+        "manifestSha256": "3ba2ec60f904a5fb83637bf8332e3c6ad8fcc87653673c9dc2614cd5c3420a53",
+        "dependencyClosureOk": true,
+        "buildExcluded": true
+      }
+    },
+    "passed": true,
+    "temporaryCleanup": {
+      "ownerVerified": true,
+      "resolvedUnderTemp": true,
+      "removed": true
+    }
+  },
+  "resolvedFailures": [
+    {
+      "check": "registry projection",
+      "reason": "The test projected a new parameter-family query through the six-query model-family owner.",
+      "resolution": "Project each read from its owning native family; full regression rerun passed."
+    },
+    {
+      "check": "legacy catalog preparation",
+      "reason": "The configured external six-tool group and its mock shared the expanded local seven-query list.",
+      "resolution": "Keep legacy external six explicit and local new query separate; added compatibility regression and reran all 182 tests."
+    }
+  ],
+  "knownUnverifiedFollowup": {
+    "operation": "set_parameters",
+    "finding": "Static review found readback equality is not required when Parameter.Set returns true; old setter peer coverage is a stub.",
+    "realRevitReproduced": false,
+    "next": "Execute actual setter/transaction/rollback producers with controlled peers, fix reproduced failures before expanding named parameter writes."
+  },
+  "remainingAcceptance": {
+    "releaseReady": false,
+    "installable": false,
+    "taskBX006Complete": false,
+    "realRevitLoadVerified": false,
+    "realTypeParameterQueryVerified": false,
+    "realWebViewCodexVerified": false,
+    "customerMachineVerified": false,
+    "installationUpgradeRestoreUninstallVerified": false,
+    "argusReplacementComplete": false,
+    "otherBlockers": [
+      "Argus runtime/features and distribution conditions",
+      "External Node bootstrap and Node/Python private runtimes",
+      "WebView2 Runtime",
+      "Plugin distribution conditions",
+      "Python/pypdf",
+      "Customer data upgrade/restore",
+      "License backend/customer configuration"
+    ]
+  }
+}

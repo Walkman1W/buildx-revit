@@ -27,6 +27,7 @@ namespace RevitLocalCodex
         };
         internal static bool IsRead(string operation) { return Operations.Contains(operation, StringComparer.Ordinal); }
         internal static string SignedId(ElementId id) { return id.Value.ToString(CultureInfo.InvariantCulture); }
+        internal static long ExactId(Dictionary<string, object> args, string key) { return RequiredId(args, key); }
         private static string PositiveId(ElementId id) { return id == null || id.Value <= 0 ? null : SignedId(id); }
 
         internal static object Read(UIApplication uiapp, string operation, Dictionary<string, object> args)
@@ -62,12 +63,7 @@ namespace RevitLocalCodex
             {
                 Fields(args, "expected_document", "element_id");
                 Element element = RequiredElement(doc, RequiredId(args, "element_id"));
-                var parameters = new List<Parameter>();
-                foreach (Parameter parameter in element.Parameters) { budget.Scan(); if (parameters.Count >= 2000) throw new InvalidOperationException("Native parameter query exceeds 2000 parameters; no partial result published."); parameters.Add(parameter); }
-                parameters.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
-                var values = new List<object>();
-                foreach (Parameter parameter in parameters) { object value = WorkbenchActions.DescribeParameter(parameter, true); budget.Reserve(value); values.Add(value); }
-                return new { schema_version = 1, element_id = SignedId(element.Id), element_name = element.Name, parameters = values.ToArray() };
+                return new { schema_version = 1, element_id = SignedId(element.Id), element_name = element.Name, parameters = ParameterRows(element, budget) };
             }
             if (operation == "get_elements_by_type") return Elements(doc, args, budget);
             if (operation == "get_element_geometry")
@@ -77,6 +73,19 @@ namespace RevitLocalCodex
                 budget.Reserve(result); return result;
             }
             throw new InvalidOperationException("Unknown native model query.");
+        }
+
+        // Instance/type queries share these exact rows and the existing budget.
+        // Parameter identity, raw/display values and units remain owned by the
+        // WorkbenchActions descriptor rather than a second DTO interpretation.
+        internal static object[] ParameterRows(Element element, ReadBudget budget)
+        {
+            var parameters = new List<Parameter>();
+            foreach (Parameter parameter in element.Parameters) { budget.Scan(); if (parameters.Count >= 2000) throw new InvalidOperationException("Native parameter query exceeds 2000 parameters; no partial result published."); parameters.Add(parameter); }
+            parameters.Sort((a, b) => a.Id.Value.CompareTo(b.Id.Value));
+            var values = new List<object>();
+            foreach (Parameter parameter in parameters) { object value = WorkbenchActions.DescribeParameter(parameter, true); budget.Reserve(value); values.Add(value); }
+            return values.ToArray();
         }
 
         private static object Elements(Document doc, Dictionary<string, object> args, ReadBudget budget)
@@ -264,7 +273,7 @@ namespace RevitLocalCodex
         private static void Fields(Dictionary<string, object> args, params string[] allowed)
         { foreach (string key in args.Keys) if (!allowed.Contains(key, StringComparer.Ordinal)) throw new InvalidOperationException("Unknown argument: " + key); }
 
-        private sealed class ReadBudget
+        internal sealed class ReadBudget
         {
             private readonly Stopwatch watch = Stopwatch.StartNew();
             private int estimatedCharacters = 4096;

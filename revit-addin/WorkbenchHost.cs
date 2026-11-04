@@ -17,7 +17,7 @@ namespace RevitLocalCodex
     // This local queue is an application integration boundary, not a security sandbox.
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
-        private const string HostVersion = "0.8.1";
+        private const string HostVersion = "0.8.2";
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");
@@ -50,7 +50,7 @@ namespace RevitLocalCodex
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
-        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" };
+        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_type_parameters" };
 
         internal string SessionId { get { return session; } }
 
@@ -277,6 +277,7 @@ namespace RevitLocalCodex
                 WriteAtomic(Path.Combine(queue, "host.json"), new { sessionId = session, pid = Process.GetCurrentProcess().Id,
                     startedUtc = hostStartedUtc.ToString("o"), version = HostVersion, dispatcher = "ExternalEvent", atomicReadSnapshot = true,
                     nativeModelQueriesVersion = 1, nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
+                    nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters" },
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
         }
@@ -845,6 +846,7 @@ namespace RevitLocalCodex
                 capabilities = new { script = File.Exists(ScriptRunner.Compiler), argusCorePresent = File.Exists(core), annotationInferencePresent = File.Exists(inference),
                     mode = "active-document-reads-scoped-writes", dispatcher = "ExternalEvent", runtimeValidated = false, atomicReadSnapshot = true, nativeModelQueriesVersion = 1,
                     nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
+                    nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters" },
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }
                         .Concat(WorkbenchActions.ReadOperations).Concat(WorkbenchActions.WriteOperations).Concat(FamilyOperations).Concat(VisualInspection.Operations).ToArray() },

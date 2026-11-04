@@ -10,6 +10,7 @@ import {MODEL_COMMAND_CATALOG,MODEL_WORKSPACE_TOOL_NAMES,modelCommandById} from 
 import {PANEL_WORKBENCH_TOOLS,PANEL_CONFIRMED_ONLY_TOOLS,READ_TOOLS,MODEL_WORKSPACE_TOOLS,MODEL_AI_READ_TOOLS,MODEL_AI_EFFECT_TOOLS} from './lib/panel-tools.mjs';
 import {supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
 import {NATIVE_MODEL_QUERY_TOOLS} from './lib/native-model-queries.mjs';
+import {NATIVE_PARAMETER_QUERY_TOOLS} from './lib/native-parameter-queries.mjs';
 import {ACCESS_FILE_TOOLS} from './lib/access-file-tools.mjs';
 import {createModelToolDispatcher,invokeModelCommand} from './lib/model-tool-dispatch.mjs';
 import {createCodexSessionProfile,MODEL_WORKSPACE_SESSION_PROFILE,verifyModelWorkspaceCatalog,verifyReadonlyWorkbenchCatalog} from './lib/codex-profile.mjs';
@@ -22,7 +23,7 @@ const status=()=>({hostSession:session,document:{...document},request_id:'111111
 const catalog=()=>({data:[{name:'revit_workbench',runtimeStatus:'connected',authStatus:'unsupported',resources:[],resourceTemplates:[],toolsError:null,
   tools:Object.fromEntries(MODEL_AI_READ_TOOLS.map(tool=>[tool.name,structuredClone(tool)]))}]});
 
-test('the complete inventory includes the six native query contracts exactly once',()=>{
+test('the complete inventory includes the native model and type-parameter contracts exactly once',()=>{
   assert.equal(MODEL_COMMAND_CATALOG.length,PANEL_WORKBENCH_TOOLS.length+PANEL_CONFIRMED_ONLY_TOOLS.length);
   assert.equal(new Set(MODEL_COMMAND_CATALOG.map(item=>item.id)).size,MODEL_COMMAND_CATALOG.length);
   assert.equal(modelCommandById('revit_capture_model_snapshot').readOnly,true);
@@ -34,7 +35,7 @@ test('the complete inventory includes the six native query contracts exactly onc
   for(const item of MODEL_COMMAND_CATALOG){
     assert.ok(Object.isFrozen(item));assert.equal(typeof item.label,'string');
     if(READ_TOOLS.includes(item.tool)){
-      const source=NATIVE_MODEL_QUERY_TOOLS.find(tool=>tool.name===item.tool);assert.equal(item.enabled,true);
+      const source=[...NATIVE_MODEL_QUERY_TOOLS,...NATIVE_PARAMETER_QUERY_TOOLS].find(tool=>tool.name===item.tool);assert.equal(item.enabled,true);
       const projected=structuredClone(source.inputSchema);delete projected.properties.expected_document;projected.required=projected.required.filter(key=>key!=='expected_document');
       assert.deepEqual(item.inputSchema,projected);assert.equal(item.unavailableReason,null);continue;
     }
@@ -46,6 +47,12 @@ test('the complete inventory includes the six native query contracts exactly onc
   }
   assert.equal(modelCommandById('document').tool,'revit_workbench_status');
   assert.equal(modelCommandById('search').tool,'revit_search_elements');
+});
+
+test('the legacy external query group keeps six tools while the owned workbench advertises type parameters',()=>{
+  const profile=createCodexSessionProfile(root,{profile:'model'});
+  assert.deepEqual(profile.groups.find(group=>group.name==='revit_local').toolNames,NATIVE_MODEL_QUERY_TOOLS.map(tool=>tool.name));
+  assert.ok(profile.groups.find(group=>group.name==='revit_workbench').toolNames.includes('revit_get_type_parameters'));
 });
 
 test('the product profile owns one exact local MCP catalog without requiring the optional AEC server',()=>{

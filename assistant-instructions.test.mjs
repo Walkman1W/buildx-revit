@@ -4,6 +4,7 @@ import { EventEmitter } from 'node:events';
 import { buildAssistantInstructions } from './lib/assistant-instructions.mjs';
 import { CodexClient } from './lib/codex-client.mjs';
 import { READ_TOOLS, PANEL_WORKBENCH_TOOLS } from './lib/panel-tools.mjs';
+import {NATIVE_MODEL_QUERY_NAMES} from './lib/native-model-queries.mjs';
 
 test('application prompt retains real execution contracts and distinguishes observations from authority', () => {
   const text = buildAssistantInstructions();
@@ -29,7 +30,7 @@ test('real thread preparation sends the single prompt and keeps Codex access res
       else if (message.method === 'account/read') result = { requiresOpenaiAuth: true, account: { type: 'chatgpt', email: 'fixture@example.invalid', planType: 'free' } };
       else if (message.method === 'thread/start') result = { thread: { id: 'offline-test-thread' } };
       else if (message.method === 'mcpServerStatus/list') {
-        const names = message.params.serverName === 'revit_local' ? READ_TOOLS : PANEL_WORKBENCH_TOOLS.map(tool => tool.name);
+        const names = message.params.serverName === 'revit_local' ? NATIVE_MODEL_QUERY_NAMES : PANEL_WORKBENCH_TOOLS.map(tool => tool.name);
         result = { data: [{ name: message.params.serverName, runtimeStatus: 'connected', tools: Object.fromEntries(names.map(name => [name, {}])) }] };
       } else throw new Error('Unexpected production protocol request: ' + message.method);
       child.stdout.emit('data', Buffer.from(JSON.stringify({ id: message.id, result }) + '\n'));

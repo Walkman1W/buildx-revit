@@ -233,5 +233,12 @@
   "script-compiler-installer.test.mjs",
   "script-compiler-offline.test.mjs",
   "test-support/script-compiler-offline.mjs",
-  "modelling-tools.test.mjs"
+  "modelling-tools.test.mjs",
+  "lib/native-parameter-queries.mjs",
+  "revit-addin/NativeParameterQueries.cs",
+  "native-type-parameter-contract.test.mjs",
+  "native-type-parameter-producer.test.mjs",
+  "native-type-parameter-transport.test.mjs",
+  "test-support/native-type-parameter-producer.mjs",
+  "test-support/native-type-parameter-peers.cs"
 ]

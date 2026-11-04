@@ -49,8 +49,14 @@
     {
       "id": "BX-006",
       "title": "常用参数与建模命令迁移",
-      "status": "pending",
-      "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收"
+      "status": "in_progress",
+      "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收",
+      "currentSlice": "P1 revit_get_type_parameters: named atomic native read; instance-to-type or direct ElementType; independent v1 capability and host 0.8.2",
+      "evidence": "NATIVE-PARAMETER-VERIFICATION.zh-CN.md; native-parameter-verification.json; new type-query group 24/24, query/catalog regression 182/182, layout 105/105, host 80/80; actual Revit 2024 API compilation from a 242-file snapshot with 33 C# inputs",
+      "milestone": "type_parameter_read_source_and_isolated_validation_complete",
+      "remaining": "Other P1 parameter read/write semantics, existing setter readback/rollback producer coverage, common modelling commands and real Revit acceptance",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
     },
     {
       "id": "BX-007",
@@ -69,15 +75,15 @@
       "title": "清理已替代模块与专属依赖",
       "status": "in_progress",
       "acceptance": "消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留",
-      "evidence": "Built-in-only Node runtime; official pinned private C# compiler replaces research-only provenance. 235-file source closure and 17-file compiler layout verified; Argus/ScriptRunner consumers preserved, no 103-tool expansion. SCRIPT-COMPILER-VERIFICATION.zh-CN.md records remaining runtime/acceptance blockers."
+      "evidence": "Built-in-only Node runtime; official pinned private C# compiler; latest 242-file source closure and 17-file compiler layout verified. Type queries share the original parameter-fact owner. Argus/ScriptRunner consumers preserved; no 103-tool expansion. Remaining blockers recorded in NATIVE-PARAMETER-VERIFICATION.zh-CN.md."
     },
     {
       "id": "BX-010",
       "title": "Revit 2024 安装候选与客户验收",
       "status": "in_progress",
       "acceptance": "来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex",
-      "evidence": "SCRIPT-COMPILER-VERIFICATION.zh-CN.md; script-compiler-verification.json; official Toolset 17-file payload and seven actual production ScriptRunner offline compilations verified; 142-file runtime and 235-file source snapshot; actual 32-source Revit 2024 API build; releaseReady:false. Previous candidate evidence preserved.",
-      "milestone": "official_private_compiler_offline_verified",
+      "evidence": "NATIVE-PARAMETER-VERIFICATION.zh-CN.md; native-parameter-verification.json; 0.8.2-internal-parameters candidate, 143 runtime files and 242-file source snapshot; actual 33-source Revit 2024 API build; pinned compiler retained; releaseReady:false. Previous compiler/candidate evidence preserved.",
+      "milestone": "native_type_parameter_internal_candidate_generated",
       "internalCandidateGenerated": true,
       "installable": false,
       "realRevitLoadVerified": false,
