@@ -30,12 +30,16 @@
 
 候选构建清单包含项目资料、命令组合和软件许可等源码资源。是否包含 WebView2 许可与通知文件需以本次候选构建结果逐项核对；文件存在也不等于分发条件已审核通过。PDF 解析需要所选 Python 能导入外部 `pypdf`；安装计划检测此依赖，不自动安装或分发它。资源入包不代表相关功能完成客户验收。
 
-安装计划独立复核清单、导入闭包和必需的非 JavaScript 资源；清空包中的缺项报告不能绕过检查。六项查询已接入自有原生契约，入口清单不再携带 AEC provider、中继或机器专属契约快照；这不证明当前安装的宿主已支持查询。Argus 运行时及分发权、脚本编译器布局、插件分发权、客户数据升级恢复、许可后端与客户配置仍未验证，当前候选保持 `releaseReady:false` 并阻止实际安装。它不会复制开发机凭据和运行历史。隔离测试使用占位插件，不证明真实 DLL 可发布或加载。
+安装计划独立复核清单、导入闭包和必需的非 JavaScript 资源；清空包中的缺项报告不能绕过检查。六项查询已接入自有原生契约，入口清单不再携带 AEC provider、中继或机器专属契约快照；这不证明当前安装的宿主已支持查询。私有脚本编译器可按以下固定来源流程单独纳入内部候选，安装预检重新核对全部载荷、许可证和来源记录；缺项、自改记录或仅删除清单项均不能通过。Argus 运行时及分发权、插件分发权、客户数据升级恢复、许可后端与客户配置等条件仍未验证，当前候选保持 `releaseReady:false` 并阻止实际安装。它不会复制开发机凭据和运行历史。隔离测试使用占位插件，不证明真实 DLL 可发布或加载。
 
 ## 内部候选生成
 
 先用 `revit-addin/build.ps1` 的 `-RevitDirectory` 选择 Revit 2024 API，`-WebView2PackageDirectory` 选择官方 NuGet 缓存中的 `Microsoft.Web.WebView2/1.0.2478.35`，`-OutputDirectory` 使用新的绝对目录。没有显式 Revit 路径时仅检查标准安装目录，多个或缺失不会猜选。构建固定官方包 SHA-256，并把三项 SDK 文件及 LICENSE/NOTICE 与原 nupkg 内容逐项核对；WebView2 Evergreen Runtime 是独立外部先决条件，不从系统目录或 AEC 运行目录复制。
 
-然后运行 `node tools/buildx-installer.mjs --build-candidate <新候选目录> <本次插件输出目录> [内部版本]`。按显式资源清单和导入闭包复制，包含锁文件、原始 npm 公告和 schema2 配置模板，不复制整个工程、node_modules 或用户状态。构建来源只发布相对源码路径、摘要和官方 SDK 包信息；原构建记录的开发机绝对路径不会进入候选。SDK 和插件文件存在不代表真实 Revit 或客户机验收已完成，缺项与阻塞保存在 `buildx-package.json`。
+然后运行 `node tools/buildx-installer.mjs --build-candidate <新候选目录> <本次插件输出目录> [内部版本] [已核验私有编译器目录]`。按显式资源清单和导入闭包复制，包含锁文件、原始 npm 公告和 schema2 配置模板，不复制整个工程、node_modules 或用户状态。构建来源只发布相对源码路径、摘要和官方 SDK 包信息；原构建记录的开发机绝对路径不会进入候选。SDK 和插件文件存在不代表真实 Revit 或客户机验收已完成，缺项与阻塞保存在 `buildx-package.json`。
+
+私有 C# 编译器使用官方 NuGet `Microsoft.Net.Compilers.Toolset 5.0.0` 原包；固定 SHA-256/SHA-512、16 项载荷与许可证由 `manifests/script-compiler-5.0.0.json` 管理。先自行取得原包，再运行 `powershell.exe -NoProfile -File tools/provision-script-compiler.ps1 -Nupkg <原包绝对路径> -OutputDirectory <全新私有编译器目录>`。该脚本不下载、不安装系统运行时、不覆盖已有目录；候选只复制核验通过的 17 项文件至 `private-runtime/script-compiler/`。原包的 MIT nuspec、ThirdPartyNotices 和官方 Roslyn 对应提交的 License 一同保留。未指定编译器目录时继续记录缺项。
+
+此 Toolset 包依赖机器已有 .NET Framework 4.7.2+，官方不支持将其长期作为旧 MSBuild 的升级替代；当前只验证内部候选中的直接 `csc.exe /noconfig @rsp` 路径。离线测试可设置 `BUILDX_SCRIPT_COMPILER_DIR`、`BUILDX_SCRIPT_COMPILER`、`BUILDX_REVIT_API_DIR` 后运行 `npm run test:compiler`，真实 API 只参与编译引用，不会加载生成的用户脚本 DLL 或调用 Revit。没有显式选择 compiler/API 时相关案例明确跳过，不计为验收。
 
 安装预检 CLI 使用 `--plan <组件目录> <新程序目录> <已有Addins目录> <node.exe> <python.exe> <codex.exe> <新独立数据目录>`，只检查，不发布插件。真实 `--apply` 仍需本次具体安装授权，当前候选阻塞不会被构建成功自动解除。

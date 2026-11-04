@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "package": {
+    "id": "Microsoft.Net.Compilers.Toolset",
+    "version": "5.0.0",
+    "sourceUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.net.compilers.toolset/5.0.0/microsoft.net.compilers.toolset.5.0.0.nupkg",
+    "sha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+    "sha512": "FQNz6IJ+BRjHiFZUC+KhkGF98LtMZUKXfu3MXDM8vL7an+kQcuUiaqxAbvNNZ3NNR2yVs8FHRfe8nNwXjhr0JA==",
+    "licenseExpression": "MIT",
+    "licenseUrl": "https://licenses.nuget.org/MIT",
+    "repositoryCommit": "6c4a46a31302167b425d5e0a31ea83c9a9aa1d09"
+  },
+  "selection": {
+    "targetFramework": "net472",
+    "processArchitecture": "windows-x64",
+    "internalCandidateOnly": true,
+    "longTermMsbuildReplacementSupported": false,
+    "systemRuntimeInstalled": false
+  },
+  "stampFile": "compiler-package.json",
+  "budgets": {
+    "packageBytes": 67108864,
+    "fileBytes": 8388608,
+    "totalBytes": 33554432,
+    "stampBytes": 65536,
+    "files": 24
+  },
+  "licenseText": "The MIT License (MIT)\n\nCopyright (c) .NET Foundation and Contributors\n\nAll rights reserved.\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.",
+  "files": [
+    {
+      "path": "csc.exe",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/csc.exe",
+      "bytes": 61696,
+      "sha256": "2e322f99d0dba8c2dd3bf59362037ee5fae9b71321da7d72fb411fdae82a00ec"
+    },
+    {
+      "path": "csc.exe.config",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/csc.exe.config",
+      "bytes": 5322,
+      "sha256": "69736b8f37f21d3fc73dc53e1cfb987d8b85c0686a76ce30f461f90a49bc7dc6"
+    },
+    {
+      "path": "Microsoft.CodeAnalysis.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/Microsoft.CodeAnalysis.dll",
+      "bytes": 5051192,
+      "sha256": "e8164d287f0d21e3d235d5dac4efafe04af86a2c35e5adce4b493900ee3811f6"
+    },
+    {
+      "path": "Microsoft.CodeAnalysis.CSharp.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/Microsoft.CodeAnalysis.CSharp.dll",
+      "bytes": 7365896,
+      "sha256": "b38231f2d5e1d0319b2c92214fd563f7e7304ae01ec34b87a80b882e14f2cea2"
+    },
+    {
+      "path": "System.Buffers.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Buffers.dll",
+      "bytes": 23856,
+      "sha256": "3af1e07305bed0abe0cf32d9854e0a7f5f470216adee1b87d02350be09d31b35"
+    },
+    {
+      "path": "System.Collections.Immutable.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Collections.Immutable.dll",
+      "bytes": 259360,
+      "sha256": "77d705fe51f224d77b25fc06ede39e2921f08b46a961a027d6ee49a4bb19c127"
+    },
+    {
+      "path": "System.Memory.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Memory.dll",
+      "bytes": 145192,
+      "sha256": "b8fe216aff0f6d162f8eefe7be1712162b7d8199e20ce2e70ffac36c7ce20a4c"
+    },
+    {
+      "path": "System.Numerics.Vectors.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Numerics.Vectors.dll",
+      "bytes": 110344,
+      "sha256": "22c84be385fe8ba6d0e0138952748f28d781fce36078b5a7aed91a6104bcd99b"
+    },
+    {
+      "path": "System.Reflection.Metadata.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Reflection.Metadata.dll",
+      "bytes": 511240,
+      "sha256": "8fc17840e7b7db173e84fc6c7daaf92441069b83a07b2cb054599e7dd36ab86b"
+    },
+    {
+      "path": "System.Runtime.CompilerServices.Unsafe.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Runtime.CompilerServices.Unsafe.dll",
+      "bytes": 19224,
+      "sha256": "2d6f419d641682d8efc4a40e850d2e85de519d6823b93daf2aeee63206d4e32d"
+    },
+    {
+      "path": "System.Text.Encoding.CodePages.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Text.Encoding.CodePages.dll",
+      "bytes": 766224,
+      "sha256": "b77ee852824a6e8098fbade000beb42ce9df32fa4189a00d5e7f472f6c6a5030"
+    },
+    {
+      "path": "System.Threading.Tasks.Extensions.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/System.Threading.Tasks.Extensions.dll",
+      "bytes": 27944,
+      "sha256": "692c324c02a922f890aaf5948c54ec9758f5ab7019b8e8ab169c106ddd3231f4"
+    },
+    {
+      "path": "Microsoft.DiaSymReader.Native.amd64.dll",
+      "sourceKind": "nuget-entry",
+      "packagePath": "tasks/net472/Microsoft.DiaSymReader.Native.amd64.dll",
+      "bytes": 1842552,
+      "sha256": "84068d5569a44913ddc38739b6c7e273634e32a64fa1f277657e2db4c7c3b73c"
+    },
+    {
+      "path": "ThirdPartyNotices.rtf",
+      "sourceKind": "nuget-entry",
+      "packagePath": "ThirdPartyNotices.rtf",
+      "bytes": 2183,
+      "sha256": "ef4678850e7e3aaf9297f07e5c4060d477854e545ccf8e2ef8452d65a7b2efaf"
+    },
+    {
+      "path": "Microsoft.Net.Compilers.Toolset.nuspec",
+      "sourceKind": "nuget-entry",
+      "packagePath": "Microsoft.Net.Compilers.Toolset.nuspec",
+      "bytes": 2101,
+      "sha256": "1c2b7c90e40829779d76eee152ca39b2f9289cb5b2c6ce778e5e8a98fe62c604"
+    },
+    {
+      "path": "License.txt",
+      "sourceKind": "official-repository-license",
+      "sourceUrl": "https://raw.githubusercontent.com/dotnet/roslyn/6c4a46a31302167b425d5e0a31ea83c9a9aa1d09/License.txt",
+      "bytes": 1115,
+      "sha256": "ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b"
+    }
+  ]
+}

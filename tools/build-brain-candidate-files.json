@@ -225,5 +225,13 @@
   "test-support/native-model-query-peers.cs",
   "public/register.html",
   "public/register.css",
-  "installer-directory-owner.test.mjs"
+  "installer-directory-owner.test.mjs",
+  "lib/script-compiler-package.mjs",
+  "manifests/script-compiler-5.0.0.json",
+  "tools/provision-script-compiler.ps1",
+  "script-compiler-package.test.mjs",
+  "script-compiler-installer.test.mjs",
+  "script-compiler-offline.test.mjs",
+  "test-support/script-compiler-offline.mjs",
+  "modelling-tools.test.mjs"
 ]

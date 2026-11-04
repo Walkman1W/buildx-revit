@@ -11,7 +11,8 @@
     "start:customer-chat": "node customer-server.mjs",
     "customer:component": "node customer-chat-package.mjs",
     "customer:install-plan": "node customer-install-plan.mjs",
-    "test:layout": "node --test buildx-paths.test.mjs installed-layout-mcp.test.mjs installation-layout-native.test.mjs installation-identity.test.mjs data-root-panel.test.mjs portable-runtime.test.mjs service-startup-probe.test.mjs service-identity-http.test.mjs server-lifecycle.test.mjs access-services.test.mjs visual-artifact-owner.test.mjs visual-chat-artifacts-http.test.mjs panel-core-boundary.test.mjs local-runtimes.test.mjs runtime-discovery.test.mjs buildx-installer.test.mjs buildx-setup.test.mjs installer-directory-owner.test.mjs tools/build-brain-candidate.test.mjs"
+    "test:layout": "node --test buildx-paths.test.mjs installed-layout-mcp.test.mjs installation-layout-native.test.mjs installation-identity.test.mjs data-root-panel.test.mjs portable-runtime.test.mjs service-startup-probe.test.mjs service-identity-http.test.mjs server-lifecycle.test.mjs access-services.test.mjs visual-artifact-owner.test.mjs visual-chat-artifacts-http.test.mjs panel-core-boundary.test.mjs local-runtimes.test.mjs runtime-discovery.test.mjs buildx-installer.test.mjs buildx-setup.test.mjs installer-directory-owner.test.mjs tools/build-brain-candidate.test.mjs",
+    "test:compiler": "node --test script-compiler-package.test.mjs script-compiler-installer.test.mjs script-compiler-offline.test.mjs modelling-tools.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.3.1",

@@ -2,6 +2,8 @@
 
 日期：2026 年 11 月 5 日。版本 `0.8.1-internal`，Windows x64 / Revit 2024。已生成可审阅运行包与完整源码快照，**`releaseReady:false`，安装器仍阻止实际安装**。本轮没有替换已装 DLL/Addins、重启既有服务、加载新插件、写真实模型或公开发布。
 
+此页及 `internal-candidate-verification.json` 保留原候选的历史证据。后续新增官方私有编译器的独立候选，见 [私有编译器验证](SCRIPT-COMPILER-VERIFICATION.zh-CN.md)，不覆盖本页所列产物或摘要。
+
 ## 本机产物
 
 | 产物 | 位置 | 实际内容 |

@@ -6,6 +6,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 import {detectLocalRuntimes,inspectPythonExecutable} from '../lib/local-runtimes.mjs';
 import {normalizeInstallationConfiguration} from '../lib/buildx-paths.mjs';
+import {inspectScriptCompilerPackage} from '../lib/script-compiler-package.mjs';
 
 // This is a development candidate, not a commercial release authority. Only
 // runtime files named here can enter the package; no state or user environment
@@ -18,7 +19,7 @@ const SETUP=['tools/buildx-installer.mjs','tools/buildx-setup.ps1','tools/buildx
 // if an import changes. This list is independently checked during planning.
 const WEB=['index.html','style.css','register.html','register.css','app.js','chat-view.mjs','account.js','codex-account.js','model-picker.css','model-picker.mjs','model-workspace.css','model-workspace.mjs','command-form-source.mjs','personal-command-fields.mjs','command-fields.mjs','command-parameter-options.mjs','command-choice-field.mjs','parameter-change-field.mjs','account-license.mjs','project-knowledge-ui.mjs','project-files.css','model-viewer.mjs','model-viewer.css','model-viewer-ui.mjs'];
 const MODULES=['native-model-queries.mjs','assistant-instructions.mjs','buildx-auth.mjs','buildx-runtime-config.mjs','cad-candidates.mjs','cad-document-path.mjs','cad-dxf-reader.mjs','cad-inventory.mjs','cad-read-report.mjs','cad-tools.mjs','chat-context.mjs','chat-session.mjs','chat-store.mjs','codex-client-core.mjs','codex-client.mjs','codex-confirmation.mjs','codex-profile.mjs','command-sequence.mjs','command-store.mjs','family-template-preflight.mjs','family-tools.mjs','installation-identity.mjs','local-runtimes.mjs','model-command-catalog.mjs','model-tool-dispatch.mjs','model-viewer-service.mjs','modelling-tools.mjs','native-schematic-tools.mjs','panel-accounts.mjs','panel-audit.mjs','panel-chat-format.mjs','panel-profile.mjs','panel-server-core.mjs','panel-server.mjs','panel-tools.mjs','parse-project-document.mjs','project-agent-bridge.mjs','project-files.mjs','project-files-picker.mjs','project-files-store.mjs','project-history.mjs','project-knowledge.mjs','source-tools.mjs','turn-attachments.mjs','workbench-client.mjs','workbench-contracts.mjs','workbench-receipt.mjs'];
-const NON_JS_ASSETS=['lib/project-knowledge-parser.py','lib/chat-lock-recovery.ps1','lib/project-files-lock-recovery.ps1','lib/access-lock-recovery.cs','prompts/buildx-assistant.zh-CN.md','.agents/skills/buildx-project-research/SKILL.md'];
+const NON_JS_ASSETS=['lib/project-knowledge-parser.py','lib/chat-lock-recovery.ps1','lib/project-files-lock-recovery.ps1','lib/access-lock-recovery.cs','manifests/script-compiler-5.0.0.json','prompts/buildx-assistant.zh-CN.md','.agents/skills/buildx-project-research/SKILL.md'];
 const THIRD_PARTY_NOTICES=['licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'];
 const PLUGIN=['LocalCodexRevit.dll','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wpf.dll','runtimes/win-x64/native/WebView2Loader.dll'];
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -88,11 +89,17 @@ async function importClosure(sourceRoot,initial){
 // The complete 37-tool product has additional owners outside the JS import
 // graph. These cannot be proven by a package's own missing/ready flags. Keep
 // the checks here until each producer has a portable, distributable contract.
-async function verifyCompleteToolDependencies(root,present){
+async function verifyCompleteToolDependencies(root,present,manifestFiles){
   const issues=[];
   if(!present.has('private-runtime/argus/2024/arguslearning.core.dll'))issues.push({file:'private-runtime/argus/2024/ArgusLearning.Core.dll',reason:'argus_runtime_missing'});
+  const compiler=await inspectScriptCompilerPackage(path.join(root,'private-runtime','script-compiler'));
+  if(!compiler.ok)issues.push({file:'private-runtime/script-compiler/csc.exe',reason:'script_compiler_portable_layout_unverified'});
+  else for(const file of compiler.value.files){
+    const filename='private-runtime/script-compiler/'+file.path;
+    if(!present.has(filename.toLowerCase()))issues.push({file:filename,reason:'script_compiler_asset_not_in_package'});
+    else if(manifestFiles.find(item=>item.path.toLowerCase()===filename.toLowerCase())?.sha256!==file.sha256)issues.push({file:filename,reason:'script_compiler_manifest_hash_mismatch'});
+  }
   issues.push({reason:'argus_runtime_distribution_rights_unverified'},
-    {file:'private-runtime/script-compiler/csc.exe',reason:'script_compiler_portable_layout_unverified'},
     {reason:'plugin_distribution_rights_unverified'},
     {reason:'installer_bootstrap_requires_external_node'},
     {reason:'private_node_python_runtime_distribution_unverified'},
@@ -124,17 +131,39 @@ async function pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing){
       realRevitLoadVerified:false,realModelExecutionVerified:false};
   }catch(error){missing.push({file:'revit-addin/build-evidence',reason:error.code==='ENOENT'?'plugin_build_provenance_missing':'plugin_build_provenance_unverified'});return null;}
 }
-export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,productVersion='0.8.1-internal'}){
+export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,productVersion='0.8.1-internal',scriptCompilerDirectory}={}){
   if(typeof productVersion!=='string'||!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.-]+)?$/.test(productVersion))throw fail('VERSION_INVALID','候选版本无效。');
   await checkedDirectory(path.dirname(output));await checkedDirectory(pluginDirectory);await checkedDirectory(sourceRoot);if(!path.isAbsolute(output)||!await absent(output))throw fail('OUTPUT_EXISTS','候选目录必须是新的绝对路径。');
+  let compiler=null;
+  if(scriptCompilerDirectory!==undefined){
+    const checked=await inspectScriptCompilerPackage(scriptCompilerDirectory);
+    if(!checked.ok)throw fail('SCRIPT_COMPILER_PACKAGE_INVALID','私有脚本编译器未通过固定来源与载荷核验，候选未生成。');
+    compiler=checked.value;
+  }
   const graph=await importClosure(sourceRoot,['server.mjs','workbench-mcp.mjs','tools/buildx-installer.mjs',...MODULES.map(p=>'lib/'+p),...WEB.filter(p=>/\.(mjs|js)$/.test(p)).map(p=>'public/'+p)]);
   const runtimeFiles=[...new Set([...ENTRY,...SETUP,...graph.files,...WEB.map(p=>'public/'+p),...NON_JS_ASSETS])];
-  const specs=[...runtimeFiles.map(p=>[p,p]),['tools/buildx-package-entry.cmd','BuildX-Setup.cmd'],...PLUGIN.map(p=>[p,'revit-addin/bin/'+p]),...THIRD_PARTY_NOTICES.map(p=>[p,p])];
+  const specs=[...runtimeFiles.map(p=>[p,p]),['tools/buildx-package-entry.cmd','BuildX-Setup.cmd'],...PLUGIN.map(p=>[p,'revit-addin/bin/'+p]),...THIRD_PARTY_NOTICES.map(p=>[p,p]),...(compiler?compiler.files.map(file=>[file.path,'private-runtime/script-compiler/'+file.path,scriptCompilerDirectory]):[])];
   const checked=[],missing=[...graph.missing,...graph.externalDependencies.map(module=>({module,reason:'runtime_npm_dependency_not_bundled'}))];
-  for(const [src,dst] of specs){const base=dst.startsWith('revit-addin/')||dst.startsWith('licenses/webview2/')?pluginDirectory:sourceRoot;try{const f=path.join(base,...src.split('/'));await checkedDirectory(path.dirname(f));const info=await plainFile(f);if(info.size>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');const data=await fs.readFile(f);if(data.length>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');checked.push({src:f,dst,data,sha256:sha(data)});}catch(e){missing.push({file:dst,reason:e.code==='ENOENT'?'missing':'not_readable_or_invalid'});}}
-  // Reconstructed third-party components and the external compiler have not
-  // been cleared for distribution; native query migration does not clear them.
-  missing.push({file:'private-runtime/argus/2024/ArgusLearning.Core.dll',reason:'distribution_and_runtime_not_verified'},{file:'private-runtime/script-compiler/csc.exe',reason:'external_compiler_not_packaged'},{reason:'installer_bootstrap_requires_external_node'},{reason:'private_node_python_runtime_distribution_unverified'},{reason:'webview2_runtime_presence_unverified'});
+  for(const [src,dst,selectedBase] of specs){
+    const base=selectedBase??(dst.startsWith('revit-addin/')||dst.startsWith('licenses/webview2/')?pluginDirectory:sourceRoot);
+    try{
+      const f=path.join(base,...src.split('/'));await checkedDirectory(path.dirname(f));const info=await plainFile(f);
+      if(info.size>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');
+      const data=await fs.readFile(f);if(data.length>20*1024*1024)throw fail('SOURCE_LIMIT','单个文件超限。');
+      const digest=sha(data);
+      if(selectedBase!==undefined){
+        const expected=compiler.files.find(file=>file.path===src);
+        if(!expected||data.length!==expected.bytes||digest!==expected.sha256)throw fail('SCRIPT_COMPILER_PACKAGE_INVALID','编译器在核验后发生变化。');
+      }
+      checked.push({src:f,dst,data,sha256:digest});
+    }catch(e){
+      if(selectedBase!==undefined)throw fail('SCRIPT_COMPILER_PACKAGE_INVALID','私有编译器在整理期间发生变化，候选未生成。');
+      missing.push({file:dst,reason:e.code==='ENOENT'?'missing':'not_readable_or_invalid'});
+    }
+  }
+  // Native query migration does not clear the remaining distribution/runtime
+  // checks. The compiler has its own pinned payload owner, when selected.
+  missing.push({file:'private-runtime/argus/2024/ArgusLearning.Core.dll',reason:'distribution_and_runtime_not_verified'},...compiler?[]:[{file:'private-runtime/script-compiler/csc.exe',reason:'external_compiler_not_packaged'}],{reason:'installer_bootstrap_requires_external_node'},{reason:'private_node_python_runtime_distribution_unverified'},{reason:'webview2_runtime_presence_unverified'});
   const buildEvidence=await pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing);
   for(const item of checked){await checkedDirectory(path.dirname(item.src));await plainFile(item.src);if(sha(await fs.readFile(item.src))!==item.sha256)throw fail('SOURCE_CHANGED','源文件在候选整理期间变化，未确认本次候选。');}
   // The runtime graph currently uses Node built-ins only. The source lock and
@@ -151,7 +180,7 @@ export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,pro
   await fs.mkdir(output);for(const x of checked){const target=path.join(output,...x.dst.split('/'));await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,x.data,{flag:'wx'});}
   const manifest={schemaVersion:1,stage:'candidate',releaseReady:false,productVersion,target:{platform:'win32',architecture:'x64',revit:'2024'},
     installationSchemaVersion:2,runtimePolicy:{node:{minimumVersion:'22.17.0',bundled:false},python:{minimumVersion:'3.11.0',bundled:false},codex:{bundled:false,upgrade:false},privateRuntimeDirectory:'private-runtime',webView2Runtime:{bundled:false,required:true,verified:false}},
-    buildEvidence,nodeModuleClosure:{builtinOnly,externalDependencies:graph.externalDependencies,sourcePackageHashes,testingDependenciesBundled:false},files:checked.map(x=>({path:x.dst,sha256:x.sha256})),missing};
+    buildEvidence,...compiler?{scriptCompilerEvidence:{id:compiler.id,version:compiler.version,sourceUrl:compiler.sourceUrl,packageSha256:compiler.packageSha256,files:compiler.files.length,scope:'internal-candidate',realModelExecutionVerified:false}}:{},nodeModuleClosure:{builtinOnly,externalDependencies:graph.externalDependencies,sourcePackageHashes,testingDependenciesBundled:false},files:checked.map(x=>({path:x.dst,sha256:x.sha256})),missing};
   await fs.writeFile(path.join(output,'buildx-package.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
   return {ok:true,output,releaseReady:false,missing};
 }
@@ -178,7 +207,7 @@ export async function planInstall({packageRoot,installRoot,addinDirectory,nodeEx
     blockers.push(...graph.missing);
     blockers.push(...graph.externalDependencies.map(module=>({module,reason:'runtime_npm_dependency_not_bundled'})));
     for(const file of [...ENTRY,...graph.files,...SETUP,'BuildX-Setup.cmd',...WEB.map(p=>'public/'+p),...NON_JS_ASSETS,...THIRD_PARTY_NOTICES])if(!present.has(file.toLowerCase()))blockers.push({file,reason:'required_asset_not_in_package'});
-    blockers.push(...await verifyCompleteToolDependencies(pkg,present));
+    blockers.push(...await verifyCompleteToolDependencies(pkg,present,manifest.files));
     if(runtimeVersions.pypdfAvailable!==true)blockers.push({reason:'python_pypdf_unavailable_or_unverified'});
   }
   // Even an installable candidate remains explicitly experimental; self-
@@ -298,9 +327,9 @@ export async function applyInstall(options){
 async function main(){
   const [action,...args]=process.argv.slice(2);let result;
   if(action==='--detect'&&args.length===0)result=detectLocalRuntimes();
-  else if(action==='--build-candidate'&&[2,3].includes(args.length))result=await buildCandidate({output:args[0],pluginDirectory:args[1],...args[2]?{productVersion:args[2]}:{}});
+  else if(action==='--build-candidate'&&[2,3,4].includes(args.length))result=await buildCandidate({output:args[0],pluginDirectory:args[1],...args[2]?{productVersion:args[2]}:{},...args[3]?{scriptCompilerDirectory:args[3]}:{}});
   else if(['--plan','--apply'].includes(action)&&args.length===7){const [packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot]=args;const options={packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot};result=action==='--plan'?await planInstall(options):await applyInstall(options);}
-  else throw fail('ARGUMENTS','用法：--detect；--build-candidate <新组件目录> <已构建插件目录> [版本]；--plan 或 --apply <组件> <新安装目录> <Revit Addins目录> <node.exe> <python.exe> <codex.exe> <新独立数据目录>。');
+  else throw fail('ARGUMENTS','用法：--detect；--build-candidate <新组件目录> <已构建插件目录> [版本] [已核验私有编译器目录]；--plan 或 --apply <组件> <新安装目录> <Revit Addins目录> <node.exe> <python.exe> <codex.exe> <新独立数据目录>。');
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(e=>{process.stderr.write(JSON.stringify({ok:false,code:e.code??'INSTALL_ERROR',message:e.message,...e.retainedInstallRoot?{retainedInstallRoot:e.retainedInstallRoot,retainedDataRoot:e.retainedDataRoot,manifestPublished:e.manifestPublished}:{}})+'\n');process.exitCode=1;});

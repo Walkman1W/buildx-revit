@@ -2,12 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
-import {spawnSync} from 'node:child_process';
+import os from 'node:os';
+import {compileScriptRunnerOffline} from './test-support/script-compiler-offline.mjs';
 import {MODELLING_TOOLS,MODELLING_TEMPLATE_VERSION,isModellingTool,compileModellingTool} from './lib/modelling-tools.mjs';
 import {validateTool} from './lib/workbench-client.mjs';
 
-const root=path.dirname(fileURLToPath(import.meta.url));
 const common={expected_document:'D:\\sample.rvt'};
 const cases={
   revit_rotate_elements:{...common,element_ids:[123,456],axis_origin_mm:{x:-100.5,y:20,z:0},angle_degrees:90},
@@ -84,30 +83,12 @@ test('commit is explicit and template numeric formatting accepts exponents witho
   assert.throws(()=>compileModellingTool('revit_rotate_elements',{...cases.revit_rotate_elements,element_ids:['123L); throw new Exception();']}));
 });
 
-test('all modelling templates compile against actual Revit 2024 assemblies (no Revit execution)',{skip:process.env.BUILDX_COMPILE_MODELLING!=='1'},async()=>{
-  const compiler=path.resolve(root,'..','_reference','argus-source-reconstruction-20261019','toolchain','roslyn-5.0.0','tasks','net472','csc.exe');
-  const apiRoot='D:\\Program Files\\Autodesk\\Revit 2024';
-  const framework=path.join(process.env.WINDIR||'C:\\Windows','Microsoft.NET','Framework64','v4.0.30319');
-  const outputRoot=path.join(root,'workbench','validation','20261104-hosted-door','compile');
-  await fs.mkdir(outputRoot,{recursive:true});
-  const evidence=[];
-  const compileCases=[...Object.entries(cases).map(([name,args])=>({name,args,variant:'default'})),{name:'revit_place_door',args:{...cases.revit_place_door,facing_direction:{x:0,y:-1,z:0}},variant:'facing'}];
-  for(const {name,args,variant} of compileCases){
-    const folder=path.join(outputRoot,name+'-'+variant);
-    await fs.mkdir(folder,{recursive:true});
-    const source=path.join(folder,'Script.cs');
-    const dll=path.join(folder,'Template.dll');
-    const rsp=path.join(folder,'compile.rsp');
-    const wrapper='using System; using System.Linq; using System.Collections.Generic; using Autodesk.Revit.DB; using Autodesk.Revit.UI;\npublic static class LocalCodexScript { public static object Run(UIApplication uiapp) { var uidoc=uiapp.ActiveUIDocument; var doc=uidoc.Document; var app=uiapp.Application;\n'+validateTool(name,args).args.code+'\n} }';
-    await fs.writeFile(source,wrapper,'utf8');
-    const refs=[path.join(framework,'System.dll'),path.join(framework,'System.Core.dll'),path.join(apiRoot,'RevitAPI.dll'),path.join(apiRoot,'RevitAPIUI.dll')];
-    const lines=['/nologo','/target:library','/platform:x64','/langversion:14','/optimize+',`/out:"${dll}"`,...refs.map(p=>`/reference:"${p}"`),`"${source}"`];
-    await fs.writeFile(rsp,lines.join('\r\n'),'utf8');
-    const result=spawnSync(compiler,['/noconfig',`@${rsp}`],{cwd:folder,encoding:'utf8',timeout:30000,windowsHide:true,env:{...process.env,COMPlus_gcServer:'0',COMPlus_GCHeapCount:'2'}});
-    const log=(result.stdout||'')+(result.stderr||'')+(result.error?.message||'');
-    await fs.writeFile(path.join(folder,'compile.log'),log,'utf8');
-    evidence.push({name,variant,templateVersion:MODELLING_TEMPLATE_VERSION,exitCode:result.status,error:result.error?.message||null,source,rsp,dll,compiler,apiRoot,executedInRevit:false});
-  }
-  await fs.writeFile(path.join(outputRoot,'summary.json'),JSON.stringify({createdUtc:new Date().toISOString(),validation:'offline C# compilation only',executedInRevit:false,templates:evidence},null,2),'utf8');
-  for(const entry of evidence)assert.equal(entry.exitCode,0,entry.name+' failed; inspect '+path.join(path.dirname(entry.source),'compile.log'));
+test('all modelling templates compile through production ScriptRunner preparation against explicitly selected Revit 2024 references (no Revit execution)',{
+  skip:process.env.BUILDX_COMPILE_MODELLING!=='1'?'Optional compiler acceptance was not selected.':!(process.env.BUILDX_SCRIPT_COMPILER&&process.env.BUILDX_REVIT_API_DIR)?'Select BUILDX_SCRIPT_COMPILER and BUILDX_REVIT_API_DIR; no private fallback is used.':false
+},async t=>{
+  const outputDirectory=process.env.BUILDX_MODELLING_COMPILER_OUTPUT||path.join(await fs.mkdtemp(path.join(os.tmpdir(),'buildx-modelling-offline-')),'evidence');
+  const summary=await compileScriptRunnerOffline({compilerExecutable:process.env.BUILDX_SCRIPT_COMPILER,revitDirectory:process.env.BUILDX_REVIT_API_DIR,outputDirectory});
+  t.diagnostic('Offline modelling evidence: '+path.join(outputDirectory,'summary.json'));
+  assert.equal(summary.passed,true,JSON.stringify(summary.entries.map(entry=>({name:entry.name,variant:entry.variant,exitCode:entry.exitCode}))));
+  assert.equal(summary.generatedAssembliesLoaded,false);assert.equal(summary.executedInRevit,false);assert.equal(summary.modelModified,false);
 });

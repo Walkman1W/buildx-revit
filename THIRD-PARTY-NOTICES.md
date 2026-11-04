@@ -2,6 +2,8 @@
 
 Generated 2026-11-05 from the existing package-lock.json and its locked npm install. This file retains the license texts of the 19 installed Node packages. No third-party binary or npm source is vendored in this repository. The installation candidate must separately inventory any Revit, WebView2, Python, PDF parser and compiler components actually included. Research/recovered Argus assemblies are not licensed or approved for distribution by this file.
 
+An optional internal candidate may include the pinned C# compiler selected by `manifests/script-compiler-5.0.0.json`: Microsoft.Net.Compilers.Toolset 5.0.0 from official NuGet, package SHA-256 `e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627`. Its original MIT nuspec, `ThirdPartyNotices.rtf`, and the corresponding official Roslyn commit's `License.txt` must accompany the selected payload under `private-runtime/script-compiler/`. The source repository stores the fixed contract and license text; generated binaries remain local artifacts. This records provenance and notice retention, not customer acceptance or a general distribution approval.
+
 ## @modelcontextprotocol/client 2.3.1
 
 License: Apache-2.0. Package source: https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.3.1.tgz

@@ -1,0 +1,477 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-04T18:38:52.354Z",
+  "version": "0.8.1-internal-compiler",
+  "sourceBaseCommit": "3347225a47d9ba226725a36f2057e108736dfb97",
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-compiler-20261105-02",
+    "productVersion": "0.8.1-internal-compiler",
+    "releaseReady": false,
+    "files": 142,
+    "totalBytes": 19369557,
+    "manifestSha256": "069ad4fd0ef5b1dae9a939a326513d86f3ed90acd4e639abaed48e212de69827",
+    "modules": 96,
+    "imports": 301,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "4631b88ee4e1ece35a12a5231811f4b0f4ef2c8b9bb6ba8258dc91ff2bf51c52",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-04",
+    "sourceFiles": 235,
+    "sourceModules": 166,
+    "sourceReferences": 487,
+    "sourceManifestSha256": "103ccc399632d8670603161852791f9bb61263f432c261e8a934b519302bdb23",
+    "currentSourceMismatches": [],
+    "buildSources": 32,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false
+  },
+  "archives": {
+    "schemaVersion": 1,
+    "scope": "New ZIP construction and every-entry SHA256 readback against immutable candidate/source manifests",
+    "archives": [
+      {
+        "kind": "runtime",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Revit2024-0.8.1-internal-compiler-20261105.zip",
+        "sha256": "5e48d86ca343fa4017a64e292ce3b1c35b0a836ae515d7d89702c8e8b576e989",
+        "bytes": 7637777,
+        "files": 143,
+        "manifestPayloadFiles": 142,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true,
+        "sourceBuildExcluded": false
+      },
+      {
+        "kind": "source",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Source-0.8.1-internal-compiler-20261105.zip",
+        "sha256": "e37dd7bc7f78ff992456e2c3444b43a361b7ca9abe687c6c2a1d88a003bb8f8d",
+        "bytes": 1010404,
+        "files": 237,
+        "manifestPayloadFiles": 235,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true,
+        "sourceBuildExcluded": true
+      }
+    ],
+    "realRevitExecuted": false,
+    "sourceModified": false
+  },
+  "archiveRoundTrip": {
+    "schemaVersion": 1,
+    "kind": "zip-roundtrip-verification",
+    "archives": [
+      {
+        "kind": "runtime",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Revit2024-0.8.1-internal-compiler-20261105.zip",
+        "sha256": "5e48d86ca343fa4017a64e292ce3b1c35b0a836ae515d7d89702c8e8b576e989",
+        "bytes": 7637777,
+        "files": 143,
+        "manifestPayloadFiles": 142,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true,
+        "sourceBuildExcluded": false
+      },
+      {
+        "kind": "source",
+        "path": "D:\\code\\BuildX\\artifacts\\BuildX-Source-0.8.1-internal-compiler-20261105.zip",
+        "sha256": "e37dd7bc7f78ff992456e2c3444b43a361b7ca9abe687c6c2a1d88a003bb8f8d",
+        "bytes": 1010404,
+        "files": 237,
+        "manifestPayloadFiles": 235,
+        "entryReadbackVerified": true,
+        "sourceFilesMatchManifest": true,
+        "inputsUnchanged": true,
+        "sourceBuildExcluded": true
+      }
+    ],
+    "realRevitExecuted": false,
+    "modelToolsCalled": false,
+    "roundtrip": {
+      "runtime": {
+        "ok": true,
+        "filesVerified": 143,
+        "manifestPayloadFiles": 142,
+        "scriptCompiler": {
+          "ok": true,
+          "version": "5.0.0",
+          "files": 17,
+          "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627"
+        },
+        "noNodeModules": true,
+        "catalog": {
+          "ok": true,
+          "methods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list"
+          ],
+          "toolCount": 20,
+          "nativeTools": [
+            "revit_health",
+            "revit_get_document_info",
+            "revit_list_views",
+            "revit_get_element_parameters",
+            "revit_get_elements_by_type",
+            "revit_get_element_geometry"
+          ],
+          "modelToolsCalled": false,
+          "exitCode": 0
+        },
+        "queueCreated": false
+      },
+      "source": {
+        "ok": true,
+        "filesVerified": 237,
+        "snapshotFiles": 235,
+        "manifestSha256": "103ccc399632d8670603161852791f9bb61263f432c261e8a934b519302bdb23",
+        "dependencyClosureOk": true,
+        "buildExcluded": true
+      }
+    },
+    "passed": true,
+    "temporaryCleanup": {
+      "ownerVerified": true,
+      "resolvedUnderTemp": true,
+      "removed": true
+    }
+  },
+  "officialSource": {
+    "registrationUrl": "https://api.nuget.org/v3/registration5-semver1/microsoft.net.compilers.toolset/5.0.0.json",
+    "catalogUrl": "https://api.nuget.org/v3/catalog0/data/2025.11.18.21.04.18/microsoft.net.compilers.toolset.5.0.0.json",
+    "id": "Microsoft.Net.Compilers.Toolset",
+    "version": "5.0.0",
+    "packageHashAlgorithm": "SHA512",
+    "packageHash": "FQNz6IJ+BRjHiFZUC+KhkGF98LtMZUKXfu3MXDM8vL7an+kQcuUiaqxAbvNNZ3NNR2yVs8FHRfe8nNwXjhr0JA==",
+    "downloadSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+    "downloadBytes": 22199160,
+    "licenseExpression": "MIT",
+    "requireLicenseAcceptance": true,
+    "source": "https://api.nuget.org/v3/index.json",
+    "observedUtc": "2026-11-04T18:24:16.5973646Z",
+    "verificationRecord": "artifacts/compiler-package-20261105-01/official-source-verification.json"
+  },
+  "compilerContract": {
+    "path": "manifests/script-compiler-5.0.0.json",
+    "sha256": "87c7f2f1b98825d37c033a54c75f86cb6ab0278d73060b478005c4a97a336f59",
+    "package": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "sourceUrl": "https://api.nuget.org/v3-flatcontainer/microsoft.net.compilers.toolset/5.0.0/microsoft.net.compilers.toolset.5.0.0.nupkg",
+      "sha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "sha512": "FQNz6IJ+BRjHiFZUC+KhkGF98LtMZUKXfu3MXDM8vL7an+kQcuUiaqxAbvNNZ3NNR2yVs8FHRfe8nNwXjhr0JA==",
+      "licenseExpression": "MIT",
+      "licenseUrl": "https://licenses.nuget.org/MIT",
+      "repositoryCommit": "6c4a46a31302167b425d5e0a31ea83c9a9aa1d09"
+    },
+    "selection": {
+      "targetFramework": "net472",
+      "processArchitecture": "windows-x64",
+      "internalCandidateOnly": true,
+      "longTermMsbuildReplacementSupported": false,
+      "systemRuntimeInstalled": false
+    },
+    "files": [
+      {
+        "path": "csc.exe",
+        "sha256": "2e322f99d0dba8c2dd3bf59362037ee5fae9b71321da7d72fb411fdae82a00ec",
+        "bytes": 61696
+      },
+      {
+        "path": "csc.exe.config",
+        "sha256": "69736b8f37f21d3fc73dc53e1cfb987d8b85c0686a76ce30f461f90a49bc7dc6",
+        "bytes": 5322
+      },
+      {
+        "path": "Microsoft.CodeAnalysis.dll",
+        "sha256": "e8164d287f0d21e3d235d5dac4efafe04af86a2c35e5adce4b493900ee3811f6",
+        "bytes": 5051192
+      },
+      {
+        "path": "Microsoft.CodeAnalysis.CSharp.dll",
+        "sha256": "b38231f2d5e1d0319b2c92214fd563f7e7304ae01ec34b87a80b882e14f2cea2",
+        "bytes": 7365896
+      },
+      {
+        "path": "System.Buffers.dll",
+        "sha256": "3af1e07305bed0abe0cf32d9854e0a7f5f470216adee1b87d02350be09d31b35",
+        "bytes": 23856
+      },
+      {
+        "path": "System.Collections.Immutable.dll",
+        "sha256": "77d705fe51f224d77b25fc06ede39e2921f08b46a961a027d6ee49a4bb19c127",
+        "bytes": 259360
+      },
+      {
+        "path": "System.Memory.dll",
+        "sha256": "b8fe216aff0f6d162f8eefe7be1712162b7d8199e20ce2e70ffac36c7ce20a4c",
+        "bytes": 145192
+      },
+      {
+        "path": "System.Numerics.Vectors.dll",
+        "sha256": "22c84be385fe8ba6d0e0138952748f28d781fce36078b5a7aed91a6104bcd99b",
+        "bytes": 110344
+      },
+      {
+        "path": "System.Reflection.Metadata.dll",
+        "sha256": "8fc17840e7b7db173e84fc6c7daaf92441069b83a07b2cb054599e7dd36ab86b",
+        "bytes": 511240
+      },
+      {
+        "path": "System.Runtime.CompilerServices.Unsafe.dll",
+        "sha256": "2d6f419d641682d8efc4a40e850d2e85de519d6823b93daf2aeee63206d4e32d",
+        "bytes": 19224
+      },
+      {
+        "path": "System.Text.Encoding.CodePages.dll",
+        "sha256": "b77ee852824a6e8098fbade000beb42ce9df32fa4189a00d5e7f472f6c6a5030",
+        "bytes": 766224
+      },
+      {
+        "path": "System.Threading.Tasks.Extensions.dll",
+        "sha256": "692c324c02a922f890aaf5948c54ec9758f5ab7019b8e8ab169c106ddd3231f4",
+        "bytes": 27944
+      },
+      {
+        "path": "Microsoft.DiaSymReader.Native.amd64.dll",
+        "sha256": "84068d5569a44913ddc38739b6c7e273634e32a64fa1f277657e2db4c7c3b73c",
+        "bytes": 1842552
+      },
+      {
+        "path": "ThirdPartyNotices.rtf",
+        "sha256": "ef4678850e7e3aaf9297f07e5c4060d477854e545ccf8e2ef8452d65a7b2efaf",
+        "bytes": 2183
+      },
+      {
+        "path": "Microsoft.Net.Compilers.Toolset.nuspec",
+        "sha256": "1c2b7c90e40829779d76eee152ca39b2f9289cb5b2c6ce778e5e8a98fe62c604",
+        "bytes": 2101
+      },
+      {
+        "path": "License.txt",
+        "sha256": "ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b",
+        "bytes": 1115
+      }
+    ]
+  },
+  "offlineCompilation": {
+    "record": "artifacts/script-compiler-offline-20261105-01/summary.json",
+    "sha256": "d0346d822883320fb70f41fc76688a47a34667bcd988f9892c7713503ba038fc",
+    "actualTestGroup": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "compilerVersion": "5.0.0-2.25567.12 (6c4a46a3)",
+    "compilerSha256": "2e322f99d0dba8c2dd3bf59362037ee5fae9b71321da7d72fb411fdae82a00ec",
+    "productionSource": {
+      "source": "revit-addin/ScriptRunner.cs",
+      "sourceSha256": "8b5917d74c021dfefa2ed6cf11a7da30a9eb1a37466a901e6400715ce1396574",
+      "preparationSha256": "65f82c03985b80fe8192493b729f4fa9008da75037d92cd8b4a35c1acd683c24",
+      "fromLine": 17,
+      "toLine": 31,
+      "substitutions": {
+        "typeof(Document).Assembly.Location": "explicit selected RevitAPI.dll file",
+        "typeof(UIApplication).Assembly.Location": "explicit selected RevitAPIUI.dll file"
+      },
+      "boundary": "Stop before compiler Process, Assembly.LoadFrom, generated script invocation and transactions."
+    },
+    "templates": {
+      "source": "lib/modelling-tools.mjs",
+      "sha256": "60c5ce98e85b6f717f33f1aba91a7c58aa1e5db66a72adc36d01c7a0d7478c1b",
+      "version": 1
+    },
+    "compilerInvocation": {
+      "arguments": [
+        "/noconfig",
+        "@<production responseFile>"
+      ],
+      "timeoutMs": 30000,
+      "environment": {
+        "COMPlus_gcServer": "0",
+        "COMPlus_GCHeapCount": "2"
+      }
+    },
+    "inputsUnchanged": true,
+    "references": [
+      {
+        "name": "RevitAPI.dll",
+        "fileVersion": "24.3.30.11",
+        "sha256": "eb3ade235237b300e699176ed91786b3998cc30d889b95a2e45f84d556b6df0d"
+      },
+      {
+        "name": "RevitAPIUI.dll",
+        "fileVersion": "24.3.30.11",
+        "sha256": "a7dc0e93ba4c29fad6549262b611a3231b9f0b9e5739e69381d1d2f08d8e7097"
+      }
+    ],
+    "entries": [
+      {
+        "name": "revit_rotate_elements",
+        "variant": "default",
+        "exitCode": 0,
+        "codeSha256": "c2258aa9c4327bd51c1ff686b8a551d956c0717ef928c42fa02b114794edaac3",
+        "sourceSha256": "63bd83e9fa0281bc4671182e056922747ad738212135289da702defa00a70da5",
+        "responseSha256": "58bc9fb4998ee807ca7acda0f87e06368f01652d37e6acfe46b5bb6de61a2759",
+        "dllSha256": "0f8506f65a42aa180311747ca1c8dca1d48f0a4304f408ba5f28917ff7d599de"
+      },
+      {
+        "name": "revit_place_family_instance",
+        "variant": "default",
+        "exitCode": 0,
+        "codeSha256": "5a6ade2bcebea16b4552e4c181d274983c8d30afb5f8ad40f36d6625a4ea902e",
+        "sourceSha256": "a5e767532e7804aa5106b05eb85acff65a8f928916923ed72a0b38fe9d05c0be",
+        "responseSha256": "97757898cd0a82cb333db38cdda8b55b6656be2028e55f272c74a82e845489fe",
+        "dllSha256": "4f97ca74ceb4bfaa2299278c997cddfc197d47c48f15d96e0c371edfe495e40d"
+      },
+      {
+        "name": "revit_place_door",
+        "variant": "default",
+        "exitCode": 0,
+        "codeSha256": "6ae654e7ff836d4d56d3a4565d62fc22425ce03f069656074e37f041a193b3c8",
+        "sourceSha256": "803205fb491c08ae8491513b5a99cbbc4794e995d6598805acf2e348e008352f",
+        "responseSha256": "171f78168a3a351bf1af11d5f26ab855176cce741fdc42b3adcbdc4d545263b8",
+        "dllSha256": "74a9e77153298b30f63c31104542f7d70af8e931bc79d4533b6dba7b52d71158"
+      },
+      {
+        "name": "revit_create_floor",
+        "variant": "default",
+        "exitCode": 0,
+        "codeSha256": "ef1ac667b8c3da3fdf5dfb33ab51cb1a52085e076cefac8832f07bdcdb1546a4",
+        "sourceSha256": "ebcf9afee47eb8f67df6d77168c4d818f231b11dbb41aac6f33e81678681f2e2",
+        "responseSha256": "f52b1cea3eece8bfbc12c498b91da64acdf47f49181121fb066e4f18fedc5125",
+        "dllSha256": "37e3d36c3f2de6328b4f25f24d253f797e6d4c3c4446824e537eeb4d2f7285d6"
+      },
+      {
+        "name": "revit_place_door",
+        "variant": "facing",
+        "exitCode": 0,
+        "codeSha256": "75a2cac1ac992a22e7d13891dff206e5dd471332b6e93e2d8b0a470f023fb152",
+        "sourceSha256": "a0969ec98ba5d4a7b1eaea20968423aeb8f461f8707907b72e41d738fa5dd2bc",
+        "responseSha256": "1a2bbd9f75578c9b7caa087b099c10deeb40c0ecb330c98db30649851ca5f8de",
+        "dllSha256": "b14f4cc54e3dc0d14e6364bb4b9db297bffb482db03df69ea52aa915f870bddd"
+      },
+      {
+        "name": "structured_parameters",
+        "variant": "unicode",
+        "exitCode": 0,
+        "codeSha256": "7c7655e08d00ee436959ee579e4379f0f7bded42cd02eb2fd2b42bbbf6182cec",
+        "sourceSha256": "ed1e2ecb3922393e8240dc8cffeceea20a530d19f3dd08304838eed7d7d2c17b",
+        "responseSha256": "c333cfee7fe611a47e512659a0e1d9a95dd3e18c30cb01b2ff0ad819f4b8c7b8",
+        "dllSha256": "833a7722f4be374fe5f2a4d3b662b67ea1271e89f600bd8aa00c67c0dad381b0"
+      },
+      {
+        "name": "csharp14_unicode",
+        "variant": "unbound_generic_nameof",
+        "exitCode": 0,
+        "codeSha256": "3140f4d18993f7c4c8f8d101f04cf47c31141ca6679de5ac8e09f62578a42308",
+        "sourceSha256": "6b061b25b13b2c3403a683d4d33d085e821626e91c2d58643f123181a855d353",
+        "responseSha256": "6bf7ed3463dfb97c4f19adf3826933d50d4390e22d558ba37f0a309acfb9e140",
+        "dllSha256": "e20b35ffd7f4d27d9c868c089b6af4cea8bd0cd493026a0065f0ee5520867599"
+      }
+    ],
+    "generatedAssembliesLoaded": false,
+    "uiApplicationInstantiated": false,
+    "executedInRevit": false,
+    "modelModified": false
+  },
+  "checks": [
+    {
+      "name": "compiler-package-installer",
+      "log": "artifacts/compiler-validation-20261105-01/compiler-package-installer-final.tap.log",
+      "sha256": "43ea3a3ec7118dd7108105842546af600ca8a69d4f12c6bfad6ae3b871d35d76",
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "layout",
+      "log": "artifacts/compiler-validation-20261105-01/layout-final.tap.log",
+      "sha256": "d45f389049d81f6af34b1e22cd82cc45684d6fc84e210367cf5ba796bdff9c31",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-queries",
+      "log": "artifacts/compiler-validation-20261105-01/native.tap.log",
+      "sha256": "80db49376b77f2afa3df7610d0863f9c7c765327b0afe04c6744b75a45753563",
+      "passed": 181,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "productionApiBuild": {
+    "record": "artifacts/buildx-source-20261105-04/build/build-record.json",
+    "compilerExitCode": 0,
+    "sources": 32,
+    "dllSha256": "4631b88ee4e1ece35a12a5231811f4b0f4ef2c8b9bb6ba8258dc91ff2bf51c52",
+    "revitVersion": "2024",
+    "realRevitLoadVerified": false
+  },
+  "earlierFailures": [
+    {
+      "check": "source-closure/layout",
+      "reason": "New package test script referenced modelling-tools.test.mjs outside source whitelist.",
+      "resolution": "Added explicit source entry, rebuilt a new snapshot, and reran all 105 layout tests successfully."
+    }
+  ],
+  "skippedDuplicateAcceptance": {
+    "check": "modelling-tools.test.mjs legacy opt-in",
+    "count": 1,
+    "reason": "Same seven-case helper ran separately with explicit compiler/API; duplicate legacy opt-in was not selected in the static modelling group."
+  },
+  "remainingAcceptance": {
+    "installable": false,
+    "releaseReady": false,
+    "realRevitLoadVerified": false,
+    "realUserScriptExecutionVerified": false,
+    "realWebViewCodexVerified": false,
+    "customerMachineVerified": false,
+    "installationUpgradeRestoreUninstallVerified": false,
+    "argusReplacementComplete": false,
+    "externalPrerequisites": [
+      "Argus feature boundary and original distribution conditions",
+      "External Node bootstrap and Node/Python runtime distribution",
+      "Existing .NET Framework 4.7.2+ on customer machine",
+      "WebView2 Runtime",
+      "Plugin distribution conditions",
+      "Python/pypdf",
+      "Customer data upgrade/restore",
+      "License backend/customer configuration"
+    ]
+  },
+  "next": "Implement the next named native common-parameter command slice from the inventory, preserving document identity, permissions, cancellation and original-receipt reconciliation."
+}

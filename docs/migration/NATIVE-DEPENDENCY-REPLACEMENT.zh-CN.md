@@ -98,7 +98,7 @@ BuildX 界面或 Codex 工具
 | 专属依赖没有其他消费者 | 研究 DLL、推理 EXE、模型、原族素材及其传递依赖退出产品清单；原件和历史证据留在私有归档 |
 | 新产品清单已验证 | 安装器按新清单重建候选和许可公告，重新验证实际动态加载与包内容，不直接改就绪标记 |
 
-去掉 AEC Python 只能消除这条外部 provider 链。当前 Python 还被 `parse-project-document.mjs` 等文档解析链以及 `codex-client-core.mjs:67-70,297` 的 TOML 配置读取使用；`local-runtimes.mjs` 仍解析 Python。彻底去 Python 需要另立任务替换这两条链。`ScriptRunner.cs` 中研究目录的编译器依赖也是独立问题，不能因 Argus 业务原生化就算解决。
+去掉 AEC Python 只能消除这条外部 provider 链。当前 Python 还被 `parse-project-document.mjs` 等文档解析链以及 `codex-client-core.mjs:67-70,297` 的 TOML 配置读取使用；`local-runtimes.mjs` 仍解析 Python。彻底去 Python 需要另立任务替换这两条链。`ScriptRunner.cs` 的编译器依赖单独处理：2026-11-05 已有官方 Toolset 固定来源、私有 17 文件布局和七项生产 wrapper/RSP 离线编译证据，见 `SCRIPT-COMPILER-VERIFICATION.zh-CN.md`；这不代表真实用户脚本执行、客户机环境或 Argus 业务替代已验收。
 
 只清理已证明由这些能力专属拥有且不再被引用的依赖。队列、命令、权限配置、用户历史和当前插件输出继续按迁移计划保留。
 
