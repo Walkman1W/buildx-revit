@@ -32,7 +32,7 @@ namespace Autodesk.Revit.DB {
     internal sealed class Category {public ElementId Id;public string Name;}
     internal sealed class Definition {public string Name;public ForgeTypeId DataType=new ForgeTypeId("text");public ForgeTypeId GetDataType(){return DataType;}}
     internal sealed class Parameter {
-        public ElementId Id;public Definition Definition;public StorageType StorageType;public bool IsReadOnly,HasValue;public object Value;public string Display;
+        public ElementId Id;public Element Element;public Definition Definition;public StorageType StorageType;public bool IsReadOnly,HasValue;public object Value;public string Display;
         public ForgeTypeId GetUnitTypeId(){return Definition.DataType;}
         public string AsString(){return Value as string;}public string AsValueString(){return Display;}
         public double AsDouble(){return Convert.ToDouble(Value,CultureInfo.InvariantCulture);}public int AsInteger(){return Convert.ToInt32(Value,CultureInfo.InvariantCulture);}public ElementId AsElementId(){return (ElementId)Value;}

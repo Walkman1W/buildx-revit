@@ -33,6 +33,8 @@ BuildX 界面或 Codex 工具
 
 ## 六项 AEC 查询迁入 C#
 
+0.8.6 新增类型写前的只读 `revit_get_type_parameter_impact`，明确 type/parameter 身份、参数原态和当前文档直接类型引用清单；间接影响未评估，核查不授予写权限。新操作按参数查询族 v1/具名能力门禁，旧两项查询的最低版本保持。实际检查与后续确认缺口见 [类型参数影响核查验证](TYPE-PARAMETER-IMPACT-VERIFICATION.zh-CN.md)。旧批量类型写与任意脚本边界尚需收口，不因新增查询就宣称完整类型写授权链已经建立。
+
 现有清单见 `lib/aec-model-adapter.mjs:19` 和 `lib/aec-read-contracts.json`。契约快照只有输入定义和描述，没有 outputSchema；迁移时必须检查现有消费者，建立 BuildX 自有结果契约，不能声称已知旧输出的所有字段。
 
 | 当前工具 | 原生实现规划 | 现成基础与需要补充的部分 |

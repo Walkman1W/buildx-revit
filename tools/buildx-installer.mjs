@@ -131,7 +131,7 @@ async function pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing){
       realRevitLoadVerified:false,realModelExecutionVerified:false};
   }catch(error){missing.push({file:'revit-addin/build-evidence',reason:error.code==='ENOENT'?'plugin_build_provenance_missing':'plugin_build_provenance_unverified'});return null;}
 }
-export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,productVersion='0.8.5-internal',scriptCompilerDirectory}={}){
+export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,productVersion='0.8.6-internal',scriptCompilerDirectory}={}){
   if(typeof productVersion!=='string'||!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.-]+)?$/.test(productVersion))throw fail('VERSION_INVALID','候选版本无效。');
   await checkedDirectory(path.dirname(output));await checkedDirectory(pluginDirectory);await checkedDirectory(sourceRoot);if(!path.isAbsolute(output)||!await absent(output))throw fail('OUTPUT_EXISTS','候选目录必须是新的绝对路径。');
   let compiler=null;

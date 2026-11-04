@@ -17,10 +17,10 @@ const body=(patch={})=>({schema_version:1,element_id:sourceId,element_name:'Inst
   type_id:typeId,type_name:'Type',parameters:[parameter()],...patch});
 
 test('the named type-parameter query owns a frozen read contract distinct from instance parameters',()=>{
-  assert.deepEqual(NATIVE_PARAMETER_QUERY_NAMES,[name,'revit_get_parameter_value']);
-  assert.deepEqual(NATIVE_PARAMETER_QUERY_OPERATION_BY_TOOL,{[name]:operation,revit_get_parameter_value:'get_parameter_value'});
+  assert.deepEqual(NATIVE_PARAMETER_QUERY_NAMES,[name,'revit_get_parameter_value','revit_get_type_parameter_impact']);
+  assert.deepEqual(NATIVE_PARAMETER_QUERY_OPERATION_BY_TOOL,{[name]:operation,revit_get_parameter_value:'get_parameter_value',revit_get_type_parameter_impact:'get_type_parameter_impact'});
   assert.equal(NATIVE_PARAMETER_QUERY_VERSION,1);assert.equal(NATIVE_PARAMETER_QUERY_MIN_HOST_VERSION,'0.8.2');
-  assert.equal(NATIVE_PARAMETER_QUERY_TOOLS.length,2);
+  assert.equal(NATIVE_PARAMETER_QUERY_TOOLS.length,3);
   const tool=NATIVE_PARAMETER_QUERY_TOOLS[0];
   assert.equal(tool.name,name);assert.equal(tool.annotations.readOnlyHint,true);
   assert.deepEqual(tool.inputSchema.required,['element_id']);
@@ -36,7 +36,8 @@ test('the named type-parameter query owns a frozen read contract distinct from i
 test('host evidence requires the independent parameter version, operation and atomic capability',()=>{
   for(const version of ['0.8.2','0.8.2.0','0.9.0','1.0.0'])assert.equal(supportsNativeParameterQueries({...capable(),version},operation),true,version);
   assert.equal(supportsNativeParameterQueries(capable()),false,'a type-only host does not prove the complete expanded family');
-  assert.equal(supportsNativeParameterQueries({...capable(),version:'0.8.4',nativeParameterQueryOperations:[operation,'get_parameter_value']}),true);
+  assert.equal(supportsNativeParameterQueries({...capable(),version:'0.8.4',nativeParameterQueryOperations:[operation,'get_parameter_value']}),false,'two older operations do not prove the expanded impact family');
+  assert.equal(supportsNativeParameterQueries({...capable(),version:'0.8.6',nativeParameterQueryOperations:[operation,'get_parameter_value','get_type_parameter_impact']}),true);
   for(const patch of [
     {version:'0.8.1'},{version:'0.8.2-preview'},{version:'0.8'},{version:''},
     {atomicReadSnapshot:false},{atomicReadSnapshot:undefined},{nativeParameterQueriesVersion:undefined},

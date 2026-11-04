@@ -142,6 +142,27 @@ export function modelCommandPresentation(command) {
     view.columns = ['名称','类别','ID'];
     view.rows = (Array.isArray(data.items) ? data.items : []).slice(0,200).map(item => [text(item.name),text(item.category),text(item.element_id)]);
     if (Number.isSafeInteger(data.returned) && Number.isSafeInteger(data.total)) view.summary = '显示 ' + data.returned + ' / ' + data.total + ' 项' + (data.has_more || data.truncated ? ' · 仅展示本次返回' : '');
+  } else if (command.commandId === 'revit_get_type_parameter_impact') {
+    const payload=Object.hasOwn(data,'value')?data.value:data,parameter=payload?.parameter,coverage=payload?.coverage;
+    if(payload?.schema_version!==1||!parameter||typeof parameter.has_value!=='boolean'||!Object.hasOwn(parameter,'value_internal')||
+      !Array.isArray(payload.instance_ids)||payload.instance_ids.length>500||payload.instance_ids.some(id=>typeof id!=='string')||
+      !Number.isSafeInteger(payload.instance_count)||payload.instance_count<0||payload.instance_count!==payload.instance_ids.length||
+      coverage?.complete!==true||coverage.scope!=='current_document_direct_type_references'||coverage.indirect_effects!=='not_assessed'||
+      !Number.isSafeInteger(coverage.scanned_elements)||coverage.scanned_elements<payload.instance_count||coverage.scanned_elements>20000||payload.write_authorization!=='not_granted'){
+      view.status='结果待核对';view.error='类型影响核查结果不完整，请核对原回执。';return view;
+    }
+    const raw=value=>value===null?'null':value===undefined?'未知（未提供）':value===''?'空字符串（""）':String(value);
+    const shown=payload.instance_ids.slice(0,50),count=payload.instance_count;
+    view.columns=['项目','内容'];
+    view.rows=[['类型名称',payload.type_name===null?'未知（null）':raw(payload.type_name)],['类型 ID',raw(payload.type_id)],
+      ['参数名称',raw(parameter.name)],['参数 ID',raw(parameter.parameter_id)],['存储类型',raw(parameter.storage_type)],
+      ['是否有值（HasValue）',parameter.has_value?'是（true）':'否（false）'],['原始内部值',raw(parameter.value_internal)],
+      ['显示值',raw(parameter.value_display)],['数据类型',parameter.data_type===null?'未知（null）':raw(parameter.data_type)],
+      ['单位标识',parameter.unit_type===null?'未知或不适用（null）':raw(parameter.unit_type)],['直接实例数',String(count)],
+      ['核查范围','当前文档中直接引用该类型的实例'],['扫描元素数',String(coverage.scanned_elements)],
+      ['间接影响','未评估'],['写入授权','本次核查不额外授予类型写入权限'],
+      ['实例 ID','显示 '+shown.length+' / '+count+' 个'+(shown.length?'：'+shown.join(', '):'（无直接实例）')]];
+    view.summary='当前文档直接实例 '+count+' 个；实例 ID 显示 '+shown.length+' / '+count+'。间接影响未评估；本次核查不额外授予类型写入权限。';
   } else {
     view.columns = ['结果','内容'];
     const payload = Object.hasOwn(data,'value') ? data.value : data;

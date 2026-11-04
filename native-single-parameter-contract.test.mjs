@@ -35,14 +35,15 @@ test('the frozen single-parameter contract has one explicit selector and a singl
 });
 
 test('capability gates are operation-specific and keep the old type query available on host 0.8.2',()=>{
-  assert.deepEqual(NATIVE_PARAMETER_QUERY_MIN_HOST_VERSION_BY_OPERATION,{get_type_parameters:'0.8.2',get_parameter_value:'0.8.4'});
+  assert.deepEqual(NATIVE_PARAMETER_QUERY_MIN_HOST_VERSION_BY_OPERATION,{get_type_parameters:'0.8.2',get_parameter_value:'0.8.4',get_type_parameter_impact:'0.8.6'});
   const old=capable('0.8.2',['get_type_parameters']);
   assert.equal(supportsNativeParameterQueries(old,'get_type_parameters'),true);assert.equal(supportsNativeParameterQueries(old,operation),false);
   assert.equal(supportsNativeParameterQueries(capable('0.8.3'),operation),false);
   for(const version of ['0.8.4','0.8.4.0','0.9.0','1.0.0'])assert.equal(supportsNativeParameterQueries(capable(version),operation),true,version);
   for(const patch of [{version:'0.8.4-preview'},{atomicReadSnapshot:false},{nativeParameterQueriesVersion:0},{nativeParameterQueriesVersion:2},
     {nativeParameterQueryOperations:['get_type_parameters']},{nativeParameterQueryOperations:[operation,operation]}])assert.equal(supportsNativeParameterQueries({...capable(),...patch},operation),false);
-  assert.equal(supportsNativeParameterQueries(capable('0.8.4',['get_type_parameters',operation])),true);
+  assert.equal(supportsNativeParameterQueries(capable('0.8.4',['get_type_parameters',operation])),false,'the full family now also requires impact support');
+  assert.equal(supportsNativeParameterQueries(capable('0.8.6',['get_type_parameters',operation,'get_type_parameter_impact'])),true);
   assert.equal(supportsNativeParameterQueries(capable('0.8.2',['get_type_parameters',operation])),false);
   assert.equal(supportsNativeParameterQueries(capable(),'set_parameters'),false);
 });

@@ -9,19 +9,22 @@ namespace RevitLocalCodex
     // the atomic receipt; this service neither starts transactions nor writes.
     internal static class NativeParameterQueries
     {
-        internal static bool IsRead(string operation) { return operation == "get_type_parameters" || operation == "get_parameter_value"; }
+        internal static bool IsRead(string operation) { return operation == "get_type_parameters" || operation == "get_parameter_value" || operation == "get_type_parameter_impact"; }
 
         internal static object Read(UIApplication uiapp, string operation, Dictionary<string, object> args)
         {
             if (!IsRead(operation)) throw new InvalidOperationException("Unknown native parameter query.");
             if (args == null) throw new InvalidOperationException("Native parameter query arguments are required.");
             bool singleParameter = operation == "get_parameter_value";
+            bool typeImpact = operation == "get_type_parameter_impact";
             foreach (string key in args.Keys)
-                if (key != "expected_document" && key != "element_id" && !(singleParameter && (key == "parameter_id" || key == "parameter_name")))
+                if (typeImpact ? key != "expected_document" && key != "type_id" && key != "parameter_id" :
+                    key != "expected_document" && key != "element_id" && !(singleParameter && (key == "parameter_id" || key == "parameter_name")))
                     throw new InvalidOperationException("Unknown argument: " + key);
-            var budget = new NativeModelQueries.ReadBudget();
+            var budget = typeImpact ? new NativeModelQueries.ReadBudget(20000) : new NativeModelQueries.ReadBudget();
             Document doc = uiapp == null || uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
             if (doc == null) throw new InvalidOperationException("Open a Revit document before this query.");
+            if (typeImpact) return TypeParameterImpact(doc, args, budget);
             long sourceId = NativeModelQueries.ExactId(args, "element_id");
             Element source = doc.GetElement(new ElementId(sourceId));
             if (source == null || !source.IsValidObject || source.Id == null || source.Id.Value != sourceId)
@@ -47,6 +50,15 @@ namespace RevitLocalCodex
         }
 
         private static object SingleParameter(Element source, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
+        {
+            Parameter selected = SelectParameter(source, args, budget);
+            object result = new { schema_version = 1, element_id = NativeModelQueries.SignedId(source.Id), element_name = source.Name,
+                parameter = WorkbenchActions.DescribeParameter(selected, true) };
+            budget.Reserve(result);
+            return result;
+        }
+
+        private static Parameter SelectParameter(Element source, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
         {
             bool byId = args.ContainsKey("parameter_id"), byName = args.ContainsKey("parameter_name");
             if (byId == byName) throw new InvalidOperationException("Exactly one parameter_id or parameter_name selector is required.");
@@ -76,10 +88,49 @@ namespace RevitLocalCodex
             }
             if (matches == 0) throw new InvalidOperationException("Parameter was not found on the selected element; no type-parameter fallback is performed.");
             if (matches != 1) throw new InvalidOperationException("Parameter name is ambiguous on the selected element; use a unique parameter_id.");
-            object result = new { schema_version = 1, element_id = NativeModelQueries.SignedId(source.Id), element_name = source.Name,
-                parameter = WorkbenchActions.DescribeParameter(selected, true) };
-            budget.Reserve(result);
-            return result;
+            return selected;
+        }
+
+        private static object TypeParameterImpact(Document doc, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
+        {
+            long typeId = NativeModelQueries.ExactId(args, "type_id");
+            ElementType type = doc.GetElement(new ElementId(typeId)) as ElementType;
+            if (type == null || !type.IsValidObject || type.Id == null || type.Id.Value != typeId || type.Document == null || !type.Document.Equals(doc))
+                throw new InvalidOperationException("type_id must identify the exact valid ElementType in the current document.");
+            Parameter selected = SelectParameter(type, args, budget);
+            Element owner = selected.Element;
+            if (!(owner is ElementType) || !owner.IsValidObject || owner.Id == null || owner.Id.Value != typeId || owner.Document == null || !owner.Document.Equals(doc))
+                throw new InvalidOperationException("Parameter is not owned by the explicitly selected ElementType in the current document.");
+            object parameter = WorkbenchActions.DescribeParameter(selected, true);
+            budget.Reserve(new { schema_version = 1, type_id = NativeModelQueries.SignedId(type.Id), type_name = type.Name, parameter });
+            var instanceIds = new List<long>();
+            var scannedIds = new HashSet<long>();
+            int scannedElements = 0;
+            using (var collector = new FilteredElementCollector(doc).WhereElementIsNotElementType())
+            {
+                foreach (Element candidate in collector)
+                {
+                    budget.Scan();
+                    scannedElements++;
+                    if (candidate == null || candidate is ElementType || !candidate.IsValidObject || candidate.Id == null || candidate.Id.Value <= 0 || candidate.Id.Value == typeId ||
+                        candidate.Document == null || !candidate.Document.Equals(doc))
+                        throw new InvalidOperationException("Cannot prove complete type impact: an element source is invalid or belongs to another document.");
+                    if (!scannedIds.Add(candidate.Id.Value)) throw new InvalidOperationException("Cannot prove complete type impact: duplicate element identity.");
+                    ElementId reference = candidate.GetTypeId();
+                    if (reference == null) throw new InvalidOperationException("Cannot prove complete type impact: an element returned a null type reference.");
+                    if (reference.Value <= 0 || reference.Value != typeId) continue;
+                    if (instanceIds.Count >= 500) throw new InvalidOperationException("Type impact exceeds 500 direct instances; no partial result published.");
+                    instanceIds.Add(candidate.Id.Value);
+                    budget.Reserve(NativeModelQueries.SignedId(candidate.Id));
+                }
+            }
+            instanceIds.Sort();
+            string[] ids = new string[instanceIds.Count];
+            for (int index = 0; index < instanceIds.Count; index++) ids[index] = NativeModelQueries.SignedId(new ElementId(instanceIds[index]));
+            object coverage = new { complete = true, scope = "current_document_direct_type_references", scanned_elements = scannedElements, indirect_effects = "not_assessed" };
+            budget.Reserve(new { instance_count = ids.Length, coverage, write_authorization = "not_granted" });
+            return new { schema_version = 1, type_id = NativeModelQueries.SignedId(type.Id), type_name = type.Name, parameter,
+                instance_ids = ids, instance_count = ids.Length, coverage, write_authorization = "not_granted" };
         }
     }
 }

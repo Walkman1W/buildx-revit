@@ -264,5 +264,12 @@
   "native-single-parameter-write-transport.test.mjs",
   "native-single-parameter-write-ui.test.mjs",
   "codex-profile.test.mjs",
-  "test-support/native-single-parameter-write-fixtures.mjs"
+  "test-support/native-single-parameter-write-fixtures.mjs",
+  "native-type-parameter-impact-contract.test.mjs",
+  "native-type-parameter-impact-producer.test.mjs",
+  "native-type-parameter-impact-transport.test.mjs",
+  "native-type-parameter-impact-ui.test.mjs",
+  "test-support/native-type-parameter-impact-producer.mjs",
+  "test-support/native-type-parameter-impact-peers.cs",
+  "test-support/native-type-parameter-impact-fixtures.mjs"
 ]

@@ -1,0 +1,922 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-04T23:30:31.329Z",
+  "sourceBaseCommit": "df25779354349e85f3c27ae91e66b0975e4de410",
+  "version": "0.8.6-internal-type-parameter-impact",
+  "slice": {
+    "task": "BX-006",
+    "tool": "revit_get_type_parameter_impact",
+    "operation": "get_type_parameter_impact",
+    "hostVersion": "0.8.6",
+    "assemblyVersion": "0.8.6.0",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "expected_document": {
+          "type": "string",
+          "maxLength": 32768,
+          "description": "Exact current document path; empty means the current unsaved document. The atomic queue can bind an omitted path."
+        },
+        "type_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9]\\d{0,18}$",
+              "maxLength": 19
+            }
+          ]
+        },
+        "parameter_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^-?(?:0|[1-9]\\d{0,18})$",
+              "maxLength": 20
+            }
+          ],
+          "not": {
+            "enum": [
+              0,
+              -1,
+              "0",
+              "-1"
+            ]
+          }
+        }
+      },
+      "required": [
+        "type_id",
+        "parameter_id"
+      ],
+      "additionalProperties": false
+    },
+    "resultSchema": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "enum": [
+            1
+          ]
+        },
+        "type_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9]\\d{0,18}$",
+              "maxLength": 19
+            }
+          ]
+        },
+        "type_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parameter": {
+          "type": "object",
+          "properties": {
+            "parameter_id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string",
+                  "pattern": "^-?(?:0|[1-9]\\d{0,18})$",
+                  "maxLength": 20
+                }
+              ]
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "storage_type": {
+              "type": "string",
+              "enum": [
+                "None",
+                "Integer",
+                "Double",
+                "String",
+                "ElementId"
+              ]
+            },
+            "is_read_only": {
+              "type": "boolean"
+            },
+            "has_value": {
+              "type": "boolean"
+            },
+            "data_type": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unit_type": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "value_internal": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64000
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "value_display": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "parameter_id",
+            "name",
+            "storage_type",
+            "is_read_only",
+            "has_value",
+            "data_type",
+            "unit_type",
+            "value_internal",
+            "value_display"
+          ],
+          "additionalProperties": false
+        },
+        "instance_ids": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,18}$",
+            "maxLength": 19
+          }
+        },
+        "instance_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "coverage": {
+          "type": "object",
+          "properties": {
+            "complete": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "current_document_direct_type_references"
+              ]
+            },
+            "scanned_elements": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20000
+            },
+            "indirect_effects": {
+              "type": "string",
+              "enum": [
+                "not_assessed"
+              ]
+            }
+          },
+          "required": [
+            "complete",
+            "scope",
+            "scanned_elements",
+            "indirect_effects"
+          ],
+          "additionalProperties": false
+        },
+        "write_authorization": {
+          "type": "string",
+          "enum": [
+            "not_granted"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "type_id",
+        "type_name",
+        "parameter",
+        "instance_ids",
+        "instance_count",
+        "coverage",
+        "write_authorization"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "type": "string",
+          "enum": [
+            "get_type_parameter_impact"
+          ]
+        },
+        "hostSession": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "document": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 32768
+            }
+          },
+          "required": [
+            "title",
+            "path"
+          ],
+          "additionalProperties": true
+        },
+        "modifiedByOperation": {
+          "type": "boolean",
+          "enum": [
+            false
+          ]
+        },
+        "value": {
+          "type": "object",
+          "properties": {
+            "schema_version": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            },
+            "type_id": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[1-9]\\d{0,18}$",
+                  "maxLength": 19
+                }
+              ]
+            },
+            "type_name": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "parameter": {
+              "type": "object",
+              "properties": {
+                "parameter_id": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "^-?(?:0|[1-9]\\d{0,18})$",
+                      "maxLength": 20
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                "storage_type": {
+                  "type": "string",
+                  "enum": [
+                    "None",
+                    "Integer",
+                    "Double",
+                    "String",
+                    "ElementId"
+                  ]
+                },
+                "is_read_only": {
+                  "type": "boolean"
+                },
+                "has_value": {
+                  "type": "boolean"
+                },
+                "data_type": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "unit_type": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1024
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "value_internal": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string",
+                      "maxLength": 64000
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "value_display": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 64000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "parameter_id",
+                "name",
+                "storage_type",
+                "is_read_only",
+                "has_value",
+                "data_type",
+                "unit_type",
+                "value_internal",
+                "value_display"
+              ],
+              "additionalProperties": false
+            },
+            "instance_ids": {
+              "type": "array",
+              "maxItems": 500,
+              "items": {
+                "type": "string",
+                "pattern": "^[1-9]\\d{0,18}$",
+                "maxLength": 19
+              }
+            },
+            "instance_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 500
+            },
+            "coverage": {
+              "type": "object",
+              "properties": {
+                "complete": {
+                  "type": "boolean",
+                  "enum": [
+                    true
+                  ]
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "current_document_direct_type_references"
+                  ]
+                },
+                "scanned_elements": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 20000
+                },
+                "indirect_effects": {
+                  "type": "string",
+                  "enum": [
+                    "not_assessed"
+                  ]
+                }
+              },
+              "required": [
+                "complete",
+                "scope",
+                "scanned_elements",
+                "indirect_effects"
+              ],
+              "additionalProperties": false
+            },
+            "write_authorization": {
+              "type": "string",
+              "enum": [
+                "not_granted"
+              ]
+            }
+          },
+          "required": [
+            "schema_version",
+            "type_id",
+            "type_name",
+            "parameter",
+            "instance_ids",
+            "instance_count",
+            "coverage",
+            "write_authorization"
+          ],
+          "additionalProperties": false
+        },
+        "snapshot": {
+          "type": "object"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "operation",
+        "hostSession",
+        "document",
+        "modifiedByOperation",
+        "value",
+        "snapshot",
+        "request_id"
+      ],
+      "additionalProperties": true
+    },
+    "minimumVersions": {
+      "get_type_parameters": "0.8.2",
+      "get_parameter_value": "0.8.4",
+      "get_type_parameter_impact": "0.8.6"
+    },
+    "capability": {
+      "nativeParameterQueriesVersion": 1,
+      "nativeParameterQueryOperations": [
+        "get_type_parameters",
+        "get_parameter_value",
+        "get_type_parameter_impact"
+      ]
+    },
+    "maxParameterScan": 2000,
+    "maxCombinedScanned": 20000,
+    "maxDirectInstances": 500,
+    "timeBudgetMilliseconds": 5000,
+    "responseEstimateCharacters": 180000,
+    "previousReadDefaultMaxScan": 100000,
+    "scope": "current_document_direct_type_references",
+    "indirectEffects": "not_assessed",
+    "writeAuthorization": "not_granted",
+    "instanceIdFormat": "canonical positive Int64 string",
+    "newNamedTypeWriteImplemented": false,
+    "legacyWriteEntryPointsClosed": false,
+    "unknownResultAutomaticReplay": false
+  },
+  "checks": [
+    {
+      "name": "type-impact",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/impact-final.tap.log",
+      "sha256": "545b9eb1ce5516efed629d1a17a0df1c3900e2e5b3fbf1a4dc6eeaec8eab11a0",
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-queries-catalog",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/native-final.tap.log",
+      "sha256": "25bdaa0460561a6ddbc105acb087ec580bdaffe771bebfc2c4cd4271ea44e8a8",
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "type-parameter-reads",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/type-read-final.tap.log",
+      "sha256": "26e90194bf5e2969c24b690e112c00346e2a5917f0efad5a93d31c1c2137bc05",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "single-parameter-reads-ui",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/single-read-final.tap.log",
+      "sha256": "e39f13196b20b33e28470868f840a0152aaf653b624b0129c4cd8249c901594b",
+      "passed": 79,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-parameter-writes",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/writes-final.tap.log",
+      "sha256": "ea8db40c783f57db86d04575185c734b694819c7a1119582d8dd57cd423e0379",
+      "passed": 117,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "instance-parameter-write",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/single-write-final.tap.log",
+      "sha256": "a39d8038c938fab45936abd4830e05e188d311e6a0cf5b05bf43a488c5498681",
+      "passed": 124,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "layout",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/layout-final.tap.log",
+      "sha256": "635e8eddcfb518252331a22c7175b0567f3395556e18a7e1d697e451f77d7b62",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-session-catalog",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/catalog-final.tap.log",
+      "sha256": "73efc48eb1c6238a16841e87570f4998ccc3e6dd027e8cd7734834774cec0f01",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "producer-new-and-old",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/producer-final.tap.log",
+      "sha256": "e3a92eee96f3e0df17cbb99e3d431920b5e7e5e81fb4f67cc2087da5fe90780d",
+      "passed": 71,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "impact-ui",
+      "record": "artifacts/native-type-parameter-impact-validation-20261105-01/ui-final.tap.log",
+      "sha256": "bba79b4529e80d107e6f594c85ebc39d0c1950048d5cd5c21b78a72be44a50e7",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "producer": {
+    "record": "artifacts/native-type-parameter-impact-validation-20261105-01/producer-summary.json",
+    "recordSha256": "83471cb6abfa0348aaafab39c8b434ad8a05878f601f1cfd77a48d2ea71c737c",
+    "evidence": "artifacts/native-type-parameter-impact-validation-20261105-01/producer-evidence.json",
+    "evidenceSha256": "4c3ae2d15cf5a7a1223c8112fb88fb511c6dbee9de6d5d3d11804289ffeeaedf",
+    "sourceEvidence": {
+      "querySourceSha256": "d5f4378b2f9aad9caa3e3270da0586adacbb08feeba92fb34f320b55dda96101",
+      "sharedQuerySourceSha256": "847f3a8c8340b32376bae002e6a108dfe250a315e8f4400970e3476bb58d8758",
+      "parameterDescriptorSha256": "599abb309c3dcf7a8f1d8ca6296d8b252441186608c7e1aa986d67ca8f64292b",
+      "internalValueSha256": "2c73a83ebcf92b1e67db11b6dcff09f3a532c8e4ad61d900cba7cc551d21e3fe",
+      "sharedPeersSha256": "3667ed0c4ac20f62f1456d0abaa513c5ca4b92b57c520226d858810fc8d624a2",
+      "impactPeersSha256": "73313e7bfec7cd59b97a10bf943b6ac699d3728480bb81b3fae56513303d2015",
+      "scope": "Complete unchanged production queries, shared exact-ID parser, scan/response/time budget and descriptor; controlled API peer instrumentation only; no Autodesk load, setter APIs, transactions or real Revit/model"
+    },
+    "passed": 71,
+    "newImpactProducerTests": 38,
+    "previousReadProducerRegressionTests": 33,
+    "noSetterOrTransactionApisInPeers": true
+  },
+  "hostChecks": {
+    "record": "artifacts/native-type-parameter-impact-validation-20261105-01/host-final/results.json",
+    "sourceProof": "artifacts/native-type-parameter-impact-validation-20261105-01/host-final/source-proof.json",
+    "passed": 80,
+    "failed": 0,
+    "scope": "Original scheduler/claim/validation/receipt producer methods; controlled event and Dispatch peers; no Revit API"
+  },
+  "apiCompilation": {
+    "record": "artifacts/buildx-source-20261105-10/build/build-record.json",
+    "recordSha256": "e47dd41776a1d0003e1d2165594539fc2c9baba510fee6146a431e1f6a2ff503",
+    "compilerExitCode": 0,
+    "sources": 33,
+    "webview2Sdk": {
+      "package_id": "Microsoft.Web.WebView2",
+      "version": "1.0.2478.35",
+      "source": "https://api.nuget.org/v3/index.json",
+      "package_sha256": "b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96",
+      "payload_verified_against_package": true,
+      "runtime_bundled": false
+    },
+    "dllSha256": "3f54866dcc7c4d8a784b6d2b0650b4cb7cc1ce0bb28fa611badfbfc7ccfaa393",
+    "installed": false,
+    "realRevitLoadVerified": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-type-parameter-impact-20261105-01",
+    "productVersion": "0.8.6-internal-type-parameter-impact",
+    "releaseReady": false,
+    "files": 145,
+    "totalBytes": 19437404,
+    "manifestSha256": "8558022f42f8554395556a0ccc868103db6e39656fbc529c3a6c70ea9646979c",
+    "modules": 99,
+    "imports": 315,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "3f54866dcc7c4d8a784b6d2b0650b4cb7cc1ce0bb28fa611badfbfc7ccfaa393",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-10",
+    "sourceFiles": 273,
+    "sourceModules": 199,
+    "sourceReferences": 613,
+    "sourceManifestSha256": "192e9d0231af55eae1e0528cdf153944560b02ebf312635a4b1dc55a272d564d",
+    "currentSourceMismatches": [],
+    "buildSources": 33,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false
+  },
+  "archives": {
+    "record": "artifacts/native-type-parameter-impact-validation-20261105-01/archive-roundtrip.json",
+    "recordSha256": "25290da3855303806cd6104306ebfdbad99363d14c45a034e26f22effac131ff",
+    "passed": true,
+    "archives": [
+      {
+        "inputsUnchanged": true,
+        "kind": "runtime",
+        "sourceFilesMatchManifest": true,
+        "sha256": "761f4e618b6818279b26097db153ecd8edf5e0e6b324d7dd2ca639488c58426f",
+        "files": 146,
+        "bytes": 7407247,
+        "entryReadbackVerified": true,
+        "manifestPayloadFiles": 145,
+        "path": "artifacts/BuildX-Revit2024-0.8.6-internal-type-parameter-impact-20261105.zip",
+        "entryDigestsVerified": 146
+      },
+      {
+        "inputsUnchanged": true,
+        "kind": "source",
+        "sourceFilesMatchManifest": true,
+        "sha256": "949dc2505bc2f3efc931b7daac897fb0a78bb98a8f43682136875444aaa3aad2",
+        "files": 275,
+        "bytes": 1140383,
+        "entryReadbackVerified": true,
+        "manifestPayloadFiles": 273,
+        "path": "artifacts/BuildX-Source-0.8.6-internal-type-parameter-impact-20261105.zip",
+        "entryDigestsVerified": 275
+      }
+    ],
+    "roundtrip": {
+      "runtime": {
+        "ok": true,
+        "filesVerified": 146,
+        "manifestPayloadFiles": 145,
+        "scriptCompiler": {
+          "ok": true,
+          "version": "5.0.0",
+          "files": 17,
+          "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627"
+        },
+        "noNodeModules": true,
+        "catalog": {
+          "ok": true,
+          "methods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list"
+          ],
+          "toolCount": 23,
+          "allReadOnly": true,
+          "typeImpactTool": "revit_get_type_parameter_impact",
+          "impactInputSchemaStrictCompiled": true,
+          "impactOutputSchemaStrictCompiled": true,
+          "exactInputAccepted": true,
+          "mutationInputsRejected": true,
+          "numericInstanceIdsRejected": true,
+          "writeAuthorizationEscalationRejected": true,
+          "instanceWriteExposed": false,
+          "typeWriteExposed": false,
+          "schemaCompiler": "Workspace Ajv; extracted MCP child has no node_modules",
+          "modelToolsCalled": false,
+          "exitCode": 0
+        },
+        "typeParameterImpactOwner": {
+          "modulePresent": true,
+          "imported": true,
+          "pureMemoryProbe": true,
+          "exactInt64ArgumentsAndResultsPreserved": true,
+          "numericInstanceIdsRejected": true,
+          "wrongTypeIdentityRejected": true,
+          "mutationInputsRejected": true,
+          "writeAuthorizationNotGranted": true,
+          "scope": "current_document_direct_type_references",
+          "indirectEffects": "not_assessed"
+        },
+        "queueCreated": false,
+        "inventoryUnchangedAfterProbe": true
+      },
+      "source": {
+        "ok": true,
+        "filesVerified": 275,
+        "snapshotFiles": 273,
+        "manifestSha256": "192e9d0231af55eae1e0528cdf153944560b02ebf312635a4b1dc55a272d564d",
+        "dependencyClosureOk": true,
+        "modules": 199,
+        "references": 613,
+        "buildExcluded": true
+      }
+    },
+    "temporaryCleanup": {
+      "ownerVerified": true,
+      "directoryIdentityVerified": true,
+      "absoluteRealpathVerified": true,
+      "resolvedUnderTemp": true,
+      "removed": true
+    }
+  },
+  "sources": [
+    {
+      "path": "lib/native-parameter-queries.mjs",
+      "bytes": 14794,
+      "sha256": "1fe0cea46309f1074387686a0aa9e96da2521648646a79f8583c78b830d02c3d"
+    },
+    {
+      "path": "lib/model-operation-effects.mjs",
+      "bytes": 3914,
+      "sha256": "a7134c2c799e3586d83813af3edd87b285d9fbcf8cb787deb939e5b70a542aa5"
+    },
+    {
+      "path": "lib/codex-profile.mjs",
+      "bytes": 27703,
+      "sha256": "c6546b8cb1506cea67e9fc307c44df51d79602998482b9ce7aca3103c49558eb"
+    },
+    {
+      "path": "public/model-workspace.mjs",
+      "bytes": 109990,
+      "sha256": "25a93aa76f7687e86b7272375f22743381738d9861bd7605ff1d53ad0f288df4"
+    },
+    {
+      "path": "public/command-fields.mjs",
+      "bytes": 10982,
+      "sha256": "bec9d08e17306c9af4e6b7a63bbf84a910dc3c56f23f337609ad2a04015e04ba"
+    },
+    {
+      "path": "revit-addin/NativeModelQueries.cs",
+      "bytes": 22573,
+      "sha256": "847f3a8c8340b32376bae002e6a108dfe250a315e8f4400970e3476bb58d8758"
+    },
+    {
+      "path": "revit-addin/NativeParameterQueries.cs",
+      "bytes": 10237,
+      "sha256": "d5f4378b2f9aad9caa3e3270da0586adacbb08feeba92fb34f320b55dda96101"
+    },
+    {
+      "path": "revit-addin/WorkbenchHost.cs",
+      "bytes": 61164,
+      "sha256": "d7998d2661ad48f39300a83d640f161fecae1880f9debb80c572a9e256820b5c"
+    },
+    {
+      "path": "revit-addin/LocalCodexRevit.cs",
+      "bytes": 45491,
+      "sha256": "470e49a8c274555c66f23478f1ff3b5ef060a060d052384c63d69fdf872eb0ff"
+    },
+    {
+      "path": "test-support/native-model-query-peers.cs",
+      "bytes": 10183,
+      "sha256": "3667ed0c4ac20f62f1456d0abaa513c5ca4b92b57c520226d858810fc8d624a2"
+    },
+    {
+      "path": "tools/build-brain-candidate-files.json",
+      "bytes": 9808,
+      "sha256": "a309bd566fe61b28074792071f13e46b13d6fcbbfe63c1d42ba0ee767371e05b"
+    }
+  ],
+  "reviewCorrections": [
+    {
+      "issue": "Draft impact instance_ids schema accepted numeric IDs while C# and UI used strings",
+      "resolution": "Restricted only this new result list to the shared canonical string-ID schema and parser; old ID input/descriptor semantics preserved."
+    },
+    {
+      "issue": "The UI did not reject scanned_elements smaller than instance_count",
+      "resolution": "Reject contradictory coverage as unconfirmed; added a presentation regression."
+    }
+  ],
+  "remainingAuthorizationWork": [
+    "forced trusted approval for type-wide changes even in automatic mode",
+    "manual and AI operation decision ownership",
+    "recheck type parameter before state and direct reference set before writing",
+    "legacy batch ElementType targets and arbitrary script boundaries"
+  ],
+  "notVerified": [
+    "real Revit plugin load and model effects",
+    "real WebView/Codex UI",
+    "clean customer install/upgrade/uninstall",
+    "indirect type effects",
+    "Argus distribution/runtime and native replacement acceptance",
+    "private Node/Python distribution",
+    "external Node bootstrap",
+    "WebView2 Runtime",
+    "pypdf/third-party and plugin licensing",
+    "data upgrade/restore",
+    "license backend"
+  ],
+  "userServicesRestarted": false,
+  "installedPluginReplaced": false,
+  "realModelWritten": false,
+  "publishedRelease": false,
+  "releaseReady": false,
+  "next": "Unify trusted mandatory type-wide decisions across manual and AI paths, revalidate before state and impact set at write time, and address legacy batch/script boundaries before enabling a named type write."
+}
