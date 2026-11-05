@@ -67,7 +67,12 @@ test('the product profile owns one exact local MCP catalog without requiring the
   assert.ok(supported.some(tool=>tool.name==='revit_inspect_elements'));
   assert.deepEqual(operation.inputSchema.properties.tool.enum,supported.map(tool=>tool.name));
   assert.equal(operation.inputSchema.additionalProperties,false);
-  for(const definition of supported){const variant=operation.inputSchema.oneOf.find(item=>item.properties.tool.enum[0]===definition.name);assert.deepEqual(variant.properties.parameters,definition.inputSchema);}
+  for(const definition of supported){
+    const variant=operation.inputSchema.oneOf.find(item=>item.properties.tool.enum[0]===definition.name);
+    assert.deepEqual(Object.keys(variant.properties.parameters.properties),Object.keys(definition.inputSchema.properties));
+    assert.deepEqual(variant.properties.parameters.required,definition.inputSchema.required);
+    assert.equal(variant.properties.parameters.additionalProperties,definition.inputSchema.additionalProperties);
+  }
   assert.deepEqual(operation.inputSchema.oneOf.map(item=>item.properties.tool.enum[0]),supported.map(item=>item.name));
   const validate=new Ajv({strict:false}).compile(operation.inputSchema);
   assert.equal(validate({tool:'revit_move_elements',parameters:{expected_document:'C:\\fixture.rvt',element_ids:[1],delta_mm:{x:1,y:0,z:0},mode:'rollback'}}),true);

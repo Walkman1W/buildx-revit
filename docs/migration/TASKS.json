@@ -51,9 +51,9 @@
       "title": "常用参数与建模命令迁移",
       "status": "in_progress",
       "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收",
-      "currentSlice": "Chat and manual type writes share native preparation, per-action human decision and original receipt owners; manual typed form locks submitted facts and receives correlated final/late-receipt results; raw dispatcher/MCP still reject type writes",
-      "evidence": "MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md; manual-type-parameter-write-verification.json; manual30/30, manual+AIHTTP25/25, approvalUI37/37, originaltype180/180, permission70/70, command80/80, layout105/105; actual static-module HTTP MIME/content/hash and source/customer404; 298-file source15 snapshot, unchanged34 C# API reference compilation, 149-file internal candidate and independent ZIP roundtrip; initial fixture failures retained",
-      "milestone": "named_type_parameter_manual_and_chat_approval_source_and_isolated_validation_complete",
+      "currentSlice": "Dynamic tool registration omits only schema descriptions, preserving full on-demand contracts and validation, to reserve room for subsequent P1 commands; prior chat/manual type writes retain the shared per-action approval and receipt owners",
+      "evidence": "TOOL-CATALOG-BUDGET-VERIFICATION.zh-CN.md; registration default24777/family25570 bytes, standalone7/7 and combined45/45; full on-demand metadata retained, live Codex unverified. Earlier MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md records manual30/30, approvalUI37/37, originaltype180/180 and the 298-file source15/149-file internal candidate; that candidate predates catalog compaction and must be rebuilt.",
+      "milestone": "tool_catalog_budget_source_and_isolated_validation_complete",
       "remaining": "Other selected P1 common commands; explicit script boundaries; native schematic/annotation and real Revit/WebView/Codex/customer acceptance",
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false
