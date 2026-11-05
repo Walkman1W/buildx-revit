@@ -51,10 +51,10 @@
       "title": "常用参数与建模命令迁移",
       "status": "in_progress",
       "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收",
-      "currentSlice": "Named type parameter write through chat requires actual native preparation, fresh trusted human decision in every mode, single-use bound native permit and four-phase before/impact/value revalidation; host 0.8.8 independent capability",
-      "evidence": "TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md; type-parameter-write-verification.json; type-write180/180, permission92/92, query182/182 serial, batch117/117, single125/125, policy87/87, type24/24, single-read/UI79/79, impact65/65, layout105/105, catalog23/23, host80/80; 292-file final source14 snapshot and 34-source Revit 2024 API compilation; historical test/fixture failures and 17 matching UI baseline failures preserved",
-      "milestone": "named_type_parameter_chat_approval_source_and_isolated_validation_complete",
-      "remaining": "Manual type-write path through the same trusted review/decision owner; explicit script boundaries; other common commands, native schematic/annotation and real Revit/customer acceptance",
+      "currentSlice": "Chat and manual type writes share native preparation, per-action human decision and original receipt owners; manual typed form locks submitted facts and receives correlated final/late-receipt results; raw dispatcher/MCP still reject type writes",
+      "evidence": "MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md; manual-type-parameter-write-verification.json; manual30/30, manual+AIHTTP25/25, approvalUI37/37, originaltype180/180, permission70/70, command80/80, layout105/105; actual static-module HTTP MIME/content/hash and source/customer404; 298-file source15 snapshot, unchanged34 C# API reference compilation, 149-file internal candidate and independent ZIP roundtrip; initial fixture failures retained",
+      "milestone": "named_type_parameter_manual_and_chat_approval_source_and_isolated_validation_complete",
+      "remaining": "Other selected P1 common commands; explicit script boundaries; native schematic/annotation and real Revit/WebView/Codex/customer acceptance",
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false
     },
@@ -75,15 +75,15 @@
       "title": "清理已替代模块与专属依赖",
       "status": "in_progress",
       "acceptance": "消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留",
-      "evidence": "Built-in-only runtime and pinned private compiler; final 292-file source closure, 17-file compiler and 23-read MCP verified. Instance setters retain their owner and type rejection; named type writer reuses parameter facts and native document owner. Raw MCP excludes the new writer. Argus/ScriptRunner consumers retained. Blockers in TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md."
+      "evidence": "Built-in-only runtime and pinned private compiler; final 298-file source closure, 17-file compiler and 23-read MCP verified. Manual typed form and shared review module have actual model-only HTTP routes. Instance setters retain their owner/type rejection; manual and chat type writes reuse native facts/approval/receipts. Raw MCP excludes the writer. Argus/ScriptRunner consumers retained. Blockers in MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md."
     },
     {
       "id": "BX-010",
       "title": "Revit 2024 安装候选与客户验收",
       "status": "in_progress",
       "acceptance": "来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex",
-      "evidence": "TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md; type-parameter-write-verification.json; 0.8.8-internal-type-parameter-write, final 148 runtime files and 292-source14 snapshot; actual 34-source API compilation, independent r2 ZIP entry/extracted compiler/closure/MCP/UI-contract checks; releaseReady:false; all previous candidates and external blockers retained",
-      "milestone": "named_type_parameter_chat_approval_internal_candidate_generated",
+      "evidence": "MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md; manual-type-parameter-write-verification.json; 0.8.8-internal-manual-type-parameter-write, 149 runtime files and 298-source15 snapshot; actual 34-source API compilation, ZIP entry/extracted compiler/closure/MCP/manual-form checks; releaseReady:false; all previous candidates and external blockers retained",
+      "milestone": "named_type_parameter_manual_and_chat_approval_internal_candidate_generated",
       "internalCandidateGenerated": true,
       "installable": false,
       "realRevitLoadVerified": false,

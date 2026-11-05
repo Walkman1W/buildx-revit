@@ -67,6 +67,8 @@ BuildX 界面或 Codex 工具
 
 0.8.8 已接通 `revit_set_type_parameter` 的对话确认链：实际原生影响准备、可信 HTTP 本次决定、单次 Node 批准及原生文档/完整请求绑定 token，automatic 和 rollback 同样要求决定。写前原态/完整直接实例清单、设置后立即/重生成后/内层提交后均重新获取核对；读取准备未知和写入未知都保留原回执、不重放。手动命令面板明确暂不可执行，下一项接入同一审阅 owner；任意脚本仍非沙盒。见 [类型参数逐次确认验证](TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md)。源码及隔离验证通过，真实 Revit 模型效果未验收。
 
+同日后续已把手动类型写接入同一准备、逐次决定和回执核对链：先读取完整影响，以原生控件填写拟议值，提交后锁定草稿，再经共享确认卡决定；原态和实例清单不可编辑，所有允许模式均强制确认。原始 dispatcher/MCP 仍拒绝类型写。取消、过期和换连接结算等待，原回执迟到只更新匹配的原命令及确认卡。原生 C# 协议仍为 0.8.8，本轮完成 30 项新组合及相关回归、HTTP 静态资源和候选核对；见 [手动类型参数写入验证](MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md)。没有替换插件或执行真实模型操作。
+
 当前可复用的代码为 `SchematicModel.cs`、`SchematicRevitService.cs`、`SchematicEditorWindow.cs`、`SchematicWindowEntry.cs` 和 `lib/native-schematic-tools.mjs`。源码包含物理连接读取、BFS 基础布局、可编辑 DTO、矩形符号、文字及原生详图线输出；路径不调用 `ArgusLearning.Core.dll`。
 
 这些是可复用源码，尚不能作为产品界面已交付的证明。`LocalCodexRevit.cs:72-73` 当前明确没有在产品 Ribbon 暴露未完成编辑器。源码和既有发布边界文档将其声明为自研，正式建库时仍保留实现来源记录。

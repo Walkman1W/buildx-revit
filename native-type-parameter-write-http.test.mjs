@@ -38,13 +38,17 @@ test('decline performs no write and a later proposal requires a new independent 
   assert.equal((await f.decide(next)).status,200);await waitTypeWrite(()=>f.writes.length===1&&f.codex.answers.length===2);assert.equal(f.preparations.length,2);
 });
 
-test('manual command flags cannot authorize type writes in any permission or transaction mode',async t=>{
+test('manual command intent cannot authorize type writes before a separate user decision',async t=>{
   for(const level of ['rollback','confirm','automatic']){
     const f=await typeWriteHttpFixture(t);await f.choose(level);
     for(const mode of [undefined,'rollback','commit']){
       const parameters=typeWriteArgs();delete parameters.expected_document;if(mode===undefined)delete parameters.mode;else parameters.mode=mode;
       const result=await f.post('command',{conversationId:f.session,commandId:TYPE_WRITE_TOOL,parameters,confirmed:true,sourceDocument:TYPE_WRITE_DOCUMENT});
-      assert.equal(result.status,403);assert.equal(result.body.outcome,'not_started');assert.equal(f.writes.length,0);assert.equal(f.direct.length,0);assert.equal(f.preparations.length,0);
+      if(level==='rollback'&&mode==='commit'){assert.equal(result.status,403);continue;}
+      assert.equal(result.status,202);await waitTypeWrite(()=>Boolean(f.preview()));const pending=f.preview();
+      assert.equal(f.writes.length,0);assert.equal(f.direct.length,0);
+      assert.equal((await f.decide(pending,'decline')).status,200);await waitTypeWrite(()=>!f.app.snapshot('browser').busy);
+      assert.equal(f.writes.length,0);assert.equal(f.app.snapshot('browser').command.status,'failed');
     }
   }
 });

@@ -2,6 +2,7 @@ import {createCommandField,COMMAND_PARAMETER_LABELS,isExactIdRule,parseExactIdVa
 import {createCommandChoiceField} from './command-choice-field.mjs';
 import {createParameterChangeField} from './parameter-change-field.mjs';
 import {createPersonalCommandFields} from './personal-command-fields.mjs';
+import {createManualTypeParameterWriteField} from './manual-type-parameter-write-field.mjs';
 import {clipboardImageFiles,hasTransferredFiles} from './clipboard-attachments.mjs';
 
 // Display adapter for the fixed model workspace. The original app owns every
@@ -46,6 +47,7 @@ export function modelCommandCatalog(value) {
     effectKind:item.effectKind==='model_transaction'?'model_transaction':null,
     enabled:item.enabled === true,unavailableReason:typeof item.unavailableReason === 'string' ? item.unavailableReason.slice(0,500) : '',
     manualExecution:item.manualExecution!==false,manualUnavailableReason:typeof item.manualUnavailableReason==='string'?item.manualUnavailableReason.slice(0,500):'',
+    requiresTypeParameterReview:item.requiresTypeParameterReview===true,
     inputSchema:item.inputSchema && typeof item.inputSchema === 'object' && item.inputSchema.type === 'object' ? item.inputSchema : null,
     icon:item.readOnly === true ? '⌕' : '◇'}));
 }
@@ -366,6 +368,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     prompt.setAttribute('aria-activedescendant','model-tool-option-' + selected);
   }
   function commandNeedsConfirmation(command,inputs){
+    if(command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview===true)return false;
     if(command.readOnly!==false)return false;
     const grant=snapshot?.modelPermission,mode=inputs?.mode?.value||command.inputSchema?.properties?.mode?.default||'rollback';
     const currentGrant=snapshot?.ready===true&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===snapshot.commandConversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now());
@@ -375,7 +378,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   function renderCommandConfirmation(row){if(row.confirmLabel)row.confirmLabel.hidden=!commandNeedsConfirmation(row.command,row.inputs);}
   function applyCommand(command, inputs, error) {
     if (!active || !snapshot?.directCommandsAvailable || !(snapshot.commandsReady ?? snapshot.ready) || command.enabled === false || command.manualExecution===false || snapshot.blocked || snapshot.busy || snapshot.modelPermissionPending || snapshot.readOnly || snapshot.persistence?.status === 'failed') return;
-    const form=rows.find(row=>row.id===command.id),sources=[];
+    const form=rows.find(row=>row.id===command.id),sources=[],typeWriteField=form?.fields?.find(field=>typeof field.parameters==='function');
     for(const field of form?.fields || []){
       const check=field.validate?.();
       if(check?.ok===false){error.textContent=check.error;error.hidden=false;field.input.focus();return;}
@@ -383,7 +386,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     }
     if(sources.some(source=>JSON.stringify(source)!==JSON.stringify(sources[0]))){error.textContent='所选内容来自不同模型，请重新读取后选择。';error.hidden=false;return;}
     const values = command.inputSchema ? Object.fromEntries(Object.entries(inputs || {}).filter(([key]) => key !== '$confirmation').map(([key,input]) => [key,input.type === 'checkbox' ? input.checked : input.value])) : inputs ? {keyword:inputs.keyword.value, category:inputs.category.value} : {};
-    const result = command.inputSchema ? modelSchemaParameters(command,values) : modelCommandParameters(command.id,values);
+    const result = typeWriteField?{ok:true,parameters:typeWriteField.parameters()}:command.inputSchema ? modelSchemaParameters(command,values) : modelCommandParameters(command.id,values);
     error.textContent = result.ok ? '' : result.error; error.hidden = result.ok;
     if (!result.ok) { (inputs?.keyword || Object.values(inputs || {})[0])?.focus(); return; }
     if(command.tool==='revit_save_command' && draftOrigin) {
@@ -395,8 +398,9 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     }
     if(command.effectKind==='model_transaction'&&snapshot?.modelPermission?.level==='rollback'&&result.parameters.mode==='commit'){error.textContent='当前权限为回滚预览，请选择预览或切换模型权限。';error.hidden=false;return;}
     if (commandNeedsConfirmation(command,inputs) && inputs?.$confirmation?.checked !== true) { error.textContent = '请先核对参数并确认本次操作。'; error.hidden = false; inputs?.$confirmation?.focus(); return; }
-    const confirmed=inputs?.$confirmation?.checked===true;
+    const confirmed=Boolean(typeWriteField)||inputs?.$confirmation?.checked===true;
     if (inputs?.$confirmation) inputs.$confirmation.checked = false;
+    typeWriteField?.lock();
     window.dispatchEvent(new CustomEvent('buildx-model-command',{detail:{commandId:command.id,parameters:result.parameters,...(sources.length?{sourceDocument:sources[0]}:{}),...(confirmed?{confirmed:true}:{})}}));
   }
 
@@ -417,12 +421,13 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const copy = el('span','model-command-copy'); copy.append(commandName(command.name,'system'),el('small','',command.description));
       if (command.readOnly === false) copy.append(el('small','model-command-effect','涉及模型或文件操作'));
       if (command.enabled === false) copy.append(el('small','model-command-unavailable',command.unavailableReason || '当前环境尚未就绪'));
-      if(command.manualExecution===false){
+      if(command.manualExecution===false||command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview!==true){
         copy.append(el('small','model-command-unavailable',command.manualUnavailableReason||'请在对话中发起，逐项审阅类型影响并确认本次操作。'));
         row.append(el('span','model-command-icon',command.icon||'◇'),copy);item.append(row);groups.get(group).append(item);
         continue;
       }
-      const fields = command.inputSchema ? Object.entries(command.inputSchema.properties || {}).filter(([key]) => key !== 'expected_document').sort(([a],[b])=>Number(a==='mode')-Number(b==='mode')) : command.parameters ? [['keyword',{type:'string',maxLength:200}],['category',{type:'string',enum:MODEL_CATEGORIES.map(item => item.value),default:'all'}]] : [];
+      const manualTypeWrite=command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview===true;
+      const fields = manualTypeWrite?[]:command.inputSchema ? Object.entries(command.inputSchema.properties || {}).filter(([key]) => key !== 'expected_document').sort(([a],[b])=>Number(a==='mode')-Number(b==='mode')) : command.parameters ? [['keyword',{type:'string',maxLength:200}],['category',{type:'string',enum:MODEL_CATEGORIES.map(item => item.value),default:'all'}]] : [];
       const hasParameters = fields.length > 0 || command.readOnly === false;
       const apply = button('model-command-apply',command.enabled === false ? '不可用' : hasParameters ? '展开' : '应用');
       apply.setAttribute('aria-label',command.name + (hasParameters ? '，填写参数' : '，应用')); apply.dataset.commandEnabled = String(command.enabled !== false);
@@ -451,6 +456,12 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const advanced=el('details','model-command-advanced');advanced.append(el('summary','','更多选项'));
       const invalidate=()=>{if(inputs.$confirmation)inputs.$confirmation.checked=false;};
       const onCommand=detail=>{if(!commandActionAvailable(detail.commandId))return false;window.dispatchEvent(new CustomEvent('buildx-model-command',{detail}));return true;};
+      if(manualTypeWrite){
+        const field=createManualTypeParameterWriteField({document,Event,id:'model-command-'+command.id+'-type-write',schema:command.inputSchema,onCommand,onChange:invalidate,
+          onSubmit:()=>applyCommand(command,inputs,error)});
+        inputs.$typeWrite=field.input;formFields.push(field);parameters.append(field.element);
+        for(const control of field.controls){control.dataset.commandEnabled=String(command.enabled!==false);parameterInputs.push(control);}
+      }
       for (const [key,rule] of fields) {
         const id=command.id === 'search' && ['keyword','category'].includes(key) ? 'model-command-'+key : 'model-command-'+command.id+'-'+key;
         const label=key==='parameters' && command.tool==='revit_run_command'?'参数值':COMMAND_PARAMETER_LABELS[key] || key;
@@ -467,12 +478,14 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       if(advanced.children.length>1)parameters.append(advanced);
       if(command.tool==='revit_run_command')for(const key of ['command_id','revision'])for(const event of ['input','change'])inputs[key]?.addEventListener(event,()=>{formFields.find(field=>typeof field.setDefinition==='function')?.setDefinition(null);invalidate();});
       let confirmLabel=null;
-      if(command.readOnly === false){confirmLabel=el('label','model-command-confirm');const confirm=el('input');confirm.type='checkbox';confirm.dataset.commandEnabled=String(command.enabled !== false);confirm.checked=false;for(const input of Object.values(inputs))for(const event of ['input','change'])input.addEventListener(event,()=>{confirm.checked=false;renderCommandConfirmation({command,inputs,confirmLabel});});inputs.$confirmation=confirm;parameterInputs.push(confirm);const confirmationText=command.tool==='revit_save_command'?'我已核对草稿内容，确认保存本地版本':command.tool==='revit_family_create_cabinet'?'我已核对尺寸，确认创建独立临时柜体族；不保存或加载项目':command.tool==='revit_family_save_cabinet'?'我已核对作业，确认保存为新 RFA、关闭原临时族并重新打开复核':command.tool==='revit_family_close_cabinet'?'我已核对作业，确认关闭临时柜体族并丢弃未保存内容':'我已核对本次参数和执行方式';confirmLabel.append(confirm,el('span','',confirmationText));parameters.append(confirmLabel);}
+      if(command.readOnly === false&&!manualTypeWrite){confirmLabel=el('label','model-command-confirm');const confirm=el('input');confirm.type='checkbox';confirm.dataset.commandEnabled=String(command.enabled !== false);confirm.checked=false;for(const input of Object.values(inputs))for(const event of ['input','change'])input.addEventListener(event,()=>{confirm.checked=false;renderCommandConfirmation({command,inputs,confirmLabel});});inputs.$confirmation=confirm;parameterInputs.push(confirm);const confirmationText=command.tool==='revit_save_command'?'我已核对草稿内容，确认保存本地版本':command.tool==='revit_family_create_cabinet'?'我已核对尺寸，确认创建独立临时柜体族；不保存或加载项目':command.tool==='revit_family_save_cabinet'?'我已核对作业，确认保存为新 RFA、关闭原临时族并重新打开复核':command.tool==='revit_family_close_cabinet'?'我已核对作业，确认关闭临时柜体族并丢弃未保存内容':'我已核对本次参数和执行方式';confirmLabel.append(confirm,el('span','',confirmationText));parameters.append(confirmLabel);}
       if(hasParameters){
         apply.setAttribute('aria-expanded',String(Boolean(draft?.open)));apply.setAttribute('aria-controls',parameters.id);parameters.hidden=!draft?.open;
-        const run=button('model-command-run',command.tool === 'revit_save_command' ? '保存版本' : command.readOnly === false ? '执行' : '查询');run.dataset.commandEnabled=String(command.enabled !== false);run.addEventListener('click',()=>applyCommand(command,inputs,error));
-        if(inputs.mode){const renderRun=()=>{run.textContent=inputs.mode.value==='commit'?'应用修改':'预览结果';};inputs.mode.addEventListener('change',renderRun);renderRun();}
-        parameters.append(run,error);item.append(parameters);rows.push({id:command.id,item,parameters,apply,inputs,fields:formFields,command,confirmLabel});commandButtons.push(run);
+        const run=manualTypeWrite?null:button('model-command-run',command.tool === 'revit_save_command' ? '保存版本' : command.readOnly === false ? '执行' : '查询');
+        if(run){run.dataset.commandEnabled=String(command.enabled !== false);run.addEventListener('click',()=>applyCommand(command,inputs,error));
+          if(inputs.mode){const renderRun=()=>{run.textContent=inputs.mode.value==='commit'?'应用修改':'预览结果';};inputs.mode.addEventListener('change',renderRun);renderRun();}
+          parameters.append(run);commandButtons.push(run);}
+        parameters.append(error);item.append(parameters);rows.push({id:command.id,item,parameters,apply,inputs,fields:formFields,command,confirmLabel});
         if(command.tool==='revit_list_commands'){apply.textContent='刷新列表';apply.addEventListener('click',()=>applyCommand(command,inputs,error));}
         else apply.addEventListener('click',()=>{parameters.hidden=!parameters.hidden;apply.textContent=parameters.hidden?'展开':'收起';apply.setAttribute('aria-expanded',String(!parameters.hidden));if(!parameters.hidden)Object.values(inputs)[0]?.focus();});
         if(inputs.keyword)inputs.keyword.addEventListener('keydown',event=>{if(event.key === 'Enter' && !event.isComposing){event.preventDefault();applyCommand(command,inputs,error);}});

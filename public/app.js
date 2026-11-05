@@ -950,11 +950,14 @@ function showUserInput(value){
 }
 // The server owns the operation and its one-use decision. This UI only
 // displays its full immutable preview and sends the corresponding decision.
+const typeApprovalPermissionIdentity=()=>JSON.stringify([modelPermission?.available,modelPermission?.revision,modelPermission?.level,modelPermission?.documentLabel,
+  modelPermission?.expiresAt,accessPolicy?.id,accessPolicy?.revision,accessPolicy?.mode]);
 function dynamicApprovalScopeCurrent(owner){
   return Boolean(owner&&dynamicApproval===owner&&modelUiEnabled&&ready&&
     owner.accountEpoch===accountEpoch&&owner.contextEpoch===contextEpoch&&
     owner.connectionGeneration===modelPickerIdentity.connectionGeneration&&owner.accountRevision===modelPickerIdentity.accountRevision&&
-    owner.request.conversationId===lastSession?.conversation?.id);
+    owner.request.conversationId===lastSession?.conversation?.id&&
+    (owner.request.action!=='revit_set_type_parameter'||owner.permissionIdentity===typeApprovalPermissionIdentity()));
 }
 function dynamicApprovalCurrent(owner){return dynamicApprovalScopeCurrent(owner)&&busy;}
 function dynamicApprovalAwaitingResult(owner){return owner?.request.kind==='model'&&owner.state==='accepted';}
@@ -975,7 +978,7 @@ function applyDynamicApprovalResult(value){
      !['completed','not_started','unconfirmed','declined'].includes(value.status)||
      value.code!==undefined&&(typeof value.code!=='string'||!/^MODEL_[A-Z0-9_]{1,100}$/.test(value.code))||
      value.operationOutcome!==undefined&&value.operationOutcome!=='not_started')return;
-  const message={completed:'模型操作已完成，请查看对话中的执行结果。',not_started:value.code==='MODEL_DOCUMENT_REVALIDATION_FAILED'?'当前模型或执行权限未能重新核实，本次操作未开始；请结束未完成的 Revit 命令后重新核实。':'本次模型操作未开始，请查看对话中的原因。',unconfirmed:value.operationOutcome==='not_started'?'模型操作未开始；前置查询的原回执仍需核对。':'模型操作结果尚未确认，请核对原回执；不要重复执行。',declined:'已拒绝，本次模型操作未执行。'}[value.status];
+  const message={completed:'模型操作已完成，请查看执行结果。',not_started:value.code==='MODEL_DOCUMENT_REVALIDATION_FAILED'?'当前模型或执行权限未能重新核实，本次操作未开始；请结束未完成的 Revit 命令后重新核实。':'本次模型操作未开始，请查看对话中的原因。',unconfirmed:value.operationOutcome==='not_started'?'模型操作未开始；前置查询的原回执仍需核对。':'模型操作结果尚未确认，请核对原回执；不要重复执行。',declined:'已拒绝，本次模型操作未执行。'}[value.status];
   owner.resultMessage=message+(value.code?'（'+value.code+'）':'');settleDynamicApproval(owner,value.status);
 }
 function settleDynamicApproval(owner,state){
@@ -1020,7 +1023,7 @@ async function showDynamicApproval(value){
   invalidateDynamicApproval();
   if(settledDynamicApprovals.has(value.id)||settledDynamicApprovals.size>=4096){box.hidden=true;return;}
   const request=Object.freeze(Object.fromEntries(fields.map(key=>[key,value[key]])));
-  const owner={request,accountEpoch,contextEpoch,connectionGeneration:modelPickerIdentity.connectionGeneration,
+  const owner={request,accountEpoch,contextEpoch,permissionIdentity:typeApprovalPermissionIdentity(),connectionGeneration:modelPickerIdentity.connectionGeneration,
     accountRevision:modelPickerIdentity.accountRevision,state:'pending',timer:null};
   dynamicApproval=owner;box.replaceChildren();box.hidden=typeWrite;
   const expire=()=>{if(dynamicApproval===owner&&['pending','submitting'].includes(owner.state)){settleDynamicApproval(owner,owner.state==='submitting'?'unknown':'expired');updateButtons();}};
@@ -1125,12 +1128,12 @@ function applyConversation(data = {}, commandEvidence = false) {
   if (commandEvidence && Object.hasOwn(data,'command')) applyCommandProjection(data.command);
   if (data.activity) $('activity-text').textContent = data.activity;
   if (data.error) notice(typeof data.error === 'string' ? data.error : previewText(data.error));
-  if(Object.hasOwn(data,'userInput'))showUserInput(data.userInput);
-  if(Object.hasOwn(data,'dynamicApproval'))showDynamicApproval(data.dynamicApproval);
-  if(Object.hasOwn(data,'dynamicApprovalResult'))applyDynamicApprovalResult(data.dynamicApprovalResult);
   if(Object.hasOwn(data,'modelPermission'))applyModelPermission(data.modelPermission);
   if(Object.hasOwn(data,'accessPolicy'))applyAccessPolicy(data.accessPolicy);
   else if(data.session&&Object.hasOwn(data.session,'accessPolicy'))applyAccessPolicy(data.session.accessPolicy);
+  if(Object.hasOwn(data,'userInput'))showUserInput(data.userInput);
+  if(Object.hasOwn(data,'dynamicApproval'))showDynamicApproval(data.dynamicApproval);
+  if(Object.hasOwn(data,'dynamicApprovalResult'))applyDynamicApprovalResult(data.dynamicApprovalResult);
   if(Object.hasOwn(data,'modelReceipt'))applyModelReceipt(data.modelReceipt);
   initializeCommandAuthoring(sessionRequest);
   updateButtons();
@@ -1313,7 +1316,7 @@ async function runCommand(detail) {
   const conversationId = commandConversationId(), commandId = detail?.commandId, parameters = detail?.parameters;
   if (!conversationId || !knownCommand(commandId) || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return;
   const definition=commandCatalog?.find(command=>command.id===commandId);
-  if(definition?.enabled===false||definition?.manualExecution===false)return;
+  if(definition?.enabled===false||definition?.manualExecution===false||definition?.tool==='revit_set_type_parameter'&&definition.requiresTypeParameterReview!==true)return;
   if(definition?.readOnly===false&&detail?.confirmed!==true){
     const grant=modelPermission,exempt=definition.effectKind==='model_transaction'&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===conversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now())&&(grant.level==='automatic'||parameters.mode!=='commit')&&!(grant.level==='rollback'&&parameters.mode==='commit');
     if(!exempt)return;

@@ -1,0 +1,387 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-05T02:44:09.855Z",
+  "sourceBaseCommit": "d9bbf1b0e588a3176eb5816324f5a043549fa916",
+  "version": "0.8.8-internal-manual-type-parameter-write",
+  "slice": {
+    "task": "BX-006",
+    "tool": "revit_set_type_parameter",
+    "manualExecution": true,
+    "requiresTypeParameterReview": true,
+    "commandSubmission": "Intent only; 202/executionId is not write authorization",
+    "manualLifecycle": "kind:command; no AI thread or turn",
+    "preparation": "Same prepareTypeParameterWrite/native book and modelPermission.propose/decide as chat",
+    "decision": "Existing five-field dynamic-approval HTTP request after Origin/CSRF/client/conversation/current-scope/digest/deadline validation",
+    "allPermittedModesRequireFreshHumanDecision": true,
+    "initialConfirmedFlagIsApproval": false,
+    "rollbackPermissionRejectsCommit": true,
+    "rawCommandDispatcherStillRejected": true,
+    "rawMcpTypeWriteExposed": false,
+    "form": "Explicit exact type and parameter IDs; actual complete impact read; typed String/Int32/Double controls; explicit internal Double units; mode; no editable guard JSON, ack or permit",
+    "guards": "Four raw state fields and complete sorted canonical instance list from the actual read owner; fresh native preparation before proposal",
+    "staleReadInvalidatedOn": [
+      "target",
+      "document",
+      "account",
+      "conversation",
+      "context",
+      "permission",
+      "execution owner"
+    ],
+    "submittedDraftLockedThroughUnknown": true,
+    "approvalResult": "Same preview correlation; completed/not_started/unconfirmed/declined settle the card; original late receipt updates only matching conversation/execution",
+    "cancellation": "Pending cancel/expiry/retire/close resolves the owned wait; dispatched/unknown keeps original receipt; no auto replay",
+    "assets": {
+      "modelOnly": [
+        "manual-type-parameter-write-field.mjs",
+        "type-parameter-write-review.mjs"
+      ],
+      "actualHttpContentsMimeAndHashesVerified": true,
+      "sourceAndCustomerReturn404": true
+    },
+    "hostVersion": "0.8.8",
+    "assemblyVersion": "0.8.8.0",
+    "nativeCSharpChanged": false,
+    "nativeBookAndFourPhaseWriterUnchanged": true,
+    "parameterFactsAndUnitsOwnerUnchanged": true,
+    "arbitraryScriptSandboxClaimed": false
+  },
+  "validationScope": [
+    "Production Node owner and controlled loopback HTTP",
+    "Actual app/workspace/form in isolated DOM",
+    "Actual temporary Node filesystem queue plus persistent production C# book/Host/writer extracted with controlled API peers",
+    "Actual Revit 2024 API reference compilation",
+    "Runtime and source ZIP inventory/hash/extracted MCP and pure-memory probes"
+  ],
+  "checks": [
+    {
+      "key": "manual",
+      "command": "node --test --test-concurrency=1 native-type-parameter-write-manual-http.test.mjs native-type-parameter-write-manual-transport.test.mjs native-type-parameter-write-manual-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 30,
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 14706,
+      "log": "manual-final.tap.log",
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/manual-final.tap.log",
+      "sha256": "4014fc90461ad5b08fd65375ea6ca256300e8a1d02bce3074f1f7fbb8e180de9"
+    },
+    {
+      "key": "permission",
+      "command": "node --test --test-concurrency=1 lib/model-permission-owner.test.mjs lib/model-permission-services.test.mjs lib/model-permission-family-lifecycle.test.mjs panel-model-permission-integration.test.mjs panel-dynamic-approval.test.mjs model-dynamic-admission.test.mjs",
+      "exitCode": 0,
+      "tests": 70,
+      "passed": 70,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 7396,
+      "log": "permission-final-r2.tap.log",
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/permission-final-r2.tap.log",
+      "sha256": "8c98f2015d5e28089802f891767d7967ffa69e5f86d46d32a988fd02e2e09ac1"
+    },
+    {
+      "key": "command",
+      "command": "node --test --test-concurrency=1 command-dispatch-integration.test.mjs model-command-workspace-ui.test.mjs model-workspace.test.mjs panel-command-http.test.mjs command-receipt-http.test.mjs panel-dynamic-approval-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 80,
+      "passed": 80,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 107279,
+      "log": "command-final-r2.tap.log",
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/command-final-r2.tap.log",
+      "sha256": "99c6c2287aa92b54df90f402c679d546a1aaccb6274c06a67fe0e3211a115c1e"
+    },
+    {
+      "key": "typeWrite",
+      "command": "node --test --test-concurrency=1 native-type-parameter-write-contract.test.mjs native-type-parameter-write-approval.test.mjs native-type-parameter-write-http.test.mjs native-type-parameter-write-producer.test.mjs native-type-parameter-write-transport.test.mjs native-type-parameter-write-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 180,
+      "passed": 180,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 106952,
+      "log": "typeWrite-final-r2.tap.log",
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/typeWrite-final-r2.tap.log",
+      "sha256": "f1d23a6109cdf4aa980b588c8c82999ba7b138acf1a5e7ceea50a1bb431fb142"
+    },
+    {
+      "key": "layout",
+      "command": "node --test --test-concurrency=1 buildx-paths.test.mjs installed-layout-mcp.test.mjs installation-layout-native.test.mjs installation-identity.test.mjs data-root-panel.test.mjs portable-runtime.test.mjs service-startup-probe.test.mjs service-identity-http.test.mjs server-lifecycle.test.mjs access-services.test.mjs visual-artifact-owner.test.mjs visual-chat-artifacts-http.test.mjs panel-core-boundary.test.mjs local-runtimes.test.mjs runtime-discovery.test.mjs buildx-installer.test.mjs buildx-setup.test.mjs installer-directory-owner.test.mjs tools/build-brain-candidate.test.mjs",
+      "exitCode": 0,
+      "tests": 105,
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 95818,
+      "log": "layout-final-r2.tap.log",
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/layout-final-r2.tap.log",
+      "sha256": "072e4b57cb7a63d2d0289c0694b42913290737a6829b8dbed1c38e74285f406f"
+    }
+  ],
+  "ownerEvidence": {
+    "http": {
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/manual-http-owner-summary-r2.json",
+      "sha256": "825fcf2a126aa4b0132103c22463f7dbc8f963b7c6844da2a6304437eee2e938"
+    },
+    "ui": {
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/ui-terminal-final.json",
+      "sha256": "4e07c275e34083feeb8a9c50c3aa69bd8a9bfc9604855eea3311c8adfdfd299d"
+    },
+    "native": {
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/manual-transport-native-r3.json",
+      "sha256": "fcbeae2329e814160a2a5f0d6ceb9493368de8b8f11dd055ef1d6112925789db"
+    },
+    "independentReadOnlyReview": "manual_path_map: pending/decision/cancel/expiry/retire/close and original-receipt retention; no confirmed missing authorization boundary"
+  },
+  "toolAdvertisementBudget": {
+    "defaultBytes": 31583,
+    "familyLifecycleBytes": 32756,
+    "limitBytes": 32768
+  },
+  "changedProductionFiles": [
+    {
+      "path": "lib/panel-server-core.mjs",
+      "sha256": "f2abaa0ae6cd69785b2c5965a02e5e062f63fdecc4fbc88193faf9c986e05787"
+    },
+    {
+      "path": "lib/model-command-catalog.mjs",
+      "sha256": "0449f29e470a05512789f126abd535ee697330dd20ce8d523cb1c3b4ecacd7f9"
+    },
+    {
+      "path": "lib/model-tool-dispatch.mjs",
+      "sha256": "62bfaac9581535f2630f85768a4bc6338b2822b850ec2bb906186055c9600cdc"
+    },
+    {
+      "path": "lib/native-type-parameter-writes.mjs",
+      "sha256": "ff2531d5f5e2d769289174ff5f4c0f61ccc08f92623e7e6cc7865eefa28c0f1c"
+    },
+    {
+      "path": "lib/codex-profile.mjs",
+      "sha256": "effcccc1d46e9fa58b6e0f7a5fb672575644eebed7bdbd1fdedd4da615881f48"
+    },
+    {
+      "path": "public/app.js",
+      "sha256": "c2baa5ed65c3d51cd8a73c7e2f8bc6528701804bd9ad99ace38bde35e0ede6e6"
+    },
+    {
+      "path": "public/model-workspace.mjs",
+      "sha256": "993a3f149f8d1550686e45ce94f100954b75f29d1565fa6f6674c274aea0bed6"
+    },
+    {
+      "path": "public/manual-type-parameter-write-field.mjs",
+      "sha256": "54d654e395c43f464b1e82a36c76d31a1359bb6ab774a9175db11913bf58a8e8"
+    }
+  ],
+  "sourceSnapshot": {
+    "path": "artifacts/buildx-source-20261105-15",
+    "files": 298,
+    "modules": 222,
+    "references": 718,
+    "manifestSha256": "578e8de622722174272921656e2d7c1843ca1a55d385f51033f2fc6f8a8dd0f5",
+    "currentSourceMismatches": []
+  },
+  "compilation": {
+    "record": "artifacts/manual-type-parameter-write-validation-20261105-01/api-build-final.log",
+    "sha256": "725bd459165814ab13c8e5aaf278962333c2958a809e9dccd04d61d94f25afdf",
+    "sources": 34,
+    "exitCode": 0,
+    "dllSha256": "eb25100e3dcd9047061330bac8ee68078f6c0bd63be373d2d905b1dcba58f0e6",
+    "compilerOptions": [
+      "/target:library",
+      "/platform:x64",
+      "/langversion:5",
+      "/optimize+",
+      "/debug-"
+    ],
+    "dependencies": [
+      {
+        "file": "RevitAPI.dll",
+        "version": "24.3.30.11",
+        "sha256": "eb3ade235237b300e699176ed91786b3998cc30d889b95a2e45f84d556b6df0d"
+      },
+      {
+        "file": "RevitAPIUI.dll",
+        "version": "24.3.30.11",
+        "sha256": "a7dc0e93ba4c29fad6549262b611a3231b9f0b9e5739e69381d1d2f08d8e7097"
+      },
+      {
+        "file": "Microsoft.Web.WebView2.Core.dll",
+        "version": "1.0.2478.35",
+        "sha256": "616157863b1cd1f1330b4914dd013adef10a4ce8cd819598fd6bd4037c2c1646"
+      },
+      {
+        "file": "Microsoft.Web.WebView2.Wpf.dll",
+        "version": "1.0.2478.35",
+        "sha256": "7ca01881df23afbe6a19b60b37c1b92ea0f2ca61248228fbdfb4d30445dc6474"
+      },
+      {
+        "file": "WebView2Loader.dll",
+        "version": "1.0.2478.35",
+        "sha256": "1cbca1698175936a93d0c4d4148ed355e1b91415c6a4db6d762f017de3b6eb9a"
+      },
+      {
+        "file": "LICENSE.txt",
+        "version": null,
+        "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+      },
+      {
+        "file": "NOTICE.txt",
+        "version": null,
+        "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90"
+      },
+      {
+        "file": "microsoft.web.webview2.1.0.2478.35.nupkg",
+        "version": null,
+        "sha256": "b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96"
+      },
+      {
+        "file": "microsoft.web.webview2.nuspec",
+        "version": null,
+        "sha256": "471895cececcdbb4f87362f50eb79767745f7889e9307ccc0dc15e16404d2689"
+      },
+      {
+        "file": ".nupkg.metadata",
+        "version": null,
+        "sha256": "5f06300e83a10c990db9c7bae33ea58cd4567b80b4e55d2cd28cdd19bcbd6d82"
+      },
+      {
+        "file": "csc.exe",
+        "version": "4.8.9221.0 built by: NET481REL1LAST_25H2",
+        "sha256": "46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00"
+      }
+    ],
+    "loaded": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-manual-type-parameter-write-20261105-01",
+    "productVersion": "0.8.8-internal-manual-type-parameter-write",
+    "releaseReady": false,
+    "files": 149,
+    "totalBytes": 19527740,
+    "manifestSha256": "9ededffe73b1179a33c1f66978952de86ed4efd3062209bf38de276bf0afa764",
+    "modules": 103,
+    "imports": 337,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "eb25100e3dcd9047061330bac8ee68078f6c0bd63be373d2d905b1dcba58f0e6",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-15",
+    "sourceFiles": 298,
+    "sourceModules": 222,
+    "sourceReferences": 718,
+    "sourceManifestSha256": "578e8de622722174272921656e2d7c1843ca1a55d385f51033f2fc6f8a8dd0f5",
+    "currentSourceMismatches": [],
+    "buildSources": 34,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false,
+    "record": "artifacts/manual-type-parameter-write-validation-20261105-01/candidate-audit-final.json",
+    "sha256": "25f20386c1698a38d67fa5c6440705f46385bd423b9b497635fc3b34dc517b74"
+  },
+  "archives": {
+    "record": "artifacts/manual-type-parameter-write-validation-20261105-01/archive-roundtrip.json",
+    "sha256": "7797200cae3ada6c4af586f00d713d27387ec91f877c3e4cdafc84bc36b06afc",
+    "passed": true,
+    "archives": [
+      {
+        "path": "artifacts/BuildX-Revit2024-0.8.8-internal-manual-type-parameter-write-20261105.zip",
+        "kind": "runtime",
+        "files": 150,
+        "bytes": 7436398,
+        "sha256": "82bf350d5d6ae4f62f0ee63c3da23017840626b0f4300544314cc3cc7c159775",
+        "entryReadbackVerified": true,
+        "inputsUnchanged": true
+      },
+      {
+        "path": "artifacts/BuildX-Source-0.8.8-internal-manual-type-parameter-write-20261105.zip",
+        "kind": "source",
+        "files": 300,
+        "bytes": 1240000,
+        "sha256": "3660d2623a4fde2f278df5e246903c7152d315b182bc9457230d4e4939f511b5",
+        "entryReadbackVerified": true,
+        "inputsUnchanged": true
+      }
+    ],
+    "modelBusinessToolsExecuted": false
+  },
+  "failuresAndLimits": [
+    {
+      "cause": "The old type-review and new manual-field modules were missing from the model HTTP resource map. Static review identified the omission; both routes were added and actual model GET/MIME/content/hash plus foreign-profile404 verified."
+    },
+    {
+      "cause": "Moving policy application before the typed preview initially left its session fallback else attached to the wrong branch. Corrected before final validation; actual app top-level/fallback precedence and typed-preview snapshot tests passed."
+    },
+    {
+      "cause": "Manual completion originally updated command results without correlated dynamicApprovalResult, leaving the shared accepted card waiting. Added correlated final/late-receipt projection and matching/foreign-result UI tests."
+    },
+    {
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/manual-http-initial-failures.observed.json",
+      "cause": "Initial isolated asset-test fixture lacked the mandatory no-model invoker dependency. Fixture corrected; product validation unchanged."
+    },
+    {
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/manual-transport-native-r1.json",
+      "cause": "Two native drift cases correctly retained unknown with zero Set but fixture finally expected core.close to succeed. Test listener teardown was corrected; production close still rejects unconfirmed receipts. First run source changed during execution and is not frozen evidence."
+    },
+    {
+      "record": "artifacts/manual-type-parameter-write-validation-20261105-01/manual-transport-native-r2.json",
+      "cause": "R2 passed before the final correlated-result projection; retained as intermediate evidence. R3 uses the frozen final source."
+    },
+    {
+      "cause": "Negative drift fixture shutdown closes only its own HTTP listener and connections after the expected core.close refusal, retaining synthesized original request/response and unknown facts in local artifacts. This is not verified production close or model rollback."
+    },
+    {
+      "cause": "Previously recorded 17 broader UI fixture failures and fixed35ms query timing sensitivity are not repaired here; no complete-repository suite success is claimed."
+    }
+  ],
+  "realRevitLoadVerified": false,
+  "realModelExecutionVerified": false,
+  "realWebViewVerified": false,
+  "realCodexConversationVerified": false,
+  "customerMachineVerified": false,
+  "installedPluginChanged": false,
+  "userServiceRestarted": false,
+  "codexBundled": false,
+  "installable": false,
+  "releaseReady": false,
+  "remaining": [
+    "Other selected P1 common commands",
+    "Native schematic and annotation before removing their dependencies",
+    "Four package runtime blockers in candidate.missing",
+    "Third-party/plugin licenses, pypdf, data upgrade/restore and license backend",
+    "Actual Revit/WebView/Codex and clean-customer acceptance"
+  ],
+  "automationShouldRemainEnabled": true,
+  "planComplete": false,
+  "externalOnlyRemaining": false
+}

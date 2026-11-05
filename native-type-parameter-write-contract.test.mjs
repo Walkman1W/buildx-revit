@@ -18,13 +18,14 @@ export function typeWriteValue(args=typeWriteArgs()){
 }
 const reject=args=>{assert.throws(()=>assertNativeTypeParameterWriteArguments(TYPE_WRITE_TOOL,args));assert.throws(()=>validateToolArguments(TYPE_WRITE_TOOL,args));};
 
-test('type writing owns one explicit guarded operation without entering raw MCP or the manual command path',()=>{
+test('type writing owns one guarded operation with a reviewed manual intent and no raw MCP exposure',()=>{
   assert.deepEqual(NATIVE_TYPE_PARAMETER_WRITE_NAMES,[TYPE_WRITE_TOOL]);assert.equal(isNativeTypeParameterWrite(TYPE_WRITE_TOOL),true);assert.equal(nativeTypeParameterWriteOperationForTool(TYPE_WRITE_TOOL),'set_type_parameter');
   for(const name of ['set_type_parameter','revit_set_parameters','revit_set_parameter_value','constructor'])assert.equal(isNativeTypeParameterWrite(name),false);
   assert.equal(WORKBENCH_TOOLS.filter(item=>item.name===TYPE_WRITE_TOOL).length,1);assert.ok(Object.isFrozen(tool.inputSchema));assert.equal(tool.annotations.readOnlyHint,false);assert.equal(tool.annotations.idempotentHint,false);
   assert.equal(modelOperationEffect(TYPE_WRITE_TOOL).kind,'model_transaction');assert.ok(MODEL_AI_EFFECT_TOOLS.some(item=>item.name===TYPE_WRITE_TOOL));
   assert.ok(!MODEL_AI_READ_TOOLS.some(item=>item.name===TYPE_WRITE_TOOL));assert.ok(!LEGACY_PANEL_WORKBENCH_TOOLS.some(item=>item.name===TYPE_WRITE_TOOL));
-  assert.equal(modelCommandByTool(TYPE_WRITE_TOOL).enabled,true);assert.equal(modelCommandByTool(TYPE_WRITE_TOOL).manualExecution,false);
+  assert.equal(modelCommandByTool(TYPE_WRITE_TOOL).enabled,true);assert.equal(modelCommandByTool(TYPE_WRITE_TOOL).manualExecution,true);
+  assert.equal(modelCommandByTool(TYPE_WRITE_TOOL).requiresTypeParameterReview,true);
 });
 
 test('host 0.8.8 and its independent exact operation are mandatory without raising old operation minima',()=>{

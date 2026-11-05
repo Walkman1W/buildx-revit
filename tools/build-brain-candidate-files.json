@@ -290,5 +290,11 @@
   "test-support/native-type-parameter-write-approval-fixtures.mjs",
   "test-support/native-type-parameter-write-producer.mjs",
   "test-support/native-type-parameter-write-peers.cs",
-  "test-support/native-type-parameter-write-transport-fixtures.mjs"
+  "test-support/native-type-parameter-write-transport-fixtures.mjs",
+  "public/manual-type-parameter-write-field.mjs",
+  "native-type-parameter-write-manual-http.test.mjs",
+  "native-type-parameter-write-manual-ui.test.mjs",
+  "native-type-parameter-write-manual-transport.test.mjs",
+  "test-support/native-type-parameter-write-manual-transport-fixtures.mjs",
+  "test-support/native-type-parameter-write-manual-http-fixtures.mjs"
 ]
