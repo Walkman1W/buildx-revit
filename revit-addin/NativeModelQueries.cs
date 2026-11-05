@@ -289,15 +289,18 @@ namespace RevitLocalCodex
 
         internal sealed class ReadBudget
         {
-            private readonly Stopwatch watch = Stopwatch.StartNew();
+            private readonly Stopwatch watch;
             private readonly int maximumScanned;
             private int estimatedCharacters = 4096;
             internal int Scanned;
-            internal ReadBudget(int maxScanned = MaximumScan)
+            internal ReadBudget(int maxScanned = MaximumScan) : this(maxScanned, Stopwatch.StartNew()) { }
+            private ReadBudget(int maxScanned, Stopwatch sharedWatch)
             {
                 if (maxScanned < 1 || maxScanned > MaximumScan) throw new ArgumentOutOfRangeException("maxScanned");
                 maximumScanned = maxScanned;
+                watch = sharedWatch;
             }
+            internal ReadBudget Fork() { return new ReadBudget(maximumScanned, watch); }
             internal void Scan()
             {
                 if (++Scanned > maximumScanned || watch.ElapsedMilliseconds > 5000) throw new InvalidOperationException("Native query scan/time budget exceeded; no partial coverage published.");

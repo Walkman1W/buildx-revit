@@ -10,10 +10,10 @@ using Autodesk.Revit.UI;
 namespace RevitLocalCodex
 {
     // Explicit, typed Revit operations. All methods are called from ExternalEvent.Execute.
-    internal static class WorkbenchActions
+    internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_type_parameters", "get_parameter_value" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "move_elements", "copy_elements", "create_wall", "create_pipe" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -76,6 +76,7 @@ namespace RevitLocalCodex
 
         internal static object Write(UIApplication uiapp, string operation, Dictionary<string, object> args)
         {
+            if (operation == "set_type_parameter") return WriteTypeParameter(uiapp, args);
             Document doc = uiapp.ActiveUIDocument.Document;
             // Each operation owns exactly one transaction. The caller's TransactionGroup
             // decides rollback vs commit; no method saves the document.
@@ -138,9 +139,7 @@ namespace RevitLocalCodex
                 {
                     // Set's Boolean reports whether Revit changed a value; it
                     // does not establish that the requested value was retained.
-                    if (storageType == StorageType.Double) parameter.Set((double)expected);
-                    else if (storageType == StorageType.Integer) parameter.Set((int)expected);
-                    else parameter.Set((string)expected);
+                    SetParameterValue(parameter, storageType, expected);
                 }
                 // Set can replace API wrappers or change another target's owner.
                 // Do not verify a cached Parameter that is no longer selected.
@@ -231,6 +230,13 @@ namespace RevitLocalCodex
                 return (string)value;
             }
             throw new InvalidOperationException("Only Double, Integer and String parameters can be written; ElementId parameters are not supported.");
+        }
+
+        private static void SetParameterValue(Parameter parameter, StorageType storage, object value)
+        {
+            if (storage == StorageType.Double) parameter.Set((double)value);
+            else if (storage == StorageType.Integer) parameter.Set((int)value);
+            else parameter.Set((string)value);
         }
 
         private static string ParameterDataType(Parameter parameter)

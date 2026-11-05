@@ -91,16 +91,31 @@ namespace RevitLocalCodex
             return selected;
         }
 
+        internal sealed class TypeImpactSnapshot
+        {
+            internal readonly long TypeId;
+            internal readonly string TypeName;
+            internal readonly object ParameterFact, Coverage;
+            private readonly string[] ids;
+            internal TypeImpactSnapshot(long typeId, string typeName, object parameter, string[] instanceIds, object coverage)
+            { TypeId = typeId; TypeName = typeName; ParameterFact = parameter; ids = (string[])instanceIds.Clone(); Coverage = coverage; }
+            internal string[] InstanceIds { get { return (string[])ids.Clone(); } }
+            internal object Dto() { return new { schema_version = 1, type_id = NativeModelQueries.SignedId(new ElementId(TypeId)), type_name = TypeName,
+                parameter = ParameterFact, instance_ids = InstanceIds, instance_count = ids.Length, coverage = Coverage, write_authorization = "not_granted" }; }
+        }
+
         private static object TypeParameterImpact(Document doc, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
         {
             long typeId = NativeModelQueries.ExactId(args, "type_id");
-            ElementType type = doc.GetElement(new ElementId(typeId)) as ElementType;
-            if (type == null || !type.IsValidObject || type.Id == null || type.Id.Value != typeId || type.Document == null || !type.Document.Equals(doc))
-                throw new InvalidOperationException("type_id must identify the exact valid ElementType in the current document.");
-            Parameter selected = SelectParameter(type, args, budget);
-            Element owner = selected.Element;
-            if (!(owner is ElementType) || !owner.IsValidObject || owner.Id == null || owner.Id.Value != typeId || owner.Document == null || !owner.Document.Equals(doc))
-                throw new InvalidOperationException("Parameter is not owned by the explicitly selected ElementType in the current document.");
+            if (!args.ContainsKey("parameter_id")) throw new InvalidOperationException("Exactly one parameter_id selector is required.");
+            long parameterId = NativeModelQueries.ExactSignedId(args, "parameter_id");
+            ElementType type; Parameter selected;
+            return CaptureTypeImpact(doc, typeId, parameterId, budget, out type, out selected).Dto();
+        }
+
+        internal static TypeImpactSnapshot CaptureTypeImpact(Document doc, long typeId, long parameterId, NativeModelQueries.ReadBudget budget, out ElementType type, out Parameter selected)
+        {
+            selected = ResolveTypeParameter(doc, typeId, parameterId, budget, out type);
             object parameter = WorkbenchActions.DescribeParameter(selected, true);
             budget.Reserve(new { schema_version = 1, type_id = NativeModelQueries.SignedId(type.Id), type_name = type.Name, parameter });
             var instanceIds = new List<long>();
@@ -129,8 +144,24 @@ namespace RevitLocalCodex
             for (int index = 0; index < instanceIds.Count; index++) ids[index] = NativeModelQueries.SignedId(new ElementId(instanceIds[index]));
             object coverage = new { complete = true, scope = "current_document_direct_type_references", scanned_elements = scannedElements, indirect_effects = "not_assessed" };
             budget.Reserve(new { instance_count = ids.Length, coverage, write_authorization = "not_granted" });
-            return new { schema_version = 1, type_id = NativeModelQueries.SignedId(type.Id), type_name = type.Name, parameter,
-                instance_ids = ids, instance_count = ids.Length, coverage, write_authorization = "not_granted" };
+            return new TypeImpactSnapshot(typeId, type.Name, parameter, ids, coverage);
+        }
+
+        internal static Parameter ResolveTypeParameter(Document doc, long typeId, long parameterId, NativeModelQueries.ReadBudget budget, out ElementType type)
+        {
+            type = doc.GetElement(new ElementId(typeId)) as ElementType;
+            if (type == null || !type.IsValidObject || type.Id == null || type.Id.Value != typeId || type.Document == null || !type.Document.Equals(doc))
+                throw new InvalidOperationException("type_id must identify the exact valid ElementType in the current document.");
+            Parameter selected = SelectParameter(type, new Dictionary<string, object> { { "parameter_id", NativeModelQueries.SignedId(new ElementId(parameterId)) } }, budget);
+            RequireTypeOwner(doc, type, selected, typeId, parameterId);
+            return selected;
+        }
+        internal static void RequireTypeOwner(Document doc, ElementType type, Parameter selected, long typeId, long parameterId)
+        {
+            Element owner = selected.Element;
+            if (!type.IsValidObject || type.Id == null || type.Id.Value != typeId || type.Document == null || !type.Document.Equals(doc) || selected.Id == null || selected.Id.Value != parameterId ||
+                !(owner is ElementType) || !owner.IsValidObject || owner.Id == null || owner.Id.Value != typeId || owner.Document == null || !owner.Document.Equals(doc))
+                throw new InvalidOperationException("Parameter is not owned by the explicitly selected ElementType in the current document.");
         }
     }
 }

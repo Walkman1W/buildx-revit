@@ -1,6 +1,7 @@
 // Isolated production composer fixture. No browser, sockets or native process.
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
 import * as chatView from '../public/chat-view.mjs';
 import {mountModelWorkspace} from '../public/model-workspace.mjs';
 
@@ -39,7 +40,7 @@ class Element {
 }
 export const session=(id='chat-a',messages=[],readOnly=false)=>({conversation:{id,readOnly},messages,context:{document:null,selection:null,capturedAt:null},contextEpoch:0,historyTruncated:false});
 export const file=(name,value,type='')=>{const bytes=typeof value==='string'?new TextEncoder().encode(value):value;return {name,type,size:bytes.length,arrayBuffer:async()=>bytes.slice().buffer};};
-export async function createInputUi({kind='model',capability=true,layout=true,localStorage,timers=null}={}) {
+export async function createInputUi({kind='model',capability=true,layout=true,localStorage,timers=null,dynamicImports=false}={}) {
   const nodes=new Map(),body=new Element('body'),window=new Element('window'),document=new Element('document');let sequence=0,account={required:false};
   const find=(parent,id)=>parent.id===id?parent:parent.children.map(child=>find(child,id)).find(Boolean);
   const get=id=>{const found=find(body,id);if(found)return found;if(!nodes.has(id)){const item=new Element();item.id=id;nodes.set(id,item);body.append(item);}return nodes.get(id);};
@@ -55,7 +56,7 @@ export async function createInputUi({kind='model',capability=true,layout=true,lo
     if(url.startsWith('/api/chats?'))return {ok:true,json:async()=>({ok:true,available:true,sessions:[],complete:true})};
     const response=deferred();requests.push({url,body:JSON.parse(options.body),options,...response});return response.promise;
   }};
-  const context=vm.createContext(sandbox);vm.runInContext(source.replace(/^import \{([^}]+)\} from '\.\/chat-view\.mjs';/,'const {$1} = __chatView;'),context,{filename:'production/public/app.js'});await flush();
+  const context=vm.createContext(sandbox);vm.runInContext(source.replace(/^import \{([^}]+)\} from '\.\/chat-view\.mjs';/,'const {$1} = __chatView;'),context,{filename:fileURLToPath(new URL('../public/app.js',import.meta.url)),...(dynamicImports?{importModuleDynamically:vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER}:{})});await flush();
   const emit=(type,data)=>Stream.all.at(-1).emit(type,data),conversation=(id,messages=[],readOnly=false)=>emit('conversation',{busy:false,session:session(id,messages,readOnly),history:{available:true,activeId:id}});
   emit('snapshot',{busy:false,session:session(),history:{available:true,activeId:'chat-a'}});
   if(layout&&kind==='model')mountModelWorkspace({document,window,CustomEvent:UiEvent,Event:UiEvent});

@@ -1,0 +1,2095 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-05T02:02:51.875Z",
+  "sourceBaseCommit": "83e39ac36ad42582664612824717f8900fc0fe36",
+  "version": "0.8.8-internal-type-parameter-write",
+  "slice": {
+    "task": "BX-006",
+    "tool": "revit_set_type_parameter",
+    "operation": "set_type_parameter",
+    "hostVersion": "0.8.8",
+    "assemblyVersion": "0.8.8.0",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "expected_document": {
+          "type": "string",
+          "description": "Exact saved-document path from workbench status; must be allowed.",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "rollback",
+            "commit"
+          ],
+          "default": "rollback",
+          "description": "rollback reads the result then undoes model changes; commit keeps changes in memory without saving."
+        },
+        "type_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9]\\d{0,18}$",
+              "maxLength": 19
+            }
+          ]
+        },
+        "parameter_id": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^-?(?:0|[1-9]\\d{0,18})$",
+              "maxLength": 20
+            }
+          ],
+          "not": {
+            "enum": [
+              0,
+              -1,
+              "0",
+              "-1"
+            ]
+          }
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 8192
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "value_unit": {
+          "type": "string",
+          "enum": [
+            "internal"
+          ]
+        },
+        "expected_state": {
+          "type": "object",
+          "properties": {
+            "storage_type": {
+              "type": "string",
+              "enum": [
+                "Double",
+                "Integer",
+                "String"
+              ]
+            },
+            "has_value": {
+              "type": "boolean"
+            },
+            "value_internal": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 8192
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "data_type": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1024
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "storage_type",
+            "has_value",
+            "value_internal",
+            "data_type"
+          ],
+          "additionalProperties": false
+        },
+        "expected_instance_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[1-9]\\d{0,18}$",
+            "maxLength": 19
+          },
+          "maxItems": 500
+        }
+      },
+      "required": [
+        "expected_document",
+        "type_id",
+        "parameter_id",
+        "value",
+        "expected_state",
+        "expected_instance_ids"
+      ],
+      "additionalProperties": false
+    },
+    "capability": {
+      "nativeTypeParameterWritesVersion": 1,
+      "nativeTypeParameterWriteOperations": [
+        "set_type_parameter"
+      ]
+    },
+    "manualExecution": false,
+    "chatApprovalImplemented": true,
+    "requiredApprovalModes": [
+      "rollback",
+      "commit",
+      "automatic_permission"
+    ],
+    "trustedPreparation": "Actual native impact plus 120s single-use document/request-bound host capability; process-local WeakMap identity in Node",
+    "humanDecision": "Existing Origin/CSRF/client/conversation/current-grant HTTP boundary; original five fields; no model ack",
+    "nativeDocumentIdentity": "Existing RevitProjectDocumentSource.SameOpenDocument; no path/title-only substitute",
+    "nativeBook": {
+      "monotonicExpirySeconds": 120,
+      "maximumPending": 128,
+      "consumeOnce": true
+    },
+    "target": "Current saved project ElementType and its own exact parameter",
+    "guards": [
+      "storage_type",
+      "has_value",
+      "value_internal",
+      "data_type",
+      "complete_sorted_direct_instance_ids"
+    ],
+    "revalidation": [
+      "before_Set",
+      "immediate_readback",
+      "after_Regenerate",
+      "after_inner_Commit"
+    ],
+    "callbackBudget": {
+      "sharedMilliseconds": 5000,
+      "perPhaseScan": 20000,
+      "maximumDirectInstances": 500,
+      "partialAllowed": false
+    },
+    "directScope": "current_document_direct_type_references",
+    "indirectEffects": "not_assessed",
+    "scriptSandboxClaimed": false,
+    "originalReceiptRetainedFor": [
+      "unknown_preparation_read",
+      "unconfirmed_read_cleanup",
+      "unknown_write"
+    ],
+    "latePreparationContinuesWrite": false,
+    "unknownOperationAutoReplay": false,
+    "oldInstanceWriteTargetPolicy": "instance_only"
+  },
+  "validationScope": [
+    "Source and public contracts",
+    "Controlled loopback HTTP/fake Codex",
+    "Actual production C# extracted with controlled API peers",
+    "Actual temporary filesystem queue and stdio MCP",
+    "Actual Revit 2024 API reference compilation",
+    "ZIP entry/extracted package pure-memory checks"
+  ],
+  "checks": [
+    {
+      "key": "typeWrite",
+      "command": "node --test --test-concurrency=1 native-type-parameter-write-contract.test.mjs native-type-parameter-write-approval.test.mjs native-type-parameter-write-http.test.mjs native-type-parameter-write-producer.test.mjs native-type-parameter-write-transport.test.mjs native-type-parameter-write-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 180,
+      "passed": 180,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 111276,
+      "log": "typeWrite-root-final.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/typeWrite-root-final.tap.log",
+      "sha256": "6b663069fb5cac06734663846337095a40145022f3e87c5d2b16b8f89cefea70"
+    },
+    {
+      "key": "native",
+      "command": "node --test --test-concurrency=1 native-model-queries.test.mjs native-model-query-producer.test.mjs native-query-transport.test.mjs native-six-mcp-client.test.mjs atomic-workbench-read.test.mjs model-workspace-registry.test.mjs workbench-client.test.mjs assistant-instructions.test.mjs panel-read-commands.test.mjs command-dispatch-integration.test.mjs model-document-preflight.test.mjs model-operation-contracts.test.mjs native-access-transport.test.mjs live-tool-receipt.test.mjs",
+      "exitCode": 0,
+      "tests": 182,
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 69095,
+      "log": "native-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/native-root-final-r2.tap.log",
+      "sha256": "de9b381d7d8b8a6980fbebd6f076eaccf84ed3ec09a2572c4d055610f635162c"
+    },
+    {
+      "key": "layout",
+      "command": "node --test --test-concurrency=1 buildx-paths.test.mjs installed-layout-mcp.test.mjs installation-layout-native.test.mjs installation-identity.test.mjs data-root-panel.test.mjs portable-runtime.test.mjs service-startup-probe.test.mjs service-identity-http.test.mjs server-lifecycle.test.mjs access-services.test.mjs visual-artifact-owner.test.mjs visual-chat-artifacts-http.test.mjs panel-core-boundary.test.mjs local-runtimes.test.mjs runtime-discovery.test.mjs buildx-installer.test.mjs buildx-setup.test.mjs installer-directory-owner.test.mjs tools/build-brain-candidate.test.mjs",
+      "exitCode": 0,
+      "tests": 105,
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 109326,
+      "log": "layout-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/layout-root-final-r2.tap.log",
+      "sha256": "9348e83fffeac6ea768e1d22dcceab29be6ff04adb474570c73fa300eb96dafe"
+    },
+    {
+      "key": "typeRead",
+      "command": "node --test --test-concurrency=1 native-type-parameter-contract.test.mjs native-type-parameter-producer.test.mjs native-type-parameter-transport.test.mjs",
+      "exitCode": 0,
+      "tests": 24,
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 25673,
+      "log": "typeRead-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/typeRead-root-final-r2.tap.log",
+      "sha256": "19f13d73b7f44131e91555a0d457813c923bd85ba36d7db7c063009f31d7277e"
+    },
+    {
+      "key": "singleRead",
+      "command": "node --test --test-concurrency=1 native-single-parameter-contract.test.mjs native-single-parameter-producer.test.mjs native-single-parameter-transport.test.mjs exact-id-fields.test.mjs command-fields.test.mjs model-command-workspace-ui.test.mjs model-workspace.test.mjs",
+      "exitCode": 0,
+      "tests": 79,
+      "passed": 79,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 60491,
+      "log": "singleRead-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/singleRead-root-final-r2.tap.log",
+      "sha256": "2384bc4ccc599dc612448a23554f0c96ae678d36c7e814597b0acd3fe3ea7a44"
+    },
+    {
+      "key": "catalog",
+      "command": "node --test --test-concurrency=1 codex-profile.test.mjs assistant-instructions.test.mjs workbench-client.test.mjs",
+      "exitCode": 0,
+      "tests": 23,
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 3169,
+      "log": "catalog-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/catalog-root-final-r2.tap.log",
+      "sha256": "dc26cc5ea07352ff86c3f4b9c261d89362384706815ac1128a5edd9e676d6140"
+    },
+    {
+      "key": "batch",
+      "command": "node --test --test-concurrency=1 native-parameter-write-producer.test.mjs parameter-write-result.test.mjs native-parameter-write-transport.test.mjs model-write-publication.test.mjs",
+      "exitCode": 0,
+      "tests": 117,
+      "passed": 117,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 77675,
+      "log": "batch-root-final.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/batch-root-final.tap.log",
+      "sha256": "08ba86e745a3f8bc3fda4ccc2c33b4f2f892f730e988e1103b9b38128b98bb39"
+    },
+    {
+      "key": "singleWrite",
+      "command": "node --test --test-concurrency=1 native-single-parameter-write-contract.test.mjs native-single-parameter-write-producer.test.mjs native-single-parameter-write-transport.test.mjs native-single-parameter-write-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 125,
+      "passed": 125,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 87128,
+      "log": "singleWrite-root-final.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/singleWrite-root-final.tap.log",
+      "sha256": "994d4424c2de87805a6e4d0c3f557ad4ca59441221abcfc3ea8c1b28369238e0"
+    },
+    {
+      "key": "policy",
+      "command": "node --test --test-concurrency=1 parameter-write-instance-policy-contract.test.mjs parameter-write-instance-policy-producer.test.mjs parameter-write-instance-policy-transport.test.mjs parameter-write-instance-policy-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 87,
+      "passed": 87,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 47027,
+      "log": "policy-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/policy-root-final-r2.tap.log",
+      "sha256": "48bf88b5d58a0a9bc30dfe3a0c619cb6783364830c22eec2920a61cbaacf9e93"
+    },
+    {
+      "key": "impact",
+      "command": "node --test --test-concurrency=1 native-type-parameter-impact-contract.test.mjs native-type-parameter-impact-producer.test.mjs native-type-parameter-impact-transport.test.mjs native-type-parameter-impact-ui.test.mjs",
+      "exitCode": 0,
+      "tests": 65,
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 56593,
+      "log": "impact-root-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/impact-root-final-r2.tap.log",
+      "sha256": "374e34481ca02ecfacf8bd011a52544e6668c005e2e7e8e4cddf5af22f61f5f4"
+    },
+    {
+      "command": "node --test native-type-parameter-write-approval.test.mjs native-type-parameter-write-http.test.mjs lib/model-permission-owner.test.mjs lib/model-permission-services.test.mjs lib/model-permission-family-lifecycle.test.mjs panel-model-permission-integration.test.mjs panel-dynamic-approval.test.mjs model-dynamic-admission.test.mjs",
+      "tests": 92,
+      "passed": 92,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "durationMs": 3257.5975,
+      "log": "node-approval-owner-final-r2.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/node-approval-owner-final-r2.tap.log",
+      "sha256": "d39a5076e7299dcb81f2c396e4c06d45469338356d37b175355d8642f311df53"
+    },
+    {
+      "command": "node --test native-type-parameter-write-contract.test.mjs native-type-parameter-write-transport.test.mjs",
+      "tests": 20,
+      "passed": 20,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "durationMs": 34018.5807,
+      "log": "node-transport-final.tap.log",
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/node-transport-final.tap.log",
+      "sha256": "2d918dce240210ef51878c8a9c0f166137ce52523aecac59fffb2bca76f4212c"
+    },
+    {
+      "key": "host",
+      "tests": 80,
+      "passed": 80,
+      "failed": 0,
+      "skipped": 0,
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/host-final-r2/results.json",
+      "sha256": "3f7b4e6602f9a0bbc72b3d583fef5928e8282b4080c582a56b9d4a203eeb987c",
+      "scope": "Actual scheduling/access/native document identity with controlled business peers; type writer is out of scope in this harness."
+    }
+  ],
+  "toolAdvertisementBudget": {
+    "defaultBytes": 31583,
+    "familyLifecycleBytes": 32756,
+    "limitBytes": 32768
+  },
+  "nativeProducer": {
+    "record": "artifacts/native-type-parameter-write-validation-20261105-01/producer-final-summary.json",
+    "sha256": "3c3193ae8becd7a4831e3d86a29403ed701c463742a019fafa736f0365ad8cea",
+    "actualNewTests": 124,
+    "legacyProducerRegressionTests": 285,
+    "overlapsOtherGroups": true,
+    "realRevitExecuted": false
+  },
+  "ui": {
+    "newTests": 14,
+    "relatedRegressionTests": 78,
+    "broaderBaselineComparison": {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/ui-existing-baseline-comparison.json",
+      "sha256": "0cb07c9592e6c15a0b1dab935a3f986c1f11a94a9a0a98b6cec1e7368189f4ea",
+      "tests": 84,
+      "passed": 67,
+      "failed": 17,
+      "sameFailuresAtHeadAndCurrent": true,
+      "unfixed": true
+    }
+  },
+  "compilation": {
+    "record": "artifacts/native-type-parameter-write-validation-20261105-01/api-build-final-r3.log",
+    "sha256": "51fa9d1ebbfc9a5b3a2014739b440d5093a195b7a9b9b3e5d93466a20975ff87",
+    "inputSources": 34,
+    "compilerExit": 0,
+    "compilerOptions": [
+      "/target:library",
+      "/platform:x64",
+      "/langversion:5",
+      "/optimize+",
+      "/debug-"
+    ],
+    "dllSha256": "5a59454a41b674e3d599db717c22a02992191c891d77d27486546e77749b3c90",
+    "dependencies": [
+      {
+        "file": "RevitAPI.dll",
+        "version": "24.3.30.11",
+        "sha256": "eb3ade235237b300e699176ed91786b3998cc30d889b95a2e45f84d556b6df0d"
+      },
+      {
+        "file": "RevitAPIUI.dll",
+        "version": "24.3.30.11",
+        "sha256": "a7dc0e93ba4c29fad6549262b611a3231b9f0b9e5739e69381d1d2f08d8e7097"
+      },
+      {
+        "file": "Microsoft.Web.WebView2.Core.dll",
+        "version": "1.0.2478.35",
+        "sha256": "616157863b1cd1f1330b4914dd013adef10a4ce8cd819598fd6bd4037c2c1646"
+      },
+      {
+        "file": "Microsoft.Web.WebView2.Wpf.dll",
+        "version": "1.0.2478.35",
+        "sha256": "7ca01881df23afbe6a19b60b37c1b92ea0f2ca61248228fbdfb4d30445dc6474"
+      },
+      {
+        "file": "WebView2Loader.dll",
+        "version": "1.0.2478.35",
+        "sha256": "1cbca1698175936a93d0c4d4148ed355e1b91415c6a4db6d762f017de3b6eb9a"
+      },
+      {
+        "file": "LICENSE.txt",
+        "version": null,
+        "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+      },
+      {
+        "file": "NOTICE.txt",
+        "version": null,
+        "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90"
+      },
+      {
+        "file": "microsoft.web.webview2.1.0.2478.35.nupkg",
+        "version": null,
+        "sha256": "b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96"
+      },
+      {
+        "file": "microsoft.web.webview2.nuspec",
+        "version": null,
+        "sha256": "471895cececcdbb4f87362f50eb79767745f7889e9307ccc0dc15e16404d2689"
+      },
+      {
+        "file": ".nupkg.metadata",
+        "version": null,
+        "sha256": "5f06300e83a10c990db9c7bae33ea58cd4567b80b4e55d2cd28cdd19bcbd6d82"
+      },
+      {
+        "file": "csc.exe",
+        "version": "4.8.9221.0 built by: NET481REL1LAST_25H2",
+        "sha256": "46809206887326d2d24db1eff1f3064de972c3451abe766b49111450a5e08e00"
+      }
+    ],
+    "loaded": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-type-parameter-write-20261105-02",
+    "productVersion": "0.8.8-internal-type-parameter-write",
+    "releaseReady": false,
+    "files": 148,
+    "totalBytes": 19497683,
+    "manifestSha256": "249a9d01d80a8942fed623dbe3d905823fe4697cac79a2202e754150d0e37360",
+    "modules": 102,
+    "imports": 331,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "5a59454a41b674e3d599db717c22a02992191c891d77d27486546e77749b3c90",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-14",
+    "sourceFiles": 292,
+    "sourceModules": 216,
+    "sourceReferences": 689,
+    "sourceManifestSha256": "a54d6c85eca23217545a409a4eaf5220df7cc81541cb92f632abd07444f62bb0",
+    "currentSourceMismatches": [],
+    "buildSources": 34,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false,
+    "record": "artifacts/native-type-parameter-write-validation-20261105-01/candidate-audit-final-r2.json",
+    "sha256": "c472f28e72a1c6c5f075a7282ef434487605a456d0d29677989b7782ecb02b08"
+  },
+  "archives": {
+    "record": "artifacts/native-type-parameter-write-validation-20261105-01/archive-roundtrip-r2.json",
+    "sha256": "087f99f2528be799f61d17e8eeaff547b6a63e9bd208f8b34f0ff6ff698261f7",
+    "passed": true,
+    "archives": [
+      {
+        "path": "artifacts/BuildX-Revit2024-0.8.8-internal-type-parameter-write-20261105-r2.zip",
+        "kind": "runtime",
+        "bytes": 7427718,
+        "files": 149,
+        "sha256": "68fd39be0ef23b093e9b51005ddb56330fc024f683da9005616d5f44edfa49de",
+        "entryReadbackVerified": true,
+        "inputsUnchanged": true
+      },
+      {
+        "path": "artifacts/BuildX-Source-0.8.8-internal-type-parameter-write-20261105-r2.zip",
+        "kind": "source",
+        "bytes": 1214130,
+        "files": 294,
+        "sha256": "7ee1a39b5a99c6d875da7cbfc52a224a79276b2e1fdf5ec4c9a6ccb86baf75b4",
+        "entryReadbackVerified": true,
+        "inputsUnchanged": true
+      }
+    ],
+    "noModelBusinessCalls": true
+  },
+  "sourceFiles": [
+    {
+      "path": "package.json",
+      "bytes": 3571,
+      "sha256": "cfeeb4d6c5ddbf6caa455688ccbb876f61b4857e9173a16c029f393bea29e9ad"
+    },
+    {
+      "path": "server.mjs",
+      "bytes": 4393,
+      "sha256": "7476ec5dd71ed4c6cf2f1328e2877f4b17f1cd70c2a6b907e2e7818df8f01e9b"
+    },
+    {
+      "path": "workbench-mcp.mjs",
+      "bytes": 4026,
+      "sha256": "dd01651ce7997aaabc7c79a732b079d03f85f2e641f480b0e978db2ce59453f1"
+    },
+    {
+      "path": "prompts/buildx-assistant.zh-CN.md",
+      "bytes": 12451,
+      "sha256": "85649ce835e43f0d6613599607c549df4bffa1d8531f49af893c3ec872727811"
+    },
+    {
+      "path": "public/bim-x-logo.png",
+      "bytes": 87484,
+      "sha256": "d42e79142c95c89b70c96325dcd13aa1159949feed13cf58614f4c3c0ef9e564"
+    },
+    {
+      "path": "lib/api-provider-launch.mjs",
+      "bytes": 6749,
+      "sha256": "70166c53e196691c5f0bf2dc725bc35a3c2db93df1f4cc75d434bd8639a0161c"
+    },
+    {
+      "path": "lib/approved-terminal-gate.mjs",
+      "bytes": 10181,
+      "sha256": "d798c3c55f46a4a3ec46be4c3f10468987e6972f4bff2d93b9506b0d8cd8d317"
+    },
+    {
+      "path": "lib/argus-readonly-probe.mjs",
+      "bytes": 4880,
+      "sha256": "aa56d650a258a0fead9d34b869f819a6e92aa4ea0d264cac7cef57c4e6312f98"
+    },
+    {
+      "path": "lib/assistant-instructions.mjs",
+      "bytes": 997,
+      "sha256": "abc9afd8bb8a823447ff895d8a2953b1feb3c4bf390be84635e929f89610e9ff"
+    },
+    {
+      "path": "lib/buildx-auth.mjs",
+      "bytes": 18163,
+      "sha256": "969ee242b837e2c332cc0d5c4c58d12048459f104e76f6618991d50a759511fe"
+    },
+    {
+      "path": "lib/buildx-runtime-config.mjs",
+      "bytes": 1521,
+      "sha256": "5c77c88065a1e6cb55007781f2d3905a32ef601d8e3243c53bc8cd493f196f4e"
+    },
+    {
+      "path": "lib/cad-candidates.mjs",
+      "bytes": 8226,
+      "sha256": "24ae5c6d0e850b81f13b90b322bad923cc6629f7ffb478fdbd43de6dfbcdd4f3"
+    },
+    {
+      "path": "lib/cad-document-path.mjs",
+      "bytes": 804,
+      "sha256": "8efa2f77e8a1716aebd1445122abb8ceb82d44c92fb015547ab582e2bb603a92"
+    },
+    {
+      "path": "lib/cad-dxf-reader.mjs",
+      "bytes": 14563,
+      "sha256": "36fe2cb7444f75608b7d3e62b5cf6ed6d9d2c9d6c22ae187ae2c43b0aefbfcef"
+    },
+    {
+      "path": "lib/cad-inventory.mjs",
+      "bytes": 16635,
+      "sha256": "b9b077056504a7b7f838ac4827fb15b30af9978f1bd8a4955495f98c6c22aabb"
+    },
+    {
+      "path": "lib/cad-read-report.mjs",
+      "bytes": 14625,
+      "sha256": "5cf11e8b195fec9d37f0e7e1c23aa033a0760cc5bf0ef0d51eae6b4050ecf4b0"
+    },
+    {
+      "path": "lib/cad-tools.mjs",
+      "bytes": 9244,
+      "sha256": "c15db40d88cb340496985dba4ee2412570dc34cf20e1c92fc3dfe682643bd98a"
+    },
+    {
+      "path": "lib/chat-context.mjs",
+      "bytes": 3376,
+      "sha256": "b85f716d7b62fb898524c28b7ae61a1ca1812e69d65ac6e97d9a78df283c16d9"
+    },
+    {
+      "path": "lib/chat-session.mjs",
+      "bytes": 19560,
+      "sha256": "52786754f95f19e9c8c13c16a3b1949210262693c34acf2cacd5e44f2d85d6a7"
+    },
+    {
+      "path": "lib/chat-store.mjs",
+      "bytes": 40421,
+      "sha256": "71f32e1424b939d15a86c7bd27985386d3224158fdb2d14720424f01f401d87d"
+    },
+    {
+      "path": "lib/codex-client-core.mjs",
+      "bytes": 70222,
+      "sha256": "dae44577341c60b92b7fe6e71d74a80fa0d69c30c129d77365df3a146959e7d9"
+    },
+    {
+      "path": "lib/codex-client.mjs",
+      "bytes": 1432,
+      "sha256": "4046304fa6f7d02377a598bf098be95db9f4e87e0227b23a41050d74214a11c7"
+    },
+    {
+      "path": "lib/codex-confirmation.mjs",
+      "bytes": 10921,
+      "sha256": "a8a58e5165a3e9f47ebe07235601d600b7f04c4898c38043ef4246949c3b039f"
+    },
+    {
+      "path": "lib/codex-profile.mjs",
+      "bytes": 28307,
+      "sha256": "1bfc21d6c9da7fef374e0cf1bb1cef61bb7d7a66ca6e2b1870a69361f58ee99e"
+    },
+    {
+      "path": "lib/command-sequence.mjs",
+      "bytes": 6669,
+      "sha256": "d0ec8cfe7f4ecb66a1061c1424772d473461fcd237a379f6a3a0a5d0450bb877"
+    },
+    {
+      "path": "lib/command-store.mjs",
+      "bytes": 31707,
+      "sha256": "6706fcaa7d4eba5fe35a13b794cbb63839b3a7d49ec82d6d4a435235ae07ab6d"
+    },
+    {
+      "path": "lib/customer-assets.mjs",
+      "bytes": 443,
+      "sha256": "3ddd4301e7ff4ca83dfe438440a19aeec6c187c5fe53dcf4797e6959a707b7f6"
+    },
+    {
+      "path": "lib/customer-chat-package.mjs",
+      "bytes": 696,
+      "sha256": "4a2d0fc503ea091bf3dfdad66ace5e954cc04fb18a646f88209278b25feab993"
+    },
+    {
+      "path": "lib/customer-chat-profile.mjs",
+      "bytes": 3120,
+      "sha256": "d47ee30bea3bf36270c801aefa0331ee2d9724a802359565eb516644f1dedeca"
+    },
+    {
+      "path": "lib/customer-chat.mjs",
+      "bytes": 6196,
+      "sha256": "aa29265349c8bf2142a61ffc3b952cc9940546fa05501d27227d3601ab20eb78"
+    },
+    {
+      "path": "lib/customer-component-builder.mjs",
+      "bytes": 19876,
+      "sha256": "c7f2f49972fe93957a7b8b18f3e1f23b2ec2749b0488788d795c74a8a726e5e9"
+    },
+    {
+      "path": "lib/customer-component-definitions.mjs",
+      "bytes": 2152,
+      "sha256": "35550c5a43426a596f1a6869c8b4720357398a3ca40be77c190359a42d0f3841"
+    },
+    {
+      "path": "lib/customer-install-plan.mjs",
+      "bytes": 7566,
+      "sha256": "ba3b46f0f87ef18a3658a470e7805f61fe8d7551e925e8e89e80df285e183ca1"
+    },
+    {
+      "path": "lib/dynamic-terminal-owner.mjs",
+      "bytes": 7094,
+      "sha256": "22add315229da2fa346347cb674872d07c0b66f15335106aaf2e3dfd3cc271a3"
+    },
+    {
+      "path": "lib/family-template-preflight.mjs",
+      "bytes": 1561,
+      "sha256": "6a9c93cf793c75d25b5c57db8772abae6fff615d75e1c96b920cf1c5dc9dbe49"
+    },
+    {
+      "path": "lib/family-tools.mjs",
+      "bytes": 6581,
+      "sha256": "158b6f83b63195c02db79a2dcaefe0cc40aee6d74faae9e2c212fe42d4048a26"
+    },
+    {
+      "path": "lib/installation-identity.mjs",
+      "bytes": 759,
+      "sha256": "cc01120923df9a8c432f8b188d2ee1efc62be6c40fc2e8198aace880bb134fa8"
+    },
+    {
+      "path": "lib/internal-api-client.mjs",
+      "bytes": 3280,
+      "sha256": "50d6dfce2b1ccfacb19e9b03bedc60bb5e46589d53b74d216b49205dde5263f5"
+    },
+    {
+      "path": "lib/local-runtimes.mjs",
+      "bytes": 6463,
+      "sha256": "56734a970557c2a2922c070fcd482f22e0e397ac615eba1222a7231d0943e00f"
+    },
+    {
+      "path": "lib/model-command-catalog.mjs",
+      "bytes": 3749,
+      "sha256": "91d2c174f39832f2827d2955e64f6670d7729b7531c931275600ba44be8a4232"
+    },
+    {
+      "path": "lib/model-tool-dispatch.mjs",
+      "bytes": 15280,
+      "sha256": "eebb075026a31d831f3eccfffc5fb58c75d5a7fe40026579982f5b5561d5eb2f"
+    },
+    {
+      "path": "lib/model-viewer-service.mjs",
+      "bytes": 7285,
+      "sha256": "4d2f7d31e3955928924de0f9cad758472cd2e2ab5cddf36f4107c5b6dc1a0d37"
+    },
+    {
+      "path": "lib/modelling-tools.mjs",
+      "bytes": 20542,
+      "sha256": "60c5ce98e85b6f717f33f1aba91a7c58aa1e5db66a72adc36d01c7a0d7478c1b"
+    },
+    {
+      "path": "lib/native-schematic-tools.mjs",
+      "bytes": 5020,
+      "sha256": "9aa1eba31d4cede35dde480dd39818729fe8880a680f63b33b70aec6dc4fdb1c"
+    },
+    {
+      "path": "lib/panel-accounts.mjs",
+      "bytes": 14683,
+      "sha256": "34d6fb0ecd930ef868ccdb9109263119e0202ab15190a586e90636eb9c8951bf"
+    },
+    {
+      "path": "lib/panel-audit.mjs",
+      "bytes": 19755,
+      "sha256": "474c98db8ecc0625c54dce1a5ce55293b17c651aeafa292207432a8bb1dfa8ed"
+    },
+    {
+      "path": "lib/panel-catalog.mjs",
+      "bytes": 7265,
+      "sha256": "878d26ed1ed2039987e97e96ecee07e69eae60440081069290c67ab54f96be29"
+    },
+    {
+      "path": "lib/panel-chat-format.mjs",
+      "bytes": 13632,
+      "sha256": "5f3ccd0d33b7b6ed9a6ff6a6a9f545b2c1c9578c77a90a7fdf7b811e1bb0bbc1"
+    },
+    {
+      "path": "lib/panel-preflight.mjs",
+      "bytes": 11534,
+      "sha256": "081c448806dc158c5a16fbc8a6d7c3b04e851127365867cc526e7f971446fa56"
+    },
+    {
+      "path": "lib/panel-profile.mjs",
+      "bytes": 3712,
+      "sha256": "69003015dad5dfe0d7ea43b1f52d0c06a9a3e7abeef362857557670b52b30d18"
+    },
+    {
+      "path": "lib/panel-server-core.mjs",
+      "bytes": 230042,
+      "sha256": "6bda4eaa965b931debd15baec8bfe343bd7efdc93b571c007cb7c6716d35627c"
+    },
+    {
+      "path": "lib/panel-server.mjs",
+      "bytes": 5325,
+      "sha256": "0277b1d515b5e6c43ce1772e373d0ea00c5f95df34d9f7ed59324727889000f2"
+    },
+    {
+      "path": "lib/panel-tools.mjs",
+      "bytes": 1947,
+      "sha256": "f34f451e291b70ac41599f92b0602be827eeaa14a90a5e005057c4755a99d050"
+    },
+    {
+      "path": "lib/project-agent-bridge.mjs",
+      "bytes": 15398,
+      "sha256": "89aeb41261935d21ad88bbfe27ad26e584be1bb016024ad6a89e71bf51d2ef31"
+    },
+    {
+      "path": "lib/project-knowledge-parser.py",
+      "bytes": 10465,
+      "sha256": "b117a14b94dbce0f66657c2dd530afc4d8256df1190abdecef8a49763fb710cc"
+    },
+    {
+      "path": "lib/project-knowledge.mjs",
+      "bytes": 24589,
+      "sha256": "40d38e6c18cc1441d83ee9d62c0093b218f1cf07769c4dae4f2597cf1bf410b0"
+    },
+    {
+      "path": "lib/server-api-gateway.mjs",
+      "bytes": 9557,
+      "sha256": "0917034da05fcf3bbeb20bb45ceff7d081e3dfab63eca8e22a7c10d07a006386"
+    },
+    {
+      "path": "lib/source-content.mjs",
+      "bytes": 11469,
+      "sha256": "d554bed307fd7ca35792810add8a83bc5347dc0e28e1ec30b5aae89df386d4f5"
+    },
+    {
+      "path": "lib/source-directory.mjs",
+      "bytes": 19637,
+      "sha256": "7c4955da5d60d0e146909cc450e0a7f2e35e0170298f0db4e901f0bd6234e5fc"
+    },
+    {
+      "path": "lib/source-mcp-server.mjs",
+      "bytes": 14261,
+      "sha256": "25157aedb4fc67f28a3275f5460c0a824841263e6e20e8ec7bd5b9333c04fcad"
+    },
+    {
+      "path": "lib/source-native-client.mjs",
+      "bytes": 13553,
+      "sha256": "810ae93f4aeaf01d77b67009a55059251ab14fa3222fa9889b5fbd92dcb53e37"
+    },
+    {
+      "path": "lib/source-policy.mjs",
+      "bytes": 12604,
+      "sha256": "e6b308579f8db4f028428996d8a7874e0b4fdb32ad2d88866f53188edc81313b"
+    },
+    {
+      "path": "lib/source-search.mjs",
+      "bytes": 21378,
+      "sha256": "0249ef0799ded46d02c4952626ce7a9fa09e1228b8924d8600b9aa0fec11630d"
+    },
+    {
+      "path": "lib/source-tools.mjs",
+      "bytes": 20041,
+      "sha256": "754b52e72f4c104373dccbbc1f43a405ea956426e5a39723995fce15d1e5f5e0"
+    },
+    {
+      "path": "lib/turn-attachments.mjs",
+      "bytes": 5587,
+      "sha256": "74a40fb7ca00867dab3f4bbc0bfbb5178a398bb41775de5b39709454b4348d0e"
+    },
+    {
+      "path": "lib/workbench-client.mjs",
+      "bytes": 102230,
+      "sha256": "4895a250e299aa01c4a192becf2ef37a077c9f169bf80376f9b980a0659ad377"
+    },
+    {
+      "path": "lib/workbench-contracts.mjs",
+      "bytes": 2070,
+      "sha256": "bb831cb6360aea506ba9df460b7ca4a313b4ee296fe65ffa0673f58d33b470cc"
+    },
+    {
+      "path": "lib/workbench-receipt.mjs",
+      "bytes": 6035,
+      "sha256": "bcc648255f798d70f1d24eafda2577ecca2e2bed03b7cff39a5fdd41f1019e8b"
+    },
+    {
+      "path": "public/account-license.mjs",
+      "bytes": 4179,
+      "sha256": "2b564dff4756d08a5dc0c3bfc132a517a9fbe667e6083ce64adff5767ec69281"
+    },
+    {
+      "path": "public/account.js",
+      "bytes": 13126,
+      "sha256": "2bca4397841f38797c32a7e65ff74d07faaba0d457f1719a01c2e5a12551a8d0"
+    },
+    {
+      "path": "public/app.js",
+      "bytes": 153492,
+      "sha256": "1f56aab211503070f30b5de899155aa5dabf5b4ad3d8d5e3ac86e536c0f68deb"
+    },
+    {
+      "path": "public/chat-view.mjs",
+      "bytes": 5486,
+      "sha256": "87893ddb59ef5a69b49c95dd7198dc8e4c2d8aed454cd8b05c1a0abfae213f58"
+    },
+    {
+      "path": "public/codex-account.js",
+      "bytes": 11405,
+      "sha256": "74eecb20605de7bc5ff61f59332a0fe97d0033cc544f6367abc29b15a673a5e3"
+    },
+    {
+      "path": "public/index.html",
+      "bytes": 9759,
+      "sha256": "452dc91168534e818b1fae2f12fe27b57c1a9e20c90319f475dffcaba881aa51"
+    },
+    {
+      "path": "public/model-picker.css",
+      "bytes": 2116,
+      "sha256": "46eb9453371e37d1fabb037890f240946360bba6585eab91612c68164afc3f5f"
+    },
+    {
+      "path": "public/model-picker.mjs",
+      "bytes": 6880,
+      "sha256": "2bae5ef631aa5f4ed86bc451c123ad95ed347874faccc09d3787002b0d23e880"
+    },
+    {
+      "path": "public/model-viewer-ui.mjs",
+      "bytes": 8843,
+      "sha256": "7db69e57571c7a26faad1d840118c6db984c846eef8cc53352a0b90e046e24e0"
+    },
+    {
+      "path": "public/model-viewer.css",
+      "bytes": 442,
+      "sha256": "60115f73ffa110afc3ffabca9529978119cf1042e5d9f26c034bc928f3803545"
+    },
+    {
+      "path": "public/model-viewer.mjs",
+      "bytes": 8107,
+      "sha256": "786dcf94bd152c6da71db50197a88e87eda3021e0e842b0a03be56c5a4350ab8"
+    },
+    {
+      "path": "public/model-workspace.css",
+      "bytes": 33292,
+      "sha256": "2ac66b812d981a2d79800912e43e70df44e30047d486ae3b579b81a1c1c3ac19"
+    },
+    {
+      "path": "public/model-workspace.mjs",
+      "bytes": 110586,
+      "sha256": "723f5ef3c6fad126614816fd56d3dee2602590fe16affdd8ff40eea53be39df4"
+    },
+    {
+      "path": "public/project-knowledge-ui.mjs",
+      "bytes": 16907,
+      "sha256": "85da01c34234dc7ef603273d9251f9bbca3058d5dc70fe04910249a2fd3a9408"
+    },
+    {
+      "path": "public/style.css",
+      "bytes": 15488,
+      "sha256": "b9862fd902b0578a049e2e07dc681327b586b5eb49b3c75cbcbe73f2b2f43929"
+    },
+    {
+      "path": "revit-addin/ArgusTools.cs",
+      "bytes": 1566,
+      "sha256": "ad9cbfa3de010028ddda4aba95664fc715842fe6f673681ac0539efd2df41f0f"
+    },
+    {
+      "path": "revit-addin/CadGeometryModel.cs",
+      "bytes": 13812,
+      "sha256": "a7b66cbe4589015968d3d24de9a1a9c85a2a45aece1e94d421d03df96df87992"
+    },
+    {
+      "path": "revit-addin/CadGeometryPaging.cs",
+      "bytes": 19302,
+      "sha256": "7878f8c74f8995b8457b90f7c778e39f1794e8b59656a75b2ce31e2fcbb4a6a5"
+    },
+    {
+      "path": "revit-addin/CadGeometryQueries.cs",
+      "bytes": 5992,
+      "sha256": "78e8603b455fd5b9ba795de4133524831eea93e45769f4eb967f0c2cc1895bdf"
+    },
+    {
+      "path": "revit-addin/CadGeometryReader.cs",
+      "bytes": 19205,
+      "sha256": "e34e450cdefa28adf98971275c0a3bce1fa78431973faf1248082d01bdfb81c8"
+    },
+    {
+      "path": "revit-addin/LocalCodexRevit.cs",
+      "bytes": 45491,
+      "sha256": "ea1a4df8861bc4e9e9d86dd0d5792e847e5388b63cce99c61ffc962f076d97c2"
+    },
+    {
+      "path": "revit-addin/ModelViewerSnapshot.cs",
+      "bytes": 9989,
+      "sha256": "016539974e2559c94b74852137936d32ec50ee740e92a36918425f5766badb4f"
+    },
+    {
+      "path": "revit-addin/SchematicEditorWindow.cs",
+      "bytes": 39301,
+      "sha256": "0cc16a8554c98d16c85dd941a571dab49431ed1acedba6ba98cabb8902dd33ae"
+    },
+    {
+      "path": "revit-addin/SchematicModel.cs",
+      "bytes": 9789,
+      "sha256": "4875f89b13b5a2531b003a2108b72f96fcee7a708de416439b45b586f0239720"
+    },
+    {
+      "path": "revit-addin/SchematicRevitService.cs",
+      "bytes": 22368,
+      "sha256": "5f3cef8697a1f813b009248acfd8993e2ed823a5a0c57cbb4348777e1ea5c899"
+    },
+    {
+      "path": "revit-addin/SchematicWindowEntry.cs",
+      "bytes": 2686,
+      "sha256": "0024ba755189fdf86186e1882b888115afc9c66d3accdee54c2d1f37c127ada7"
+    },
+    {
+      "path": "revit-addin/ScriptRunner.cs",
+      "bytes": 5142,
+      "sha256": "8b5917d74c021dfefa2ed6cf11a7da30a9eb1a37466a901e6400715ce1396574"
+    },
+    {
+      "path": "revit-addin/WindowWorkbenchClient.cs",
+      "bytes": 7734,
+      "sha256": "4ff58f85be37fc293ad617aed9d5966fc2c178579b77eb7dc7a4bd0262e07a9c"
+    },
+    {
+      "path": "revit-addin/WorkbenchActions.cs",
+      "bytes": 36321,
+      "sha256": "db10100bc16da59c8cab109240ab70228d83f72eb0743df3be097a8e7467e6d2"
+    },
+    {
+      "path": "revit-addin/WorkbenchHost.cs",
+      "bytes": 65045,
+      "sha256": "2e07cb08e8d65ab6aa470486d350ea0c3289af5730773819611e3c4be84317e4"
+    },
+    {
+      "path": "family-core/FamilyJobPlanner.cs",
+      "bytes": 11111,
+      "sha256": "42ed41a4c4700a9782cb04c138099e61a2e48575125f63b0b5204319d83a5d7a"
+    },
+    {
+      "path": "family-core/FamilyJobRegistry.cs",
+      "bytes": 31907,
+      "sha256": "69cb4a36b72a1f3b109b7fad28d5bfafea49a739b2004a692f9e2ccd59d4c594"
+    },
+    {
+      "path": "family-core/FamilyTemplateCatalog.cs",
+      "bytes": 16188,
+      "sha256": "835ad99aac1899ab877f8d4a2da79a40ec9dc831a3e81e511a7ed1ba36eda754"
+    },
+    {
+      "path": "family-core/FamilyTemplateFacts.cs",
+      "bytes": 1771,
+      "sha256": "02e7a33909c5e7e5fc16807595e80ded667a4f37e2c288ad63731c969a5011d6"
+    },
+    {
+      "path": "family-core/FamilyTerminalOutcome.cs",
+      "bytes": 705,
+      "sha256": "19034e1bc9805ce9354a42c6bb60ecf2fc7a4b8c39bbc2fa303b5843b0b0225c"
+    },
+    {
+      "path": "family-core/ProjectDocumentFactsReader.cs",
+      "bytes": 2212,
+      "sha256": "2d95d70602c5955d7ee3baf67cdf9a4cb32b7942cd5dadc3c9c4251a850e7a20"
+    },
+    {
+      "path": "family-core/ProjectDocumentRegistry.cs",
+      "bytes": 17564,
+      "sha256": "74392e4f09bfcc815d3c78370c8ad38700fc13f7798c3d36d6f3b9c0b3306d2c"
+    },
+    {
+      "path": "family-core/revit/ParametricValveBuilder.cs",
+      "bytes": 26594,
+      "sha256": "784e8310ce394030bdc196b5adbea6ba8183f255f21ff237b8aa34cf47287c2c"
+    },
+    {
+      "path": "family-core/revit/RevitFamilyWorkflow.cs",
+      "bytes": 79478,
+      "sha256": "790ce745430ecd0810af3699d8f81a97bb1a02fb6d23de8ab96a9789670fae00"
+    },
+    {
+      "path": "family-core/revit/RevitProjectDocuments.cs",
+      "bytes": 3808,
+      "sha256": "bd2d7620e68897fdc8e7118656375d67329b79f4b14c64973fb9d7b694fab1ba"
+    },
+    {
+      "path": "sql/buildx-license-migration-draft.sql",
+      "bytes": 6662,
+      "sha256": "ebc4e9bd01e0240660fda565f11c2c30c88db715cff443709b0b4235a264c023"
+    },
+    {
+      "path": "sql/buildx-license-test-fixture.sql",
+      "bytes": 1109,
+      "sha256": "f327164c9524441db0e77a12dcf4efdbb9606e67b04ccee4b2c1ef5ec285d0d3"
+    },
+    {
+      "path": "sql/buildx-license-isolated-test.mjs",
+      "bytes": 3744,
+      "sha256": "c4b77178bce1b92b25ac184e73383922be1ce54d85c5e806b8e3f7b4c1c4d967"
+    },
+    {
+      "path": "release/customer-chat-known-releases.mjs",
+      "bytes": 10724,
+      "sha256": "fb051d66da6dc7bd9e0f8d9e0f58622bbd262d1ece95f9473e919732e4940e44"
+    },
+    {
+      "path": "lib/project-history.mjs",
+      "bytes": 22064,
+      "sha256": "aff1ca09bcf121fd929d335369a9955a0abd538b43681680ad52707e7d642034"
+    },
+    {
+      "path": "tools/buildx-installer.mjs",
+      "bytes": 34609,
+      "sha256": "3053ffa009e77dbff8ac24da4b537c29c9ba1d36d6018ec31ca0c49b3b6ee0e5"
+    },
+    {
+      "path": "tools/buildx-setup.ps1",
+      "bytes": 31693,
+      "sha256": "d8eca892f8c8777543aec09af106f72e3c63c8b3ab1c7160a23ac88414658e75"
+    },
+    {
+      "path": "tools/buildx-setup.cmd",
+      "bytes": 261,
+      "sha256": "4c5ff99a68e6615502defdb30ebcd2c70283dc7599c9de3cca72b7f85cb9f191"
+    },
+    {
+      "path": "tools/buildx-setup-readme.md",
+      "bytes": 7514,
+      "sha256": "536ff857af22b74a880292696864bb8bfca561c9fe581651ab6d2d3e94373e71"
+    },
+    {
+      "path": "tools/buildx-package-entry.cmd",
+      "bytes": 45,
+      "sha256": "5854b313d712f9682c6bdb57795d1f097d2fe7b0ede3f9e45005bee6cebdd56c"
+    },
+    {
+      "path": "buildx-installer.test.mjs",
+      "bytes": 19360,
+      "sha256": "ba566731e1f0674aefbf4a6c724518445212a282b071f85ef3bd7e6062953d75"
+    },
+    {
+      "path": "buildx-setup.test.mjs",
+      "bytes": 961,
+      "sha256": "08846aa1778dea275c1d4113e3fe06af1c13c3b3ab1af4880d314da32aeeefc3"
+    },
+    {
+      "path": "lib/buildx-skills.mjs",
+      "bytes": 3413,
+      "sha256": "44f33b5cc6c68f1b784266d5841ed68ff5380e313f42f38d25c579d128a06812"
+    },
+    {
+      "path": ".agents/skills/buildx-project-research/SKILL.md",
+      "bytes": 899,
+      "sha256": "633635dfdd834cdfa232adfacd29b323773af2dc5bfdec8881a1835ad1795896"
+    },
+    {
+      "path": "lib/api-provider-launch.md",
+      "bytes": 3858,
+      "sha256": "8702bb3804b510784b4b2c57c95740c6b9f10ebbf327bea4af003e2c02525d5a"
+    },
+    {
+      "path": "internal-api-client.test.mjs",
+      "bytes": 5965,
+      "sha256": "78454ebf054657b3d1856a7148c2db963f6d0172f55fad890ee469f072508224"
+    },
+    {
+      "path": "test/project-agent-bridge.test.mjs",
+      "bytes": 5422,
+      "sha256": "b5ff19179b5c1944891740c9b15e99ca79b3203a27d5460be54f8b5ca4cd9ef9"
+    },
+    {
+      "path": "model-viewer-panel.test.mjs",
+      "bytes": 6128,
+      "sha256": "6b947d159186f2ab367172eb7fdb4af370b5ad4afaf9b5c9472acef9052ee382"
+    },
+    {
+      "path": "model-viewer-ui.test.mjs",
+      "bytes": 2575,
+      "sha256": "2fe0a89aee1eed9c0d207a1d5d0be39dbff2d72bae4df94120370290c0e90ada"
+    },
+    {
+      "path": "lib/native-model-queries.mjs",
+      "bytes": 17065,
+      "sha256": "93afa466db9a7da2b48c81d0ed7aee862649e31a7ad20669e55d9639c877e3aa"
+    },
+    {
+      "path": "revit-addin/NativeModelQueries.cs",
+      "bytes": 22791,
+      "sha256": "2d68f8e5c513f9aa21ef260e00e2b0a87741294d4cb4777c407effbc73a663f7"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 8392,
+      "sha256": "0c77c5bd6d7748536af888082c9469cc81ec112112e8050b337d5ba858b6fda3"
+    },
+    {
+      "path": "THIRD-PARTY-NOTICES.md",
+      "bytes": 59864,
+      "sha256": "28370d71487c6f700e879ad8f77f8904a4649afa62aceae68959603cace5567e"
+    },
+    {
+      "path": "buildx-installation.example.json",
+      "bytes": 341,
+      "sha256": "3455f7baa850000fecc02d02aaa1f562cd414756a9baafad16a73ce5a64ad99c"
+    },
+    {
+      "path": "lib/buildx-paths.mjs",
+      "bytes": 6716,
+      "sha256": "ab1dd62f4ae0831f320992b3e8175700f8e25bd24c69987cb8b9d26636b3eef0"
+    },
+    {
+      "path": "revit-addin/build.ps1",
+      "bytes": 10790,
+      "sha256": "402114462fd1e19aabeddb8746289a2322c404f7558faee35399a7ce9c47b16c"
+    },
+    {
+      "path": "revit-addin/AccessPolicy.cs",
+      "bytes": 9739,
+      "sha256": "9e2cb6aecdc86903e7dd8b8e7b502cc76b9a551c4d3607f4a9da1829deeb4e4f"
+    },
+    {
+      "path": "revit-addin/VisualInspection.cs",
+      "bytes": 35079,
+      "sha256": "092775abdcaf36466e4c7213ea27a78587280bed3439dd0f14bf12246dda2c66"
+    },
+    {
+      "path": "family-core/CabinetPlan.cs",
+      "bytes": 6790,
+      "sha256": "0ebf9bbd3f5fde8212b710d51d997148313c814674515d419e1a228d290c27bb"
+    },
+    {
+      "path": "family-core/FamilyJobOperationPolicy.cs",
+      "bytes": 1601,
+      "sha256": "481b40ce0dd4fc707f091ed3edeca099ce9a3ada7c1c67d98cd180892aa420a6"
+    },
+    {
+      "path": "family-core/revit/FamilyLifecycleApproval.cs",
+      "bytes": 3657,
+      "sha256": "f72683b34fc90b136d59e585f021e75702d666f4e2c609c70f8ed42d9d1a82cf"
+    },
+    {
+      "path": "family-core/revit/ParametricCabinetBuilder.cs",
+      "bytes": 26522,
+      "sha256": "4ac00d0b91932e53aa3cfb1d433152e4a58bcd7382d897724604bddaca5fdda3"
+    },
+    {
+      "path": "lib/parse-project-document.mjs",
+      "bytes": 2095,
+      "sha256": "1c1c6e39f721e8217f3861a76d27197e57b39152a8fed6d08a0e64904838fa09"
+    },
+    {
+      "path": "lib/project-files.mjs",
+      "bytes": 22849,
+      "sha256": "ae03ff4be866a74b58f1cc7b101dc104ad8c2cd18f840e571137539fefe57b0a"
+    },
+    {
+      "path": "lib/project-files-picker.mjs",
+      "bytes": 6364,
+      "sha256": "f6144f13d9843d45ce11e2064a238e177dad796a107244704e551a0ffafd3980"
+    },
+    {
+      "path": "lib/project-files-store.mjs",
+      "bytes": 10437,
+      "sha256": "a19049b2db8e3626e3f24a16e517e67b61f9d1da378bce8418eadee893d3ac08"
+    },
+    {
+      "path": "public/command-form-source.mjs",
+      "bytes": 989,
+      "sha256": "a44e168365b0f7f5d6d9e8dc95553b600c8f8a9d64b96f16444c40051f0add4e"
+    },
+    {
+      "path": "public/personal-command-fields.mjs",
+      "bytes": 8143,
+      "sha256": "82c8d41234840bd1cb3cc4e9b2958e2978dc037153a77c6f75dab13cffabb932"
+    },
+    {
+      "path": "public/command-fields.mjs",
+      "bytes": 10982,
+      "sha256": "bec9d08e17306c9af4e6b7a63bbf84a910dc3c56f23f337609ad2a04015e04ba"
+    },
+    {
+      "path": "public/command-parameter-options.mjs",
+      "bytes": 5709,
+      "sha256": "06be7110766405d64335adf407e5013cf1574dcc3be954c66e708722d7b25697"
+    },
+    {
+      "path": "public/command-choice-field.mjs",
+      "bytes": 8018,
+      "sha256": "80c7d15364de734899d121d834f6b18878147b8f9c2d7ffdbefa95899a43643d"
+    },
+    {
+      "path": "public/parameter-change-field.mjs",
+      "bytes": 20082,
+      "sha256": "254ff07156be53248c3417ae823fb4368f9326c3559ed54ee504fa279db8bc9c"
+    },
+    {
+      "path": "lib/project-files-composition.mjs",
+      "bytes": 683,
+      "sha256": "fa18ac2d174c12c5c094cc465ef82671fe5dbf65577a18044a0a4c9c58aa50f7"
+    },
+    {
+      "path": "lib/model-permission-services.mjs",
+      "bytes": 4519,
+      "sha256": "fa16c2de830d8cfb1ef8704a76b7f02e98db86478e95c17d3b79a47f65871227"
+    },
+    {
+      "path": "lib/family-capability-owner.mjs",
+      "bytes": 1280,
+      "sha256": "db84cce6e50aff3d1aac8fc57ec8bbcc9a625a2e313b84f47f5b9a00a5c21979"
+    },
+    {
+      "path": "lib/server-lifecycle.mjs",
+      "bytes": 2631,
+      "sha256": "23e5d04ec471b06b83c001d5e449f81e0abbd66b658baa10adeab1633943381a"
+    },
+    {
+      "path": "lib/access-services.mjs",
+      "bytes": 18769,
+      "sha256": "d2a3b53c5f5d82dd8b4269f790c25ac4659258445a76685edd5101a4553daabe"
+    },
+    {
+      "path": "lib/chat-lock-recovery.mjs",
+      "bytes": 4251,
+      "sha256": "f4f1602a78054ece89b30c6e10f4564da1f0c4747488b35096937304c4b600fd"
+    },
+    {
+      "path": "lib/model-agent-tool.mjs",
+      "bytes": 1596,
+      "sha256": "6086572c120128372f7d422ca741ac563fbbe202d7679aa5d229bccf7a70f925"
+    },
+    {
+      "path": "lib/model-operation-contracts.mjs",
+      "bytes": 3162,
+      "sha256": "80b2ca2fd81aab5f22aefca98037a89742279127309c71fb642ae164ec41e29f"
+    },
+    {
+      "path": "lib/access-file-tools.mjs",
+      "bytes": 15617,
+      "sha256": "4b6adc481764d5cc7822b936b9591dc610f9ae53cd276ab682898c54d41c95f1"
+    },
+    {
+      "path": "lib/command-save-receipt.mjs",
+      "bytes": 4519,
+      "sha256": "832aaf91886a780062431d01b9a62adf19dd5934ddfb2b0345d220621c880aac"
+    },
+    {
+      "path": "lib/visual-inspection-tools.mjs",
+      "bytes": 8297,
+      "sha256": "a2a714de71a4f1a7e5cee8e03f8e228a87fa7cc001db40a5305e20a14a076d19"
+    },
+    {
+      "path": "lib/created-elements.mjs",
+      "bytes": 2273,
+      "sha256": "6041399e97da2d731db7b021591382d0b15c1ce9e8369bd84ab9380f609c515c"
+    },
+    {
+      "path": "lib/model-permission-owner.mjs",
+      "bytes": 28361,
+      "sha256": "22f10f0cb69fd205b8ff13138e25dfb90466974f9f677ec850ccef35ed64a414"
+    },
+    {
+      "path": "lib/model-operation-effects.mjs",
+      "bytes": 3942,
+      "sha256": "b1e036bf2b4c44ccace846a1607d1f72b2126eb2a3cb2a7e13ec895c05c0d877"
+    },
+    {
+      "path": "lib/visual-artifact-owner.mjs",
+      "bytes": 6246,
+      "sha256": "129a74d84faf4db14bee298babcc001a37e41ed244b841bdbe6255469d0c3d3b"
+    },
+    {
+      "path": "lib/project-files-lock-recovery.mjs",
+      "bytes": 2843,
+      "sha256": "54cb1c7e8a26267253479f3449a104fb54cb909a2960a3c382683eb853b935ec"
+    },
+    {
+      "path": "lib/visual-inspection-recovery.mjs",
+      "bytes": 2959,
+      "sha256": "da4991e348c8a9a65fd90ace6699d62e66680c3ef559d472400a4b5fba8acf5b"
+    },
+    {
+      "path": "public/clipboard-attachments.mjs",
+      "bytes": 1139,
+      "sha256": "6dc48fbfde490045d1b521c4914e399a40569165a57f8bbe028cd288bd3749a9"
+    },
+    {
+      "path": "lib/project-files-opener.mjs",
+      "bytes": 4084,
+      "sha256": "bc28121a88286000b7b9f8b12af6e55dc2ee740c0bf42625e0143de299f5381d"
+    },
+    {
+      "path": "lib/access-policy.mjs",
+      "bytes": 16366,
+      "sha256": "cd69e3b03315b238cff27ea51f54077379c813d0659d01638b45b1ff4a598688"
+    },
+    {
+      "path": "lib/access-lock-recovery.mjs",
+      "bytes": 9762,
+      "sha256": "95f00bc6c75075ff03c684b292b0b57c2b11eb366c9246740d604efdb7c0c87a"
+    },
+    {
+      "path": "public/project-files.css",
+      "bytes": 5493,
+      "sha256": "ee9c9fa9bdb2e550c4517f9c327f8db9f78a72fecd2fcbb9a54e43d53dd8314e"
+    },
+    {
+      "path": "lib/chat-lock-recovery.ps1",
+      "bytes": 5483,
+      "sha256": "b50ae4426080b84f916bf94a029b0e39b982f3a40c5a8ea7aded27017c1b3c96"
+    },
+    {
+      "path": "lib/project-files-lock-recovery.ps1",
+      "bytes": 5483,
+      "sha256": "3f95491d59093afeacba9c616e40da75151c40305d5dc2482a9ab6ce494f428d"
+    },
+    {
+      "path": "lib/access-lock-recovery.cs",
+      "bytes": 13201,
+      "sha256": "ac55123fac5667b30a56ddf7426ae64907d649d62a2ce2f5a01eb2eef5a5498f"
+    },
+    {
+      "path": "tools/build-brain-candidate.mjs",
+      "bytes": 15814,
+      "sha256": "192ea5d42b4f4856caf9913f013f3fc4061a345dddf0b50596367a645fb97345"
+    },
+    {
+      "path": "tools/build-brain-candidate.test.mjs",
+      "bytes": 7171,
+      "sha256": "d9d4fcd7d2e04e0c52f91e885aab417ce0c12b8411825b4bfbd05bfeb13cc80c"
+    },
+    {
+      "path": "tools/build-brain-candidate-files.json",
+      "bytes": 10810,
+      "sha256": "846bf3e135b98969800be56d11fc87104375e478623ab954102ea64a8429ffa9"
+    },
+    {
+      "path": "tools/build-brain-candidate-build.ps1",
+      "bytes": 1344,
+      "sha256": "08c22d19e2fdcebffeb4c4522ac2809f4c7ad44585b14505cd43ddae1a3f1c60"
+    },
+    {
+      "path": "prompts/buildx-source-investigator.zh-CN.md",
+      "bytes": 3036,
+      "sha256": "edfe231d06a86b4e5648ebe5e1784a4cbb2406d81f470ac1cd7d5568d8fb3698"
+    },
+    {
+      "path": "prompts/buildx-customer-chat.zh-CN.md",
+      "bytes": 1323,
+      "sha256": "ba3524f437a1e4e614b97c3352ab429f972d8d6bc0a4c67c81a4e5a20e4ff7c0"
+    },
+    {
+      "path": "source-panel.mjs",
+      "bytes": 2219,
+      "sha256": "db90e2e5c772d3ade7eb29b729d80550bd2fc61b214ce177b3bd0bf6704766b7"
+    },
+    {
+      "path": "native-model-queries.test.mjs",
+      "bytes": 9841,
+      "sha256": "4b832c4fe5e7458242dfd207305d0043f8d86999b231e20ca7549268b6ec11e4"
+    },
+    {
+      "path": "native-model-query-producer.test.mjs",
+      "bytes": 6102,
+      "sha256": "5d8888482c091c7bbe569ce6a5d75dd4fdae94ffdbdac6e68d960d5621af2ddb"
+    },
+    {
+      "path": "native-query-transport.test.mjs",
+      "bytes": 12181,
+      "sha256": "8bdc47d55b5e7ef9c77ccd16e25433087bf21357e212b28c6ce3a13489cf7eb4"
+    },
+    {
+      "path": "native-six-mcp-client.test.mjs",
+      "bytes": 11377,
+      "sha256": "63638b6c99af85ad4b857c1fa906513d0ee6290e3f27dbe0828f24505205ef06"
+    },
+    {
+      "path": "atomic-workbench-read.test.mjs",
+      "bytes": 13220,
+      "sha256": "534f9e39e7ad974e4053bd6f6fa2323f880ec85db8f928ad36006bdec4358c7d"
+    },
+    {
+      "path": "model-workspace-registry.test.mjs",
+      "bytes": 18821,
+      "sha256": "519417c406ed6799383344d2157d2524eb079f5f239d4581f4215fe6b2c6c686"
+    },
+    {
+      "path": "workbench-client.test.mjs",
+      "bytes": 15135,
+      "sha256": "6029fa4b7f0bec6cf91bae4325de418276f729cfe17085f9770a63cd54917ff6"
+    },
+    {
+      "path": "assistant-instructions.test.mjs",
+      "bytes": 3707,
+      "sha256": "38b5749f9be25f8b85b9738043c0625a694838355061789626fed197c1fb3d12"
+    },
+    {
+      "path": "panel-read-commands.test.mjs",
+      "bytes": 22934,
+      "sha256": "e0cada029559dd09836ef5ec5359f3cf55054fbbd9acc0ad3cdd1bdd507b2f14"
+    },
+    {
+      "path": "command-dispatch-integration.test.mjs",
+      "bytes": 2710,
+      "sha256": "77baa90a96295d4a6c142acfa248e9fe4ce78934e29ce142acdfead871fa3c33"
+    },
+    {
+      "path": "model-document-preflight.test.mjs",
+      "bytes": 4287,
+      "sha256": "464a889d48de48691e08430c9418e4c163ec8d9005a25d590a159c90c537509b"
+    },
+    {
+      "path": "model-operation-contracts.test.mjs",
+      "bytes": 5085,
+      "sha256": "2b7ea88dd6db56c9f92e1d603c660030f4fe946174a38a4a63a2244c9286d039"
+    },
+    {
+      "path": "native-access-transport.test.mjs",
+      "bytes": 4827,
+      "sha256": "b0a861c6b2703aac3decfb0e6cbc79ee350d0967a012c5ea2f6eb6ab5ed5b323"
+    },
+    {
+      "path": "live-tool-receipt.test.mjs",
+      "bytes": 2609,
+      "sha256": "e06ae35f6aa55b9d66b463d7ddbce234a424e9e102aac37991d86874bb0bb18b"
+    },
+    {
+      "path": "customer-assets.mjs",
+      "bytes": 819,
+      "sha256": "ecdfe2c5751d0b516174480427ac66a4eff870de428cf861f01eaa8992ce21d4"
+    },
+    {
+      "path": "customer-server.mjs",
+      "bytes": 4990,
+      "sha256": "5733261569a9aea990eac62bf1de023d3af3d5a43857f74ae3317adf860527e7"
+    },
+    {
+      "path": "customer-chat-package.mjs",
+      "bytes": 1092,
+      "sha256": "b020ae7b6e056b2aa8a4fdc78de7d27fed7b9fd9a573318698fdcde5641b91cb"
+    },
+    {
+      "path": "customer-install-plan.mjs",
+      "bytes": 1203,
+      "sha256": "ba2d2d83905dbf055550a2c7a31623ded7fe22109a6d5f45949423310b6c0a62"
+    },
+    {
+      "path": "buildx-paths.test.mjs",
+      "bytes": 8809,
+      "sha256": "6c4e18ae127967bcd6f35e13ff9fd7bbbf68f62139c9099d287f8e5e0b11a169"
+    },
+    {
+      "path": "installed-layout-mcp.test.mjs",
+      "bytes": 8366,
+      "sha256": "6226073dcd0e66f3690ef7dc2e6ba249d44ddc11266d5a74781681bbdd5d3bab"
+    },
+    {
+      "path": "installation-layout-native.test.mjs",
+      "bytes": 5841,
+      "sha256": "b39c50656669a48e3d7d81ce4a6f6b331857da692bb65c4e03cca70843dd8868"
+    },
+    {
+      "path": "installation-identity.test.mjs",
+      "bytes": 3048,
+      "sha256": "0bc730a8437a3277b98530e87bbb005a0dc842ee1d677d253f27ace0f7638b00"
+    },
+    {
+      "path": "data-root-panel.test.mjs",
+      "bytes": 7216,
+      "sha256": "92957f274689e950806147ee1b4f629f267ef5db1c6c02add9f3aeb8c693be7c"
+    },
+    {
+      "path": "portable-runtime.test.mjs",
+      "bytes": 4179,
+      "sha256": "e3e9327457e4c2ad54ba6f6dddbfff504611a485031f41fab803fd0cacb4337c"
+    },
+    {
+      "path": "service-startup-probe.test.mjs",
+      "bytes": 7550,
+      "sha256": "514bb2fd871dbe25facf59447a9444c414bcb4569daa119b73d790e8a1e58e09"
+    },
+    {
+      "path": "service-identity-http.test.mjs",
+      "bytes": 4567,
+      "sha256": "090ac9bedaf0c2e3546053d2949a371af3d72baad7af5aa269ee11a23f858322"
+    },
+    {
+      "path": "server-lifecycle.test.mjs",
+      "bytes": 6570,
+      "sha256": "083110f0fa65beff6820219737d8c00e7bdce93a0197329da91e7faf1f9abe68"
+    },
+    {
+      "path": "access-services.test.mjs",
+      "bytes": 11984,
+      "sha256": "cc88e64c9cab8042c0cd16b528212c040ecef2d9cd4abf33a29611742f62a5ae"
+    },
+    {
+      "path": "visual-artifact-owner.test.mjs",
+      "bytes": 4907,
+      "sha256": "28b4c09a1a56783b4d45a5cd28b553ad4f895d73d1a5a2d0d5e504b1445cf546"
+    },
+    {
+      "path": "visual-chat-artifacts-http.test.mjs",
+      "bytes": 9763,
+      "sha256": "606fbc7623aedcd67941ba403c32a24667a3bc441d0694955b83b2e24fda5b8b"
+    },
+    {
+      "path": "panel-core-boundary.test.mjs",
+      "bytes": 4046,
+      "sha256": "6618bb93572b0803fc298f5bcde112ed32950fd9f6abfad09234f5ce897eb319"
+    },
+    {
+      "path": "local-runtimes.test.mjs",
+      "bytes": 3756,
+      "sha256": "5d70ee81d092acd55ec404c6e862502628c822f8876867ae49304108550839b9"
+    },
+    {
+      "path": "runtime-discovery.test.mjs",
+      "bytes": 6867,
+      "sha256": "99ac502404c1a49fae592dbc378a35df3a3a0efbc342416f99f21bda95a482e9"
+    },
+    {
+      "path": "release/customer-web-assets.json",
+      "bytes": 1879,
+      "sha256": "e68d667992cb5b369108c74fcd4fc9968d3f55fa0c74d5c15a8d290368fb2f46"
+    },
+    {
+      "path": "customer-chat.README.zh-CN.md",
+      "bytes": 8732,
+      "sha256": "a73e06e9572ba8ccb126cb038c8ace704b5f32a820f3332bcaa042c40adda77e"
+    },
+    {
+      "path": "release/customer-chat-component.json",
+      "bytes": 7306,
+      "sha256": "bdda6a8728e223da6acdd1361a27a656f0b49bf1d1541ef6cc6d2d0407fb5a23"
+    },
+    {
+      "path": "test-support/native-model-query-producer.mjs",
+      "bytes": 3848,
+      "sha256": "13552974016b146488f0d7d18d7f2cd4f9632e72e5e96d7c14d3f13225031448"
+    },
+    {
+      "path": "test-support/native-read-producer.mjs",
+      "bytes": 15393,
+      "sha256": "fab4ad0f5c004055ec6f34c01397ee560a22bb3b18097be24908b614aea90978"
+    },
+    {
+      "path": "test-support/public-tool-result.mjs",
+      "bytes": 1791,
+      "sha256": "fa66d5db711ac77ddc422fbb9f5eb6ef111830ec2439172a3b89682e093425ae"
+    },
+    {
+      "path": "test-support/live-dialogue-receipt.mjs",
+      "bytes": 302,
+      "sha256": "002245dc9e27241c90ba4dbe22d0f6d7483bd51b033b51270cd8bd279dec41ad"
+    },
+    {
+      "path": "test-support/installation-layout-native-producer.mjs",
+      "bytes": 4529,
+      "sha256": "c93f7d64df6f4c17ec98f84138d3a098d68fc6cf7954983ffb106b313ab47fad"
+    },
+    {
+      "path": "test-support/native-model-query-peers.cs",
+      "bytes": 10183,
+      "sha256": "3667ed0c4ac20f62f1456d0abaa513c5ca4b92b57c520226d858810fc8d624a2"
+    },
+    {
+      "path": "public/register.html",
+      "bytes": 2018,
+      "sha256": "46f68f7c6832362db9ee38af723662bcf916a5ec28fa81428792da44c2b956a6"
+    },
+    {
+      "path": "public/register.css",
+      "bytes": 3114,
+      "sha256": "aa6561043b712092f152bea99db478fb79481264542680c18c4f1050396fb17a"
+    },
+    {
+      "path": "installer-directory-owner.test.mjs",
+      "bytes": 6101,
+      "sha256": "68b47e19b8d814b24d7cdbb14f09d70f6c6489d636a5b43956b957a2c349b310"
+    },
+    {
+      "path": "lib/script-compiler-package.mjs",
+      "bytes": 7436,
+      "sha256": "189e79b87ff96f1aa26bbd95f2b8b4b2b6a81665a0f2ec0a9a826e4ed158801d"
+    },
+    {
+      "path": "manifests/script-compiler-5.0.0.json",
+      "bytes": 6586,
+      "sha256": "87c7f2f1b98825d37c033a54c75f86cb6ab0278d73060b478005c4a97a336f59"
+    },
+    {
+      "path": "tools/provision-script-compiler.ps1",
+      "bytes": 7874,
+      "sha256": "675bec38bcaaeac852fd602ce348a0e9803bb1daab8e1335345e1eba945f41fc"
+    },
+    {
+      "path": "script-compiler-package.test.mjs",
+      "bytes": 8977,
+      "sha256": "871a5a36a66420b5830ced1a38f4bf4afb47bddede1ac5ceee7f4cd86872616b"
+    },
+    {
+      "path": "script-compiler-installer.test.mjs",
+      "bytes": 12062,
+      "sha256": "1857bbd61799244a2ca4a5eea3fca9a996c959a7896229b9bd5cb42bbadb59e0"
+    },
+    {
+      "path": "script-compiler-offline.test.mjs",
+      "bytes": 4023,
+      "sha256": "81dc426ba37d37ed82ddfd773547ec73cdea479eac725857525159b23cda1f1f"
+    },
+    {
+      "path": "test-support/script-compiler-offline.mjs",
+      "bytes": 16046,
+      "sha256": "6722b6aaf651df5dcbce8ddd1191839aba28f1f27d62378cbb39ff8baf3ec041"
+    },
+    {
+      "path": "modelling-tools.test.mjs",
+      "bytes": 6760,
+      "sha256": "9e8b2212d679260c7ee1062cb18c2136ae51cb1bfaae304d11679582ada91eeb"
+    },
+    {
+      "path": "lib/native-parameter-queries.mjs",
+      "bytes": 14794,
+      "sha256": "1fe0cea46309f1074387686a0aa9e96da2521648646a79f8583c78b830d02c3d"
+    },
+    {
+      "path": "revit-addin/NativeParameterQueries.cs",
+      "bytes": 12415,
+      "sha256": "5e63dd9a1bb76668b365ab1872001350965eacbca85db643cb13c6bfe7636a3d"
+    },
+    {
+      "path": "native-type-parameter-contract.test.mjs",
+      "bytes": 10998,
+      "sha256": "55b519a15ee84df14325572ea2661b5466ae43b5080ea785cd04e516bc575f45"
+    },
+    {
+      "path": "native-type-parameter-producer.test.mjs",
+      "bytes": 5072,
+      "sha256": "5fa60ed6a0df29fbb929a20485b8946180d9892f5197f6049c7c87fb21b386b5"
+    },
+    {
+      "path": "native-type-parameter-transport.test.mjs",
+      "bytes": 14610,
+      "sha256": "b1ea63f85a6fc3d08bdacf91b851099226ab7c28b92d6d4cb830035239420724"
+    },
+    {
+      "path": "test-support/native-type-parameter-producer.mjs",
+      "bytes": 4659,
+      "sha256": "fb5b09a944036b445e8bf484594b5ab87ff816cee1fcad1f6cc804ce8354a5cd"
+    },
+    {
+      "path": "test-support/native-type-parameter-peers.cs",
+      "bytes": 6667,
+      "sha256": "71b68b2b112852a650a70e0f1b271706de9dfb87a77fea80449e8fb4cd5c548b"
+    },
+    {
+      "path": "lib/parameter-write-result.mjs",
+      "bytes": 3119,
+      "sha256": "867f54c79683946939349aa9aee7d9367a095f8bf330844d957a8586ff9bf6cf"
+    },
+    {
+      "path": "native-parameter-write-producer.test.mjs",
+      "bytes": 16687,
+      "sha256": "ab6d8428a914b809ebf61757f02163add3999abc9b1b955d269c5c29b5476146"
+    },
+    {
+      "path": "parameter-write-result.test.mjs",
+      "bytes": 14902,
+      "sha256": "156f895cf1ddaaf39cf341e34c5a3f63fa8cb7bd7b9ddb28b6536e68e5c748b0"
+    },
+    {
+      "path": "native-parameter-write-transport.test.mjs",
+      "bytes": 7069,
+      "sha256": "897dc030f113b628ba57031765921194c4f7f2a22239a4be5b2fc3d3c050d386"
+    },
+    {
+      "path": "test-support/native-parameter-write-producer.mjs",
+      "bytes": 8772,
+      "sha256": "7d5a33e23fb61152f212c53a5541b22ebe0d44fba15c4f08ee005dbee3550960"
+    },
+    {
+      "path": "test-support/native-parameter-write-peers.cs",
+      "bytes": 24350,
+      "sha256": "d13dcf8fd7366d291c2c8f32f99be03179903f18f2b54e3ea757be6730fa9ada"
+    },
+    {
+      "path": "model-write-publication.test.mjs",
+      "bytes": 19952,
+      "sha256": "945de0f4afa1a44a1f298adcf0a9885d49fa02e59c9c13516cdf6d45f52c4989"
+    },
+    {
+      "path": "native-single-parameter-contract.test.mjs",
+      "bytes": 13239,
+      "sha256": "cbe280b090ae059ae88248fcbb6c43af1ca12b9edccd2d9f0c05d4f5a918d456"
+    },
+    {
+      "path": "native-single-parameter-producer.test.mjs",
+      "bytes": 11727,
+      "sha256": "665cd9bfed167b25d93f0465e8e36d441465cd99c0ccdcb33c2da02fe8537d5e"
+    },
+    {
+      "path": "native-single-parameter-transport.test.mjs",
+      "bytes": 16797,
+      "sha256": "9f5e12a23a3d56e5e54aa3fa089c6ce3a9a1f54dd588d656fe9e08be74a2b11a"
+    },
+    {
+      "path": "test-support/native-single-parameter-producer.mjs",
+      "bytes": 5912,
+      "sha256": "7c7b53da319da73788c079f7e5c70c737a2bbf6dae5814b5c40d57f63826d96f"
+    },
+    {
+      "path": "test-support/native-single-parameter-peers.cs",
+      "bytes": 10605,
+      "sha256": "e53fc5db894ef7d480e8696340c0794d930ea35e98d33884f8cf37d09307b1e5"
+    },
+    {
+      "path": "exact-id-fields.test.mjs",
+      "bytes": 8267,
+      "sha256": "66f6f59a29315aa5195499a611228b81aa9dda7ae2cfe8e31c3d79a4d90ef609"
+    },
+    {
+      "path": "command-fields.test.mjs",
+      "bytes": 5667,
+      "sha256": "39cfb2f8fc8688a5365ef443ecb7c8d6c1304cfd5142b2f33b318560be8baf5d"
+    },
+    {
+      "path": "model-command-workspace-ui.test.mjs",
+      "bytes": 25158,
+      "sha256": "2d91f10458315dcc110f5ca279d86a94b5fae35aed2d3acaef6a452ba68db1da"
+    },
+    {
+      "path": "model-workspace.test.mjs",
+      "bytes": 5421,
+      "sha256": "0c4b983c7cf092898340aab9cabf891f5e96c7e72bf5a993687b7204a93d6000"
+    },
+    {
+      "path": "test-support/model-input-ui-fixture.mjs",
+      "bytes": 9267,
+      "sha256": "7baaaa81f06adffb88040df8428a7cfc315d5fa020590c789f5b3dd0e562f3da"
+    },
+    {
+      "path": "lib/native-parameter-writes.mjs",
+      "bytes": 8211,
+      "sha256": "6b93099582cbe9c8c5241cff6a3ffb497c928200a4b80b62702bc396ad1677fb"
+    },
+    {
+      "path": "native-single-parameter-write-contract.test.mjs",
+      "bytes": 13094,
+      "sha256": "1860b91aff3bd7ec8f8232a84feae87a531be3b92e8f7f0ef2696d732d08f9de"
+    },
+    {
+      "path": "native-single-parameter-write-producer.test.mjs",
+      "bytes": 16212,
+      "sha256": "57692c50cfbdf988177c63c0abb30d988c1d5d9bd6292bbdd98638100514b295"
+    },
+    {
+      "path": "native-single-parameter-write-transport.test.mjs",
+      "bytes": 15817,
+      "sha256": "1b99aa806d8aca1b726102d811e865f648be860fc0effe2726b900184374cbbd"
+    },
+    {
+      "path": "native-single-parameter-write-ui.test.mjs",
+      "bytes": 13144,
+      "sha256": "134647a93c0d96a998e8bdf5793b057c87badf173ba91323773b2f36cd82aa46"
+    },
+    {
+      "path": "codex-profile.test.mjs",
+      "bytes": 12189,
+      "sha256": "141105127da9dc262bffbdad24961d87ebe60b9ce786476605a9a6676c0fe1f0"
+    },
+    {
+      "path": "test-support/native-single-parameter-write-fixtures.mjs",
+      "bytes": 6912,
+      "sha256": "d16080c5b7ac4988d227036be6e23b71266860b545168429b7afe9487218af26"
+    },
+    {
+      "path": "native-type-parameter-impact-contract.test.mjs",
+      "bytes": 11439,
+      "sha256": "5767d60c4642ad5451f56727be7f4a85476d6429047a9f2efcd433f36ff1cb1f"
+    },
+    {
+      "path": "native-type-parameter-impact-producer.test.mjs",
+      "bytes": 9606,
+      "sha256": "bf50afb65437449f6580978e433b0c63107e46c9e3544e3ef878440fe431e103"
+    },
+    {
+      "path": "native-type-parameter-impact-transport.test.mjs",
+      "bytes": 12070,
+      "sha256": "cd09eb47c4ae89a512032be85b634ccb475eb5c305f373b9a9addc84c89c7dc0"
+    },
+    {
+      "path": "native-type-parameter-impact-ui.test.mjs",
+      "bytes": 10468,
+      "sha256": "890f7140ebd82be80b94265f419a712dc042cf2f98f9e416dd397f775b4cadfe"
+    },
+    {
+      "path": "test-support/native-type-parameter-impact-producer.mjs",
+      "bytes": 6283,
+      "sha256": "733f19d41e485fb3f732fe17c8a75e564ef3854831c00005ac62113a1a58d0e0"
+    },
+    {
+      "path": "test-support/native-type-parameter-impact-peers.cs",
+      "bytes": 12119,
+      "sha256": "73313e7bfec7cd59b97a10bf943b6ac699d3728480bb81b3fae56513303d2015"
+    },
+    {
+      "path": "test-support/native-type-parameter-impact-fixtures.mjs",
+      "bytes": 5885,
+      "sha256": "e463b0e59ca3cb74bb64f730bdaf855b9cb27b893decf3c7dfe8a348f814cf46"
+    },
+    {
+      "path": "parameter-write-instance-policy-contract.test.mjs",
+      "bytes": 8463,
+      "sha256": "aebe4c7a58abe5e36a6de10143dba8c8fea73b25a5a91a074093b803aac61b15"
+    },
+    {
+      "path": "parameter-write-instance-policy-producer.test.mjs",
+      "bytes": 11283,
+      "sha256": "17221f6516134b3d8d11c034e210a0496cc4653adcf7cc419f3fe972be9c57a2"
+    },
+    {
+      "path": "parameter-write-instance-policy-transport.test.mjs",
+      "bytes": 13809,
+      "sha256": "5d4ec8da32f59d9b113cf43daeb3f2a83df80cf28b717476b80dd32a4372b840"
+    },
+    {
+      "path": "parameter-write-instance-policy-ui.test.mjs",
+      "bytes": 9913,
+      "sha256": "0227bc69ca853f5b996cdd67c54dddfabd24cb32d4944a83fd6c0c39edbef769"
+    },
+    {
+      "path": "test-support/parameter-write-instance-policy-fixtures.mjs",
+      "bytes": 2268,
+      "sha256": "b163a3294f7c4e9be9a738cd5fce3c75a3860cc1e859f2320e15e5df0d1f6d3b"
+    },
+    {
+      "path": "lib/native-type-parameter-writes.mjs",
+      "bytes": 12086,
+      "sha256": "b11267fd71f4a896ed9ce145feae8f2a4656bd2a40b0fffbd43f5ecde5e201d6"
+    },
+    {
+      "path": "lib/type-parameter-write-approval.mjs",
+      "bytes": 4749,
+      "sha256": "3490caec54ba94e0c5875ac016e6ed6ffe2337e099079409d04cd28b0dee9f6e"
+    },
+    {
+      "path": "public/type-parameter-write-review.mjs",
+      "bytes": 6618,
+      "sha256": "cdb202f4d00668e2455dce0f192a85cf9f18549e0c7f5cf75c2e7ed12b0083b9"
+    },
+    {
+      "path": "revit-addin/TypeParameterWriteApproval.cs",
+      "bytes": 17084,
+      "sha256": "a236b8227155bcd3dc7fdc82f72c008e89ccab051aa5317282e8a94bb626468c"
+    },
+    {
+      "path": "native-type-parameter-write-contract.test.mjs",
+      "bytes": 14111,
+      "sha256": "6b8353b65a58c6b59e7c4425262dd11c742116fb0be24d1992a36f8b63cb88f7"
+    },
+    {
+      "path": "native-type-parameter-write-approval.test.mjs",
+      "bytes": 13640,
+      "sha256": "3a9d572b730ffbe0d00c760252484a0c9e72266742d5819192039689c579c687"
+    },
+    {
+      "path": "native-type-parameter-write-http.test.mjs",
+      "bytes": 12804,
+      "sha256": "acb28c93545fd4f8a92d8a2ee4088d629adc56627b36246d34236bf7e8b28021"
+    },
+    {
+      "path": "native-type-parameter-write-producer.test.mjs",
+      "bytes": 13947,
+      "sha256": "b7c31813647eaee6917f65e405539373e85e73932150a45a05f9fbcf491dcd5b"
+    },
+    {
+      "path": "native-type-parameter-write-transport.test.mjs",
+      "bytes": 12843,
+      "sha256": "d4ea9034830640ba253e3bfde644e6eca11e2e9adc37f0780d1fbbc5b6cd09d3"
+    },
+    {
+      "path": "native-type-parameter-write-ui.test.mjs",
+      "bytes": 16447,
+      "sha256": "63b99e10d4605fad23229d35a862a2956c73881dd52b2574de1f7fec3f96eb38"
+    },
+    {
+      "path": "test-support/native-type-parameter-write-approval-fixtures.mjs",
+      "bytes": 7303,
+      "sha256": "b19f52e22ea5556d4bf5c477fd9725f184fa47b95ab8a00d0ca21a40e932dd68"
+    },
+    {
+      "path": "test-support/native-type-parameter-write-producer.mjs",
+      "bytes": 9684,
+      "sha256": "854faa04f0807ccd109eb2a9710135d39a5ce4f9c4a8cdbd1d0ebc6bdbdbc5b6"
+    },
+    {
+      "path": "test-support/native-type-parameter-write-peers.cs",
+      "bytes": 20788,
+      "sha256": "006712e1f2ac461a4d9a75e4da02c84677f0ee3fdabb001a336d4d331732dcba"
+    },
+    {
+      "path": "test-support/native-type-parameter-write-transport-fixtures.mjs",
+      "bytes": 6834,
+      "sha256": "b19947fd91ab63f16f10e74eb366e7b867c087e4dd2cb68bc6df41b7a80a0076"
+    }
+  ],
+  "failuresAndLimitations": [
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/node-approval-initial-failures.observed.json",
+      "cause": "Nine initial HTTP fixtures rejected empty poll-delay configuration before exercising production; fixture corrected without weakening validation."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/node-transport-initial-failures.observed.json",
+      "cause": "Initial contract fixture reused a type ID as an instance; corrected valid-ID test isolation."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/producer-final-summary.json",
+      "cause": "Five initial controlled-peer failures: snapshot missing TypeId and helper output budget; peer evidence corrected, production guards unchanged."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/native-root-final.tap.log",
+      "cause": "Initial 181/182: family tool advertisement 32774 bytes exceeded retained 32768-byte limit by six; shortened new field description only; final182 passed."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/policy-root-final.tap.log",
+      "cause": "Initial86/87: old tool-absence assertion updated for the separately admitted type tool, raw/read-only exclusion preserved; final87 passed."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/impact-root-final.tap.log",
+      "cause": "Initial64/65: old unsupported-type-tool assertion updated to reject valid type requests without trusted preparation; preview remains read-only and grants no write; final65 passed."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/host-final/compile.log",
+      "cause": "Initial fixture duplicated the production RequireProjectEdit method already extracted; removed fixture duplicate, final80 passed."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/source-build-final.log",
+      "cause": "Relative output rejected before source creation; final absolute path built successfully."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/candidate-build-final.log",
+      "cause": "Forward-slash compiler directory was not an exact normalized Windows path; corrected absolute path verified fixed payload, no compiler check weakened."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/node-initial-empty-temp-directories.json",
+      "cause": "Automatic approval rejected removal of nine empty fixture directories with blocked by policy; command did not execute; directories retained without retry or bypass."
+    },
+    {
+      "record": "artifacts/native-type-parameter-write-validation-20261105-01/ui-existing-baseline-comparison.json",
+      "cause": "Seventeen broader UI fixture failures match old HEAD; not repaired and no complete-suite success claimed."
+    },
+    {
+      "cause": "Pre-existing fixed35ms query test remains timing-sensitive under parallel execution; final native suite uses one test file at a time."
+    }
+  ],
+  "preservedEarlierArtifacts": [
+    "artifacts/buildx-source-20261105-12",
+    "artifacts/buildx-source-20261105-13",
+    "artifacts/buildx-revit2024-type-parameter-write-20261105-01",
+    "artifacts/native-type-parameter-write-validation-20261105-01/archive-roundtrip.json"
+  ],
+  "realRevitLoadVerified": false,
+  "realModelExecutionVerified": false,
+  "realWebViewVerified": false,
+  "realCodexConversationVerified": false,
+  "customerMachineVerified": false,
+  "installedPluginChanged": false,
+  "serviceRestarted": false,
+  "codexBundled": false,
+  "installable": false,
+  "releaseReady": false,
+  "remaining": [
+    "Manual type write through the same trusted review and per-action decision owner",
+    "Other selected common commands",
+    "Native schematic and annotation, then dependency removal",
+    "Four package runtime blockers recorded in candidate.missing",
+    "Third-party/plugin license, pypdf, data upgrade/restore, license backend",
+    "Actual Revit/WebView/Codex and clean-customer acceptance",
+    "Existing UI and fixed35ms fixture maintenance"
+  ],
+  "automationShouldRemainEnabled": true,
+  "externalOnlyRemaining": false,
+  "planComplete": false
+}

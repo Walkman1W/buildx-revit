@@ -276,5 +276,19 @@
   "parameter-write-instance-policy-producer.test.mjs",
   "parameter-write-instance-policy-transport.test.mjs",
   "parameter-write-instance-policy-ui.test.mjs",
-  "test-support/parameter-write-instance-policy-fixtures.mjs"
+  "test-support/parameter-write-instance-policy-fixtures.mjs",
+  "lib/native-type-parameter-writes.mjs",
+  "lib/type-parameter-write-approval.mjs",
+  "public/type-parameter-write-review.mjs",
+  "revit-addin/TypeParameterWriteApproval.cs",
+  "native-type-parameter-write-contract.test.mjs",
+  "native-type-parameter-write-approval.test.mjs",
+  "native-type-parameter-write-http.test.mjs",
+  "native-type-parameter-write-producer.test.mjs",
+  "native-type-parameter-write-transport.test.mjs",
+  "native-type-parameter-write-ui.test.mjs",
+  "test-support/native-type-parameter-write-approval-fixtures.mjs",
+  "test-support/native-type-parameter-write-producer.mjs",
+  "test-support/native-type-parameter-write-peers.cs",
+  "test-support/native-type-parameter-write-transport-fixtures.mjs"
 ]

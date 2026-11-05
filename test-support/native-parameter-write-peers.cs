@@ -137,6 +137,7 @@ namespace RevitLocalCodex {
         // Exact production methods injected unchanged. Other operation bodies are
         // explicit unreachable peers because this suite only calls set_parameters.
         // PRODUCTION_ACTION_METHODS
+        private static object WriteTypeParameter(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope type-write peer; actual type writer is compiled in its dedicated suite."); }
         internal static object DescribeForPeer(Element element) { return DescribeElement(element); }
         private static object TransformElements(Document doc,string operation,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope transform peer."); }
         private static object CreateWall(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope wall peer."); }

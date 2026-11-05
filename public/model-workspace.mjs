@@ -45,6 +45,7 @@ export function modelCommandCatalog(value) {
     group:typeof item.group === 'string' ? item.group.slice(0,80) : '其他',readOnly:item.readOnly === true,
     effectKind:item.effectKind==='model_transaction'?'model_transaction':null,
     enabled:item.enabled === true,unavailableReason:typeof item.unavailableReason === 'string' ? item.unavailableReason.slice(0,500) : '',
+    manualExecution:item.manualExecution!==false,manualUnavailableReason:typeof item.manualUnavailableReason==='string'?item.manualUnavailableReason.slice(0,500):'',
     inputSchema:item.inputSchema && typeof item.inputSchema === 'object' && item.inputSchema.type === 'object' ? item.inputSchema : null,
     icon:item.readOnly === true ? '⌕' : '◇'}));
 }
@@ -373,7 +374,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   }
   function renderCommandConfirmation(row){if(row.confirmLabel)row.confirmLabel.hidden=!commandNeedsConfirmation(row.command,row.inputs);}
   function applyCommand(command, inputs, error) {
-    if (!active || !snapshot?.directCommandsAvailable || !(snapshot.commandsReady ?? snapshot.ready) || command.enabled === false || snapshot.blocked || snapshot.busy || snapshot.modelPermissionPending || snapshot.readOnly || snapshot.persistence?.status === 'failed') return;
+    if (!active || !snapshot?.directCommandsAvailable || !(snapshot.commandsReady ?? snapshot.ready) || command.enabled === false || command.manualExecution===false || snapshot.blocked || snapshot.busy || snapshot.modelPermissionPending || snapshot.readOnly || snapshot.persistence?.status === 'failed') return;
     const form=rows.find(row=>row.id===command.id),sources=[];
     for(const field of form?.fields || []){
       const check=field.validate?.();
@@ -416,6 +417,11 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const copy = el('span','model-command-copy'); copy.append(commandName(command.name,'system'),el('small','',command.description));
       if (command.readOnly === false) copy.append(el('small','model-command-effect','涉及模型或文件操作'));
       if (command.enabled === false) copy.append(el('small','model-command-unavailable',command.unavailableReason || '当前环境尚未就绪'));
+      if(command.manualExecution===false){
+        copy.append(el('small','model-command-unavailable',command.manualUnavailableReason||'请在对话中发起，逐项审阅类型影响并确认本次操作。'));
+        row.append(el('span','model-command-icon',command.icon||'◇'),copy);item.append(row);groups.get(group).append(item);
+        continue;
+      }
       const fields = command.inputSchema ? Object.entries(command.inputSchema.properties || {}).filter(([key]) => key !== 'expected_document').sort(([a],[b])=>Number(a==='mode')-Number(b==='mode')) : command.parameters ? [['keyword',{type:'string',maxLength:200}],['category',{type:'string',enum:MODEL_CATEGORIES.map(item => item.value),default:'all'}]] : [];
       const hasParameters = fields.length > 0 || command.readOnly === false;
       const apply = button('model-command-apply',command.enabled === false ? '不可用' : hasParameters ? '展开' : '应用');
@@ -493,7 +499,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     createCommandHelp.textContent=kind==='sequence'?'串联现有只读查询，生成可复用的步骤命令。':kind==='csharp'?'用日常语言描述需求，生成可复用的 C# 命令。':'该类型暂未接入，请选择 C# 命令或只读步骤命令。';
   }
   function commandActionAvailable(id) {
-    return active && snapshot?.directCommandsAvailable && (snapshot.commandsReady ?? snapshot.ready) && !snapshot.blocked && !snapshot.busy && !snapshot.readOnly && snapshot.persistence?.status !== 'failed' && commandCatalog.some(item=>item.id===id && item.enabled!==false);
+    return active && snapshot?.directCommandsAvailable && (snapshot.commandsReady ?? snapshot.ready) && !snapshot.blocked && !snapshot.busy && !snapshot.readOnly && snapshot.persistence?.status !== 'failed' && commandCatalog.some(item=>item.id===id && item.enabled!==false&&item.manualExecution!==false);
   }
   function renderDraftOrigin() {
     if(!draftOriginStatus || !draftOriginClear)return;

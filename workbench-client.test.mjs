@@ -11,6 +11,7 @@ import {MODELLING_TOOLS,MODELLING_TEMPLATE_VERSION,compileModellingTool} from '.
 import {invokeCommand} from './lib/command-store.mjs';
 import {FAMILY_PANEL_CONFIRMATION_ONLY} from './lib/family-tools.mjs';
 import {NATIVE_PARAMETER_WRITE_NAMES} from './lib/native-parameter-writes.mjs';
+import {isNativeTypeParameterWrite} from './lib/native-type-parameter-writes.mjs';
 import {LEGACY_PANEL_TOOL_NAMES} from './lib/panel-tools.mjs';
 
 test('mutating contracts validate ids, mode and UTF8 bounds',()=>{
@@ -30,7 +31,7 @@ test('MCP lists the complete tool catalog and connection status derives its coun
   assert.equal(new Set(ALL_PANEL_TOOLS).size,ALL_PANEL_TOOLS.length);
   for(const tool of WORKBENCH_TOOLS){
     const advertised=tools.find(value=>value.name===tool.name);
-    if(FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name))assert.equal(advertised,undefined);
+    if(FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name)||isNativeTypeParameterWrite(tool.name))assert.equal(advertised,undefined);
     else assert.deepEqual(advertised,tool);
   }
   for(const tool of MODELLING_TOOLS)assert.deepEqual(tools.find(t=>t.name===tool.name),tool);

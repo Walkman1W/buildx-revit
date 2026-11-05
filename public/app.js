@@ -961,6 +961,9 @@ function dynamicApprovalAwaitingResult(owner){return owner?.request.kind==='mode
 function dynamicApprovalPaint(owner){
   if(dynamicApproval!==owner)return;
   const box=$('dynamic-approval'), feedback=owner.feedback;
+  // A type review has no usable controls until its literal module and complete
+  // immutable facts have been checked. Late loads cannot revive this owner.
+  if(!owner.accept||!owner.decline||!feedback){box.hidden=true;return;}
   box.hidden=owner.request.conversationId!==lastSession?.conversation?.id;
   owner.accept.disabled=owner.state!=='pending';owner.decline.disabled=owner.state!=='pending';
   feedback.textContent=owner.resultMessage??{pending:'请核对完整操作后决定。',submitting:'正在提交确认…',accepted:owner.request.kind==='model'?'确认已提交，正在等待模型操作结果…':'确认已提交，执行结果需另行核对。',declined:'拒绝已提交。',expired:'确认已超时；此操作不能再从这里批准。',disconnected:'连接或对话已变化；此操作不能再从这里批准。',unknown:'确认是否送达尚未核对，请勿重复提交。'}[owner.state];
@@ -989,7 +992,7 @@ function invalidateDynamicApproval(){
   if(!owner||!['pending','submitting'].includes(owner.state))return;
   settleDynamicApproval(owner,owner.state==='submitting'?'unknown':'disconnected');
 }
-function showDynamicApproval(value){
+async function showDynamicApproval(value){
   const box=$('dynamic-approval');
   if(!value){
     // The server removes a claimed proposal from SSE before the HTTP receipt
@@ -1000,14 +1003,16 @@ function showDynamicApproval(value){
     return;
   }
   const str=(v,max,empty=false)=>typeof v==='string'&&v.length<=max&&(empty||v.length>0)&&!v.includes('\0');
+  const typeWrite=value?.action==='revit_set_type_parameter';
   if(!modelUiEnabled||!ready||!busy||!value||typeof value!=='object'||Array.isArray(value)||
     !str(value.id,200)||!/^\w[\w-]*$/.test(value.id)||typeof value.digest!=='string'||!/^[a-f0-9]{64}$/.test(value.digest)||
     !['terminal','browser','plugin','model'].includes(value.kind)||!str(value.action,16384)||!str(value.target,4096)||
     !str(value.source,512)||!str(value.cwd,4096,true)||!str(value.parameters,65536,true)||
-    !Number.isSafeInteger(value.deadline)||value.deadline<=0||!str(value.conversationId,200)||value.conversationId!==lastSession?.conversation?.id){
+    !Number.isSafeInteger(value.deadline)||value.deadline<=0||!str(value.conversationId,200)||value.conversationId!==lastSession?.conversation?.id||
+    typeWrite&&(value.kind!=='model'||!str(value.typeParameterReview,60000))||!typeWrite&&Object.hasOwn(value,'typeParameterReview')){
     invalidateDynamicApproval();box.hidden=true;return;
   }
-  const fields=['id','digest','kind','action','target','cwd','source','parameters','deadline','conversationId'];
+  const fields=['id','digest','kind','action','target','cwd','source','parameters','deadline','conversationId','typeParameterReview'];
   if(dynamicApproval?.request.id===value.id){
     if(fields.some(key=>dynamicApproval.request[key]!==value[key])){invalidateDynamicApproval();box.hidden=true;}
     return;
@@ -1017,17 +1022,33 @@ function showDynamicApproval(value){
   const request=Object.freeze(Object.fromEntries(fields.map(key=>[key,value[key]])));
   const owner={request,accountEpoch,contextEpoch,connectionGeneration:modelPickerIdentity.connectionGeneration,
     accountRevision:modelPickerIdentity.accountRevision,state:'pending',timer:null};
-  dynamicApproval=owner;box.replaceChildren();box.hidden=false;
+  dynamicApproval=owner;box.replaceChildren();box.hidden=typeWrite;
+  const expire=()=>{if(dynamicApproval===owner&&['pending','submitting'].includes(owner.state)){settleDynamicApproval(owner,owner.state==='submitting'?'unknown':'expired');updateButtons();}};
+  if(request.deadline<=Date.now())expire();else owner.timer=setTimeout(expire,Math.min(request.deadline-Date.now(),2147483647));
+  let typeReviewCard=null;
+  if(typeWrite){
+    updateButtons();
+    try{
+      const review=await import('./type-parameter-write-review.mjs');
+      const facts=review.parseTypeParameterWriteReview(request.typeParameterReview);
+      if(dynamicApproval!==owner||owner.state!=='pending')return;
+      if(!dynamicApprovalCurrent(owner)){invalidateDynamicApproval();return;}
+      if(request.deadline<=Date.now()){expire();return;}
+      typeReviewCard=review.renderTypeParameterWriteReview(document,facts);
+    }catch{
+      if(dynamicApproval===owner&&owner.state==='pending'){settleDynamicApproval(owner,'disconnected');box.hidden=true;updateButtons();}
+      return;
+    }
+  }
+  box.hidden=false;
   const names={terminal:'终端',browser:'浏览器',plugin:'插件',model:'模型'},title=node('strong','','需要确认 '+names[request.kind]+' 操作'),detail=node('dl');
-  for(const [label,text] of [['操作',request.action],['目标',request.target],['参数',request.parameters],['工作目录',request.cwd],['来源',request.source]]){
+  for(const [label,text] of typeWrite?[['操作','修改类型参数'],['目标',request.target],['来源',request.source]]:[['操作',request.action],['目标',request.target],['参数',request.parameters],['工作目录',request.cwd],['来源',request.source]]){
     const value=node('dd','',text||'（空）');value.tabIndex=0;detail.append(node('dt','',label),value);
   }
   const actions=node('div','dynamic-approval-actions'),accept=node('button','','同意本次操作'),decline=node('button','secondary-button','拒绝'),feedback=node('p','dynamic-approval-feedback');
-  accept.type='button';decline.type='button';feedback.setAttribute('role','status');actions.append(accept,decline);box.append(title,detail,actions,feedback);
-  if(request.kind==='model')box.insertBefore(node('p','dynamic-approval-feedback','请核对完整参数。C# 脚本不是安全沙盒，回滚不能撤销文件、网络等事务外副作用。'),actions);
+  accept.type='button';decline.type='button';feedback.setAttribute('role','status');actions.append(accept,decline);box.append(title,detail,...(typeReviewCard?[typeReviewCard]:[]),actions,feedback);
+  if(request.kind==='model'&&!typeWrite)box.insertBefore(node('p','dynamic-approval-feedback','请核对完整参数。C# 脚本不是安全沙盒，回滚不能撤销文件、网络等事务外副作用。'),actions);
   owner.accept=accept;owner.decline=decline;owner.feedback=feedback;
-  const expire=()=>{if(dynamicApproval===owner&&['pending','submitting'].includes(owner.state)){settleDynamicApproval(owner,owner.state==='submitting'?'unknown':'expired');updateButtons();}};
-  if(request.deadline<=Date.now())expire();else owner.timer=setTimeout(expire,Math.min(request.deadline-Date.now(),2147483647));
   async function decide(decision){
     if(owner.state!=='pending'||!dynamicApprovalCurrent(owner))return;
     if(request.deadline<=Date.now()){expire();return;}
@@ -1292,7 +1313,7 @@ async function runCommand(detail) {
   const conversationId = commandConversationId(), commandId = detail?.commandId, parameters = detail?.parameters;
   if (!conversationId || !knownCommand(commandId) || !parameters || typeof parameters !== 'object' || Array.isArray(parameters)) return;
   const definition=commandCatalog?.find(command=>command.id===commandId);
-  if(definition?.enabled===false)return;
+  if(definition?.enabled===false||definition?.manualExecution===false)return;
   if(definition?.readOnly===false&&detail?.confirmed!==true){
     const grant=modelPermission,exempt=definition.effectKind==='model_transaction'&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===conversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now())&&(grant.level==='automatic'||parameters.mode!=='commit')&&!(grant.level==='rollback'&&parameters.mode==='commit');
     if(!exempt)return;

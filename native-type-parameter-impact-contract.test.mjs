@@ -96,14 +96,17 @@ test('Ajv validates the bounded business result inside the complete atomic trans
   assert.equal(output({...envelope,value:{...impactValue(),coverage:{...impactValue().coverage,complete:false}}}),false);
 });
 
-test('preview metadata enters read MCP only and does not register or authorize a type write',()=>{
+test('preview metadata enters read MCP only and cannot authorize the independently registered type write',()=>{
   assert.equal(MODEL_AI_READ_TOOLS.some(item=>item.name===IMPACT_TOOL),true);assert.equal(MODEL_AI_EFFECT_TOOLS.some(item=>item.name===IMPACT_TOOL),false);
   assert.equal(supportsModelPermissionTool(IMPACT_TOOL),false);assert.equal(describeModelOperationSchema({tool:IMPACT_TOOL}).ok,false);
   assert.equal(NATIVE_PARAMETER_QUERY_TOOLS.some(item=>item.name==='revit_set_type_parameter'),false);
-  assert.equal(supportsModelPermissionTool('revit_set_type_parameter'),false);
+  assert.equal(supportsModelPermissionTool('revit_set_type_parameter'),true);
   const scope={client:'controlled',conversationId:'controlled',generation:1,revision:1,account:'controlled',document:{session:'controlled',path:'D:\\controlled.rvt',title:'Controlled'}};
   let calls=0;const owner=createModelPermissionOwner({invoke:async()=>{calls++;throw new Error('preview must not invoke a write');},verifyDocument:async()=>true});
   owner.setLevel({level:'automatic',scope,isCurrent:()=>true});
-  for(const tool of [IMPACT_TOOL,'revit_set_type_parameter'])assert.throws(()=>owner.propose({scope,callId:tool,tool,parameters:impactArguments(),isCurrent:()=>true}),{code:'MODEL_OPERATION_UNSUPPORTED'});
+  assert.throws(()=>owner.propose({scope,callId:IMPACT_TOOL,tool:IMPACT_TOOL,parameters:impactArguments(),isCurrent:()=>true}),{code:'MODEL_OPERATION_UNSUPPORTED'});
+  const p=impactParameter(),parameters={expected_document:scope.document.path,type_id:IMPACT_TYPE_ID,parameter_id:IMPACT_PARAMETER_ID,value:p.value_internal,value_unit:'internal',
+    expected_state:{storage_type:p.storage_type,has_value:p.has_value,value_internal:p.value_internal,data_type:p.data_type},expected_instance_ids:impactValue().instance_ids};
+  assert.throws(()=>owner.propose({scope,callId:'unprepared-type-write',tool:'revit_set_type_parameter',parameters,isCurrent:()=>true}),{code:'MODEL_TYPE_PARAMETER_REVIEW_UNAVAILABLE'});
   assert.equal(calls,0);
 });

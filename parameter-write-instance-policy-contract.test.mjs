@@ -84,5 +84,9 @@ test('the operation remains a legacy model transaction and never appears in eith
   assert.equal(LEGACY_PANEL_WORKBENCH_TOOLS.filter(item=>item.name===BATCH_TOOL).length,1);
   assert.ok(MODEL_AI_EFFECT_TOOLS.some(item=>item.name===BATCH_TOOL));assert.ok(!MODEL_AI_READ_TOOLS.some(item=>item.name===BATCH_TOOL));
   assert.ok(!READONLY_WORKBENCH_TOOL_NAMES.includes(BATCH_TOOL));
-  assert.ok(!WORKBENCH_TOOLS.some(item=>item.name==='revit_set_type_parameter'));
+  assert.ok(WORKBENCH_TOOLS.some(item=>item.name==='revit_set_type_parameter'));
+  assert.ok(MODEL_AI_EFFECT_TOOLS.some(item=>item.name==='revit_set_type_parameter'));
+  assert.ok(!LEGACY_PANEL_WORKBENCH_TOOLS.some(item=>item.name==='revit_set_type_parameter'));
+  assert.ok(!MODEL_AI_READ_TOOLS.some(item=>item.name==='revit_set_type_parameter'));
+  assert.ok(!READONLY_WORKBENCH_TOOL_NAMES.includes('revit_set_type_parameter'));
 });

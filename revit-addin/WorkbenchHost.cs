@@ -17,7 +17,7 @@ namespace RevitLocalCodex
     // This local queue is an application integration boundary, not a security sandbox.
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
-        private const string HostVersion = "0.8.7";
+        private const string HostVersion = "0.8.8";
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");
@@ -47,6 +47,7 @@ namespace RevitLocalCodex
         private UIControlledApplication controlledApplication;
         // One owner per host session; family documents never enter the project script group.
         private BuildX.FamilyRevit.RevitFamilyWorkflow familyWorkflow;
+        private TypeParameterWriteApproval typeParameterApprovals;
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
@@ -279,6 +280,7 @@ namespace RevitLocalCodex
                     nativeModelQueriesVersion = 1, nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
+                    nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
@@ -713,13 +715,32 @@ namespace RevitLocalCodex
                 throw new InvalidOperationException("Active document is no longer valid; snapshot was not published.");
             long? viewId = doc == null || doc.ActiveView == null ? (long?)null : doc.ActiveView.Id.Value;
             var boundArgs = new Dictionary<string, object>(args);
+            object proposalWire;
+            bool preparesTypeWrite = boundArgs.TryGetValue("type_write_proposal", out proposalWire);
+            if (preparesTypeWrite) boundArgs.Remove("type_write_proposal");
             // Omission is resolved once, inside the same Revit callback that
             // consumes it. An explicit identity is never replaced or guessed.
             if (!boundArgs.ContainsKey("expected_document") && (operation != "health" || doc != null))
                 boundArgs["expected_document"] = doc == null ? "" : doc.PathName;
             if ((operation != "status" && operation != "health") || args.ContainsKey("expected_document"))
                 RequireDocument(doc, ExpectedDocument(boundArgs));
-            object value = Dispatch(uiapp, operation, boundArgs, id, access);
+            object value;
+            WorkbenchActions.TypeWritePreparation preparation = null;
+            if (preparesTypeWrite)
+            {
+                if (operation != "get_type_parameter_impact") throw new InvalidOperationException("Type-write preparation requires the atomic type-impact operation.");
+                foreach (string field in boundArgs.Keys)
+                    if (field != "expected_document" && field != "type_id" && field != "parameter_id") throw new InvalidOperationException("Unknown type-impact argument: " + field);
+                var proposal = proposalWire as Dictionary<string, object>;
+                var plan = WorkbenchActions.ParseTypeWriteArguments(proposal);
+                RequireProjectEdit(doc, plan.ExpectedDocument, access);
+                if (doc == null || String.IsNullOrWhiteSpace(doc.PathName)) throw new InvalidOperationException("Type-write preparation requires a saved project.");
+                if (plan.TypeId != NativeModelQueries.ExactId(boundArgs, "type_id") || plan.ParameterId != NativeModelQueries.ExactSignedId(boundArgs, "parameter_id"))
+                    throw new InvalidOperationException("Type-write proposal differs from the reviewed type/parameter.");
+                preparation = WorkbenchActions.PrepareTypeParameterWrite(doc, proposal);
+                value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = FreezeResult(preparation.Impact.Dto()), modifiedByOperation = false };
+            }
+            else value = Dispatch(uiapp, operation, boundArgs, id, access);
             Document after = uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
             // Revit can expose a new managed wrapper for the same open native
             // document. The existing document owner compares native identity,
@@ -730,7 +751,30 @@ namespace RevitLocalCodex
             long? afterViewId = after == null || after.ActiveView == null ? (long?)null : after.ActiveView.Id.Value;
             if (viewId != afterViewId)
                 throw new InvalidOperationException("Active view changed during the read; snapshot was not published.");
+            if (preparation != null)
+                return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true,
+                    type_write_preparation = TypeParameterApprovals().Issue(doc, preparation.Plan) });
             return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true });
+        }
+
+        private TypeParameterWriteApproval TypeParameterApprovals()
+        {
+            if (typeParameterApprovals == null)
+            {
+                var nativeDocuments = new BuildX.FamilyRevit.RevitProjectDocumentSource(Thread.CurrentThread.ManagedThreadId);
+                typeParameterApprovals = new TypeParameterWriteApproval(session, nativeDocuments.SameOpenDocument);
+            }
+            return typeParameterApprovals;
+        }
+
+        private Dictionary<string, object> BindTypeWritePermit(Document doc, Dictionary<string, object> wire)
+        {
+            var args = new Dictionary<string, object>(wire, StringComparer.Ordinal); object approval;
+            args.TryGetValue("approved_type_write", out approval); args.Remove("approved_type_write");
+            WorkbenchActions.TypeWritePlan plan = WorkbenchActions.ParseTypeWriteArguments(args);
+            var permit = TypeParameterApprovals().Consume(doc, plan, approval);
+            args.Add(TypeParameterWriteApproval.PermitArgument, permit);
+            return args;
         }
 
         private object Dispatch(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access)
@@ -791,6 +835,11 @@ namespace RevitLocalCodex
                 object readResult = FreezeResult(WorkbenchActions.Read(uiapp, operation, args));
                 return new { operation, hostSession = session, document = doc == null ? null : new { title = doc.Title, path = doc.PathName }, value = readResult, modifiedByOperation = false };
             }
+            if (operation == "set_type_parameter")
+            {
+                RequireProjectEdit(doc, ExpectedDocument(args), access);
+                args = BindTypeWritePermit(doc, args);
+            }
             if (operation != "execute_csharp" && operation != "smart_annotate" && operation != "build_schematic" && operation != "export_schematic" && !WorkbenchActions.IsWrite(operation))
                 throw new InvalidOperationException("Unknown workbench operation.");
             RequireProjectEdit(doc, ExpectedDocument(args), access);
@@ -850,6 +899,7 @@ namespace RevitLocalCodex
                     nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
+                    nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }

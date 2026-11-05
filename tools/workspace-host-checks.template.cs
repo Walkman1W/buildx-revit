@@ -52,7 +52,7 @@ namespace RevitLocalCodex {
     internal sealed class View { public ElementId Id = new ElementId(12); }
     internal sealed class Document {
         private readonly object nativeIdentity;
-        public string PathName="D:\\fixture.rvt";
+        public string PathName="D:\\fixture.rvt", Title="Host fixture";
         public View ActiveView=new View();
         public bool IsValidObject=true;
         public bool IsReadOnly,IsFamilyDocument,IsLinked;
@@ -73,6 +73,24 @@ namespace RevitLocalCodex {
     internal sealed class FamilyApprovalPeer { public void DisposeApprovalObserver(){} }
     internal static class WorkbenchActions {
         // ORIGINAL_OPERATION_CLASSIFICATION
+        // Type-write business behavior is tested by the separate actual
+        // book/writer producer. Scheduler checks must never approve it here.
+        internal sealed class TypeWritePlan { internal long TypeId,ParameterId; internal string ExpectedDocument; }
+        internal sealed class ImpactPeer { internal object Dto(){throw new NotSupportedException("Type writing is outside scheduler checks.");} }
+        internal sealed class TypeWritePreparation { internal TypeWritePlan Plan;internal ImpactPeer Impact; }
+        internal static TypeWritePlan ParseTypeWriteArguments(Dictionary<string,object> args){throw new NotSupportedException("Type writing is outside scheduler checks.");}
+        internal static TypeWritePreparation PrepareTypeParameterWrite(Document doc,Dictionary<string,object> args){throw new NotSupportedException("Type writing is outside scheduler checks.");}
+    }
+    internal static class NativeModelQueries {
+        internal static long ExactId(Dictionary<string,object> args,string key){throw new NotSupportedException("Type writing is outside scheduler checks.");}
+        internal static long ExactSignedId(Dictionary<string,object> args,string key){throw new NotSupportedException("Type writing is outside scheduler checks.");}
+    }
+    internal sealed class TypeParameterWriteApproval {
+        internal const string PermitArgument="__native_type_write_permit";
+        internal sealed class Permit { }
+        internal TypeParameterWriteApproval(string session,Func<object,object,bool?> identity){ }
+        internal object Issue(Document doc,WorkbenchActions.TypeWritePlan plan){throw new NotSupportedException("Type writing is outside scheduler checks.");}
+        internal Permit Consume(Document doc,WorkbenchActions.TypeWritePlan plan,object provided){throw new NotSupportedException("Type writing is outside scheduler checks.");}
     }
     internal sealed class ExternalEvent {
         public ExternalEventRequest Result = ExternalEventRequest.Accepted;
@@ -125,6 +143,7 @@ namespace RevitLocalCodex {
         private Timer queueTimer;
         private UIControlledApplication controlledApplication;
         private FamilyApprovalPeer familyWorkflow;
+        private TypeParameterWriteApproval typeParameterApprovals;
         private ExternalEvent externalEvent = new ExternalEvent();
         private SchedulerObservation pendingObservation;
         private DateTime nextRaise = DateTime.MinValue;
