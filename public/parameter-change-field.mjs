@@ -184,7 +184,7 @@ export function createParameterChangeField({document,Event=globalThis.Event,id,o
       // its published exact-ID schema and never rounds a native decimal ID.
       elements=[];let unsupportedIds=0,unsupportedTypes=0;
       for(const item of data.items){
-        if(exactIds&&(item?.is_type===true||item?.is_element_type===true||item?.class_name==='ElementType'||item?.class_name==='FamilySymbol')){unsupportedTypes++;continue;}
+        if(item?.is_type===true||item?.is_element_type===true||item?.class_name==='ElementType'||item?.class_name==='FamilySymbol'){unsupportedTypes++;continue;}
         const element_id=normalizeId(item?.element_id);
         if(element_id===null)unsupportedIds++;
         else if(typeof item.name==='string')elements.push({...item,element_id});

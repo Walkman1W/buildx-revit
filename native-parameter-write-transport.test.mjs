@@ -14,7 +14,7 @@ async function fixture(t,produce,input){
   const parent=await fs.realpath(os.tmpdir()),root=await fs.mkdtemp(path.join(parent,'buildx-setter-queue-')),owner=randomUUID(),identity=await fs.lstat(root,{bigint:true});
   await fs.writeFile(path.join(root,'owner.json'),JSON.stringify({owner}),{flag:'wx'});
   for(const child of ['inbox','outbox','processing'])await fs.mkdir(path.join(root,'queue',child),{recursive:true});
-  await fs.writeFile(path.join(root,'queue','host.json'),JSON.stringify({sessionId:source.session,pid:process.pid,version:'0.8.3'}));
+  await fs.writeFile(path.join(root,'queue','host.json'),JSON.stringify({sessionId:source.session,pid:process.pid,version:'0.8.7',parameterWriteTargetPolicyVersion:1,parameterWriteTargetPolicy:'instance_only'}));
   let job=null,observed=null,workerError=null,requests=0;
   t.after(async()=>{
     if(job)await job;

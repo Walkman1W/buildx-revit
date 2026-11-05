@@ -150,7 +150,7 @@ async function queueFixture(t){
   });
   const queue=path.join(root,'queue');
   for(const child of ['inbox','outbox','processing'])await fs.mkdir(path.join(queue,child),{recursive:true});
-  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId:sourceDocument.session,pid:process.pid,version:'0.8.2'}),{flag:'wx'});
+  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId:sourceDocument.session,pid:process.pid,version:'0.8.7',parameterWriteTargetPolicyVersion:1,parameterWriteTargetPolicy:'instance_only'}),{flag:'wx'});
   return {root,queue,receiptOwners};
 }
 

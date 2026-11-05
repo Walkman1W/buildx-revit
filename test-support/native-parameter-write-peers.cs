@@ -25,18 +25,20 @@ namespace Autodesk.Revit.DB {
     internal sealed class Definition { public string Name;public ForgeTypeId DataType; public ForgeTypeId GetDataType() { return DataType; } }
     internal sealed class Parameter {
         public ElementId Id; public Definition Definition; public StorageType StorageType; public bool IsReadOnly,HasValue;
-        public object Value; public string Behavior; public Document Document; public Element Element;public int SetCalls,ReadCalls;
+        public object Value; public string Behavior; public Document Document; public Element Element;public Dictionary<string,object> OnSet;public int SetCalls,ReadCalls;
         private void BeforeRead() { ReadCalls++;if(Document.ReadsThrow)throw new InvalidOperationException("Controlled post-commit parameter read failure."); }
         public double AsDouble() { BeforeRead();return Convert.ToDouble(Value,CultureInfo.InvariantCulture); }
         public int AsInteger() { BeforeRead();return Convert.ToInt32(Value,CultureInfo.InvariantCulture); }
         public string AsString() { BeforeRead();return (string)Value; }
         public ElementId AsElementId() { BeforeRead();return (ElementId)Value; }
         private bool Store(object value) {
-            SetCalls++;Document.Events.Add("Set:"+Id.Value);
+            SetCalls++;Document.SetAttempts++;Document.SetTargets.Add((Element==null||Element.Id==null?"null":Element.Id.Value.ToString(CultureInfo.InvariantCulture))+":"+Id.Value.ToString(CultureInfo.InvariantCulture));Document.Events.Add("Set:"+Id.Value);
             if(Behavior=="throws")throw new InvalidOperationException("Controlled Parameter.Set failure.");
             if(Behavior!="trueNoChange"&&Behavior!="falseNoChange") { Value=value;HasValue=true;Document.IsModified=true; }
             if(Behavior=="dataTypeDrift")Definition.DataType=new ForgeTypeId("changed-immediately");
             if(Behavior=="ownerDrift")Element=new ElementType { Id=Element.Id,Document=Document };
+            if(Behavior=="readOnlyAfterSet")IsReadOnly=true;
+            Document.AfterSet(this);
             return Behavior!="falseApplied"&&Behavior!="falseNoChange";
         }
         public bool Set(double value) { return Store(value); } public bool Set(int value) { return Store(value); } public bool Set(string value) { return Store(value); }
@@ -47,8 +49,24 @@ namespace Autodesk.Revit.DB {
     internal sealed class Document {
         public string Title="Parameter write fixture",PathName=@"D:\controlled\parameter-write.rvt",CommitBehavior="normal",RegenerateBehavior="normal",GroupBehavior="normal",StartBehavior="normal";
         public bool IsModified,IsReadOnly,IsLinked,IsFamilyDocument,ReadsThrow;public List<Element> Elements=new List<Element>();public List<string> Events=new List<string>();
-        public int InnerStarts,InnerCommits,InnerRollbacks,Regenerates,GroupStarts,GroupCommits,GroupRollbacks;
+        public int InnerStarts,InnerCommits,InnerRollbacks,Regenerates,GroupStarts,GroupCommits,GroupRollbacks,SetAttempts;public List<string> SetTargets=new List<string>();
         public Element GetElement(ElementId id) { return Elements.SingleOrDefault(element=>element.Id.Value==id.Value); }
+        private static object ChangedValue(Parameter parameter) { return parameter.StorageType==StorageType.Double?(object)(Convert.ToDouble(parameter.Value,CultureInfo.InvariantCulture)+1):parameter.StorageType==StorageType.Integer?(object)(Convert.ToInt32(parameter.Value,CultureInfo.InvariantCulture)+1):(object)((string)parameter.Value+"-drift"); }
+        public void AfterSet(Parameter trigger) {
+            if(trigger.OnSet==null)return;var hook=trigger.OnSet;long elementId=Convert.ToInt64(hook["element_id"],CultureInfo.InvariantCulture),parameterId=Convert.ToInt64(hook["parameter_id"],CultureInfo.InvariantCulture);string action=(string)hook["action"];
+            Element source=GetElement(new ElementId(elementId));Parameter target=source.Parameters.Single(parameter=>parameter.Id.Value==parameterId);
+            if(action=="ownerType")target.Element=new ElementType { Id=source.Id,Document=this };
+            if(action=="ownerOtherDocument")target.Element=new Element { Id=source.Id,Document=new Document() };
+            if(action=="ownerNull")target.Element=null;
+            if(action=="readOnly")target.IsReadOnly=true;
+            if(action=="valueDrift") { target.Value=ChangedValue(target);target.HasValue=true; }
+            if(action=="sourceOtherDocument")source.Document=new Document();
+            if(action=="replaceTypeSource") { var type=new ElementType { Id=source.Id,Document=this };type.Parameters.AddRange(source.Parameters);Elements[Elements.IndexOf(source)]=type; }
+            if(action=="replace"||action=="replaceWrongValue"||action=="replaceWrongOwner") {
+                var replacement=new Parameter { Id=target.Id,Definition=target.Definition,StorageType=target.StorageType,IsReadOnly=target.IsReadOnly,HasValue=target.HasValue,Value=action=="replaceWrongValue"?ChangedValue(target):target.Value,Behavior="normal",Document=this,Element=action=="replaceWrongOwner"?(Element)new ElementType { Id=source.Id,Document=this }:source };
+                source.Parameters[source.Parameters.IndexOf(target)]=replacement;
+            }
+        }
         public void Drift() { foreach(Parameter p in Elements.SelectMany(element=>element.Parameters)) { if(p.StorageType==StorageType.Double)p.Value=Convert.ToDouble(p.Value)+1;else if(p.StorageType==StorageType.Integer)p.Value=Convert.ToInt32(p.Value)+1;else if(p.StorageType==StorageType.String)p.Value=(string)p.Value+"-drift"; } }
         public void Boundary(string behavior) {
             if(behavior=="drift")Drift();
@@ -60,6 +78,7 @@ namespace Autodesk.Revit.DB {
                     if(behavior=="storageChange")p.StorageType=p.StorageType==StorageType.Double?StorageType.Integer:StorageType.Double;if(behavior=="missingValue")p.HasValue=false;
                     if(behavior=="dataTypeDrift")p.Definition.DataType=new ForgeTypeId("changed-during-boundary");if(behavior=="dataTypeNull")p.Definition.DataType=null;
                     if(behavior=="ownerDrift")p.Element=new ElementType { Id=element.Id,Document=this };
+                    if(behavior=="readOnly")p.IsReadOnly=true;
                 }
                 if(behavior=="replaceParameter") {
                     var replacements=element.Parameters.Select(p=>new Parameter { Id=new ElementId(p.Id.Value),Definition=p.Definition,StorageType=p.StorageType,HasValue=p.HasValue,Value=p.StorageType==StorageType.Double?(object)(Convert.ToDouble(p.Value)+1):p.StorageType==StorageType.Integer?(object)(Convert.ToInt32(p.Value)+1):(object)((string)p.Value+"-replacement"),Behavior="normal",Document=this,Element=element }).ToList();
@@ -70,10 +89,10 @@ namespace Autodesk.Revit.DB {
         public void Regenerate() { Regenerates++;Events.Add("Regenerate");if(RegenerateBehavior=="throws")throw new InvalidOperationException("Controlled Regenerate failure.");Boundary(RegenerateBehavior); }
     }
     internal sealed class Snapshot {
-        private sealed class State { internal Parameter Parameter;internal object Value;internal bool HasValue;internal StorageType Storage;internal ForgeTypeId DataType;internal Element Owner; }
-        private readonly bool modified,readsThrow;private readonly List<Tuple<Element,List<Parameter>,bool>> elements;private readonly List<State> values;
-        public Snapshot(Document doc) { modified=doc.IsModified;readsThrow=doc.ReadsThrow;elements=doc.Elements.Select(element=>Tuple.Create(element,element.Parameters.ToList(),element.IsValidObject)).ToList();values=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>new State { Parameter=p,Value=p.Value,HasValue=p.HasValue,Storage=p.StorageType,DataType=p.Definition.DataType,Owner=p.Element }).ToList(); }
-        public void Restore(Document doc) { doc.IsModified=modified;doc.ReadsThrow=readsThrow;doc.Elements.Clear();foreach(var element in elements){doc.Elements.Add(element.Item1);element.Item1.Parameters.Clear();element.Item1.Parameters.AddRange(element.Item2);element.Item1.IsValidObject=element.Item3;}foreach(var item in values){item.Parameter.Value=item.Value;item.Parameter.HasValue=item.HasValue;item.Parameter.StorageType=item.Storage;item.Parameter.Definition.DataType=item.DataType;item.Parameter.Element=item.Owner;} }
+        private sealed class State { internal Parameter Parameter;internal object Value;internal bool HasValue,ReadOnly;internal StorageType Storage;internal ForgeTypeId DataType;internal Element Owner; }
+        private readonly bool modified,readsThrow;private readonly List<Tuple<Element,List<Parameter>,bool,Document>> elements;private readonly List<State> values;
+        public Snapshot(Document doc) { modified=doc.IsModified;readsThrow=doc.ReadsThrow;elements=doc.Elements.Select(element=>Tuple.Create(element,element.Parameters.ToList(),element.IsValidObject,element.Document)).ToList();values=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>new State { Parameter=p,Value=p.Value,HasValue=p.HasValue,ReadOnly=p.IsReadOnly,Storage=p.StorageType,DataType=p.Definition.DataType,Owner=p.Element }).ToList(); }
+        public void Restore(Document doc) { doc.IsModified=modified;doc.ReadsThrow=readsThrow;doc.Elements.Clear();foreach(var element in elements){doc.Elements.Add(element.Item1);element.Item1.Parameters.Clear();element.Item1.Parameters.AddRange(element.Item2);element.Item1.IsValidObject=element.Item3;element.Item1.Document=element.Item4;}foreach(var item in values){item.Parameter.Value=item.Value;item.Parameter.HasValue=item.HasValue;item.Parameter.IsReadOnly=item.ReadOnly;item.Parameter.StorageType=item.Storage;item.Parameter.Definition.DataType=item.DataType;item.Parameter.Element=item.Owner;} }
     }
     internal enum TransactionStatus { Uninitialized,Started,Committed,RolledBack,Pending,Error }
     internal enum FailureProcessingResult { Continue,ProceedWithRollBack }
@@ -141,18 +160,23 @@ namespace RevitLocalCodex {
     internal static class NativeParameterWritePeerProgram {
         private static object Value(Dictionary<string,object> args,string key,object fallback) { object result;return args.TryGetValue(key,out result)?result:fallback; }
         private static string Text(Dictionary<string,object> args,string key,string fallback) { return Convert.ToString(Value(args,key,fallback),CultureInfo.InvariantCulture); }
-        private static object Facts(Document doc) { return new { doc.IsModified,source_ids=doc.Elements.Select(element=>element.Id.Value.ToString(CultureInfo.InvariantCulture)).ToArray(),parameters=doc.Elements.SelectMany(element=>element.Parameters).Select(p=>new { parameter_id=p.Id.Value,id_exact=p.Id.Value.ToString(CultureInfo.InvariantCulture),storage_type=p.StorageType.ToString(),data_type=p.Definition.DataType==null?null:p.Definition.DataType.TypeId,owner_id=p.Element==null?null:p.Element.Id.Value.ToString(CultureInfo.InvariantCulture),owner_is_type=p.Element is ElementType,p.HasValue,value=p.Value is ElementId?(object)((ElementId)p.Value).Value:p.Value,p.SetCalls,p.ReadCalls }).ToArray() }; }
+        private static object Facts(Document doc) { return new { doc.IsModified,source_ids=doc.Elements.Select(element=>element.Id.Value.ToString(CultureInfo.InvariantCulture)).ToArray(),parameters=doc.Elements.SelectMany(element=>element.Parameters.Select(p=>new { element_id=element.Id.Value.ToString(CultureInfo.InvariantCulture),source_is_type=element is ElementType,source_same_document=Object.ReferenceEquals(element.Document,doc),parameter_id=p.Id.Value,id_exact=p.Id.Value.ToString(CultureInfo.InvariantCulture),storage_type=p.StorageType.ToString(),data_type=p.Definition.DataType==null?null:p.Definition.DataType.TypeId,owner_id=p.Element==null?null:p.Element.Id.Value.ToString(CultureInfo.InvariantCulture),owner_is_type=p.Element is ElementType,owner_same_document=p.Element!=null&&Object.ReferenceEquals(p.Element.Document,doc),p.IsReadOnly,p.HasValue,value=p.Value is ElementId?(object)((ElementId)p.Value).Value:p.Value,p.SetCalls,p.ReadCalls })).ToArray() }; }
+        private static Element AddElement(Document doc,Dictionary<string,object> raw) {
+            Element element=(bool)Value(raw,"isType",false)?new ElementType():new Element();element.Id=new ElementId(Convert.ToInt64(Value(raw,"id",100),CultureInfo.InvariantCulture));element.Document=doc;element.IsValidObject=!(bool)Value(raw,"invalid",false);doc.Elements.Add(element);
+            element.TypeId=new ElementId(Convert.ToInt64(Value(raw,"typeId",-1),CultureInfo.InvariantCulture));element.LevelId=new ElementId(Convert.ToInt64(Value(raw,"levelId",-1),CultureInfo.InvariantCulture));if(raw.ContainsKey("categoryId"))element.Category=new Category { Id=new ElementId(Convert.ToInt64(raw["categoryId"],CultureInfo.InvariantCulture)),Name="Controlled category" };
+            foreach(Dictionary<string,object> parameter in (IList)Value(raw,"parameters",new object[0])) {
+                StorageType storage=(StorageType)Enum.Parse(typeof(StorageType),Text(parameter,"storage","Double"));object value=Value(parameter,"value",null);if(storage==StorageType.Double&&value!=null)value=Convert.ToDouble(value);if(storage==StorageType.Integer&&value!=null)value=Convert.ToInt32(value);if(storage==StorageType.ElementId&&value!=null)value=new ElementId(Convert.ToInt64(value));
+                object dataType=Value(parameter,"dataType",storage==StorageType.Double?"length":"text");string owner=Text(parameter,"owner","instance");Element parameterOwner=owner=="null"?null:owner=="type"?new ElementType { Id=element.Id,Document=doc }:owner=="otherElement"?new Element { Id=new ElementId(999),Document=doc }:owner=="otherDocument"?new Element { Id=element.Id,Document=new Document() }:owner=="invalid"?new Element { Id=element.Id,Document=doc,IsValidObject=false }:element;
+                element.Parameters.Add(new Parameter { Id=new ElementId(Convert.ToInt64(Value(parameter,"id",1),CultureInfo.InvariantCulture)),StorageType=storage,Value=value,HasValue=(bool)Value(parameter,"hasValue",value!=null),IsReadOnly=(bool)Value(parameter,"readOnly",false),Behavior=Text(parameter,"behavior","normal"),Definition=new Definition { Name=Text(parameter,"name","同名参数"),DataType=dataType==null?null:new ForgeTypeId((string)dataType) },Document=doc,Element=parameterOwner,OnSet=Value(parameter,"onSet",null) as Dictionary<string,object> });
+            }
+            string document=Text(raw,"document","current");if(document=="other")element.Document=new Document();if(document=="null")element.Document=null;return element;
+        }
         public static int Main() {
             Console.InputEncoding=new UTF8Encoding(false);Console.OutputEncoding=new UTF8Encoding(false);var json=new JavaScriptSerializer { MaxJsonLength=1024*1024,RecursionLimit=40 };
             var input=json.Deserialize<Dictionary<string,object>>(Console.In.ReadToEnd());var doc=new Document { CommitBehavior=Text(input,"commitBehavior","normal"),RegenerateBehavior=Text(input,"regenerateBehavior","normal"),GroupBehavior=Text(input,"groupBehavior","normal"),StartBehavior=Text(input,"startBehavior","normal"),IsModified=(bool)Value(input,"modifiedBefore",false) };
-            Element element=(bool)Value(input,"sourceIsType",false)?new ElementType():new Element();element.Id=new ElementId(Convert.ToInt64(Value(input,"sourceId",100),CultureInfo.InvariantCulture));element.Document=doc;element.IsValidObject=!(bool)Value(input,"invalidElement",false);doc.Elements.Add(element);
-            element.TypeId=new ElementId(Convert.ToInt64(Value(input,"typeId",-1),CultureInfo.InvariantCulture));element.LevelId=new ElementId(Convert.ToInt64(Value(input,"levelId",-1),CultureInfo.InvariantCulture));if(input.ContainsKey("categoryId"))element.Category=new Category { Id=new ElementId(Convert.ToInt64(input["categoryId"],CultureInfo.InvariantCulture)),Name="Controlled category" };
-            var rawParameters=(IList)Value(input,"parameters",new object[0]);
-            foreach(Dictionary<string,object> raw in rawParameters) {
-                StorageType storage=(StorageType)Enum.Parse(typeof(StorageType),Text(raw,"storage","Double"));object value=Value(raw,"value",null);if(storage==StorageType.Double&&value!=null)value=Convert.ToDouble(value);if(storage==StorageType.Integer&&value!=null)value=Convert.ToInt32(value);if(storage==StorageType.ElementId&&value!=null)value=new ElementId(Convert.ToInt64(value));
-                object dataType=Value(raw,"dataType",storage==StorageType.Double?"length":"text");string owner=Text(raw,"owner","instance");Element parameterOwner=owner=="null"?null:owner=="type"?new ElementType { Id=element.Id,Document=doc }:owner=="otherElement"?new Element { Id=new ElementId(999),Document=doc }:owner=="otherDocument"?new Element { Id=element.Id,Document=new Document() }:owner=="invalid"?new Element { Id=element.Id,Document=doc,IsValidObject=false }:element;
-                element.Parameters.Add(new Parameter { Id=new ElementId(Convert.ToInt64(Value(raw,"id",1),CultureInfo.InvariantCulture)),StorageType=storage,Value=value,HasValue=(bool)Value(raw,"hasValue",value!=null),IsReadOnly=(bool)Value(raw,"readOnly",false),Behavior=Text(raw,"behavior","normal"),Definition=new Definition { Name=Text(raw,"name","同名参数"),DataType=dataType==null?null:new ForgeTypeId((string)dataType) },Document=doc,Element=parameterOwner });
-            }
+            Element element=null;
+            if(input.ContainsKey("elements")) { foreach(Dictionary<string,object> raw in (IList)input["elements"]) { Element added=AddElement(doc,raw);if(element==null)element=added; } }
+            else { var raw=new Dictionary<string,object>(input);raw["id"]=Value(input,"sourceId",100);raw["isType"]=Value(input,"sourceIsType",false);raw["invalid"]=Value(input,"invalidElement",false);element=AddElement(doc,raw); }
             var app=new UIApplication { ActiveUIDocument=new UIDocument { Document=doc } };var args=(Dictionary<string,object>)Value(input,"args",new Dictionary<string,object>());
             string operation=Text(input,"operation","set_parameters");
             if(!args.ContainsKey("expected_document"))args["expected_document"]=doc.PathName;if(!args.ContainsKey("mode")&&operation=="set_parameters")args["mode"]="commit";
@@ -164,7 +188,7 @@ namespace RevitLocalCodex {
             object before=Facts(doc),result=null,error=null;
             try { result=(bool)Value(input,"describeOnly",false)?WorkbenchActions.DescribeForPeer(element):(bool)Value(input,"innerOnly",false)?WorkbenchActions.Write(app,operation,args):new Producer().Produce(app,operation,args); }
             catch(Exception failure) { error=new { type=failure.GetType().Name,message=failure.Message }; }
-            Console.WriteLine(json.Serialize(new { ok=error==null,result,result_json=(bool)Value(input,"describeOnly",false)?json.Serialize(result):null,error,before,after=Facts(doc),transactions=new { doc.InnerStarts,doc.InnerCommits,doc.InnerRollbacks,doc.Regenerates,doc.GroupStarts,doc.GroupCommits,doc.GroupRollbacks,events=doc.Events.ToArray() },scope="Controlled API peers executing actual production setter/transaction/Host group branch or DescribeElement; no real Revit/model" }));return 0;
+            Console.WriteLine(json.Serialize(new { ok=error==null,result,result_json=(bool)Value(input,"describeOnly",false)?json.Serialize(result):null,error,before,after=Facts(doc),transactions=new { doc.InnerStarts,doc.InnerCommits,doc.InnerRollbacks,doc.Regenerates,doc.GroupStarts,doc.GroupCommits,doc.GroupRollbacks,doc.SetAttempts,SetTargets=doc.SetTargets.ToArray(),events=doc.Events.ToArray() },scope="Controlled API peers executing actual production setter/transaction/Host group branch or DescribeElement; no real Revit/model" }));return 0;
         }
     }
 }

@@ -115,27 +115,15 @@ namespace RevitLocalCodex
         {
             Fields(args, "expected_document", "mode", "changes");
             IList changes = RequiredList(args, "changes", 1, guarded ? 1 : 50);
-            var seen = new HashSet<string>(StringComparer.Ordinal);
+            ParameterWriteTarget[] targets = PreflightParameterTargets(doc, changes, guarded);
             var results = new List<object>();
             object guardedBefore = null;
-            foreach (object item in changes)
+            foreach (ParameterWriteTarget target in targets)
             {
-                var change = item as Dictionary<string, object>;
-                if (change == null) throw new InvalidOperationException("Each change must be an object.");
-                if (guarded) Fields(change, "element_id", "parameter_id", "value", "value_unit", "expected_state");
-                else Fields(change, "element_id", "parameter_id", "value", "value_unit");
-                long elementId = guarded ? NativeModelQueries.ExactId(change, "element_id") : ElementIdValue(Required(change, "element_id"), "element_id");
-                long parameterId = guarded ? NativeModelQueries.ExactSignedId(change, "parameter_id") : Integer(Required(change, "parameter_id"), "parameter_id", -9007199254740991L, 9007199254740991L);
-                if (parameterId == 0 || parameterId == -1) throw new InvalidOperationException("parameter_id must identify an actual parameter, not 0 or -1.");
-                if (!seen.Add(elementId.ToString(CultureInfo.InvariantCulture) + ":" + parameterId.ToString(CultureInfo.InvariantCulture)))
-                    throw new InvalidOperationException("Duplicate element_id/parameter_id pair in changes.");
-                Element element = RequiredElement(doc, elementId);
-                if (guarded && (element is ElementType || element.Id == null || element.Id.Value != elementId))
-                    throw new InvalidOperationException("set_parameter_value requires the explicitly selected instance, not an ElementType.");
-                Parameter parameter = element.Parameters.Cast<Parameter>().SingleOrDefault(candidate => candidate.Id.Value == parameterId);
-                if (parameter == null) throw new InvalidOperationException("Parameter id " + parameterId + " does not belong to element " + elementId + ".");
-                if (guarded) RequireInstanceParameter(element, parameter);
-                if (parameter.IsReadOnly) throw new InvalidOperationException("Parameter is read-only: " + parameterId);
+                Dictionary<string, object> change = target.CopyChange();
+                long elementId = target.ElementId, parameterId = target.ParameterId;
+                Element element;
+                Parameter parameter = ResolveInstanceParameter(doc, elementId, parameterId, out element);
                 object value = Required(change, "value");
                 string unit = OptionalString(change, "value_unit", "");
                 if (change.ContainsKey("value_unit") && unit != "internal") throw new InvalidOperationException("value_unit, when provided, must equal internal.");
@@ -154,6 +142,9 @@ namespace RevitLocalCodex
                     else if (storageType == StorageType.Integer) parameter.Set((int)expected);
                     else parameter.Set((string)expected);
                 }
+                // Set can replace API wrappers or change another target's owner.
+                // Do not verify a cached Parameter that is no longer selected.
+                parameter = ResolveInstanceParameter(doc, elementId, parameterId, out element, false);
                 object after = VerifyParameterValue(parameter, storageType, expected);
                 if (guarded) VerifyInstanceMetadata(element, parameter, guardedDataType);
                 if (expectations != null) expectations.Add(new ParameterWriteExpectation(elementId, parameterId, storageType, expected, guarded, guardedDataType));
@@ -164,6 +155,64 @@ namespace RevitLocalCodex
             object batch = new { updated_count = results.Count, changes = results.ToArray() };
             if (guarded) return new { schema_version = 1, target_kind = "instance", before = guardedBefore, result = batch };
             return batch;
+        }
+
+        private sealed class ParameterWriteTarget
+        {
+            internal readonly long ElementId, ParameterId;
+            private readonly Dictionary<string, object> change;
+            internal ParameterWriteTarget(long elementId, long parameterId, Dictionary<string, object> source)
+            {
+                ElementId = elementId; ParameterId = parameterId;
+                change = new Dictionary<string, object>(source, StringComparer.Ordinal);
+                object raw;
+                if (change.TryGetValue("expected_state", out raw) && raw is Dictionary<string, object>)
+                    change["expected_state"] = new Dictionary<string, object>((Dictionary<string, object>)raw, StringComparer.Ordinal);
+            }
+            internal Dictionary<string, object> CopyChange() { return new Dictionary<string, object>(change, StringComparer.Ordinal); }
+        }
+
+        private static ParameterWriteTarget[] PreflightParameterTargets(Document doc, IList changes, bool guarded)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var targets = new List<ParameterWriteTarget>();
+            foreach (object item in changes)
+            {
+                var change = item as Dictionary<string, object>;
+                if (change == null) throw new InvalidOperationException("Each change must be an object.");
+                if (guarded) Fields(change, "element_id", "parameter_id", "value", "value_unit", "expected_state");
+                else Fields(change, "element_id", "parameter_id", "value", "value_unit");
+                long elementId = guarded ? NativeModelQueries.ExactId(change, "element_id") : ElementIdValue(Required(change, "element_id"), "element_id");
+                long parameterId = guarded ? NativeModelQueries.ExactSignedId(change, "parameter_id") : Integer(Required(change, "parameter_id"), "parameter_id", -9007199254740991L, 9007199254740991L);
+                if (parameterId == 0 || parameterId == -1) throw new InvalidOperationException("parameter_id must identify an actual parameter, not 0 or -1.");
+                if (!seen.Add(elementId.ToString(CultureInfo.InvariantCulture) + ":" + parameterId.ToString(CultureInfo.InvariantCulture)))
+                    throw new InvalidOperationException("Duplicate element_id/parameter_id pair in changes.");
+                Element element;
+                ResolveInstanceParameter(doc, elementId, parameterId, out element);
+                // Retain only request data, never live Revit objects. Every target
+                // is resolved again before its value is examined or Set is called.
+                targets.Add(new ParameterWriteTarget(elementId, parameterId, change));
+            }
+            return targets.ToArray();
+        }
+
+        private static Parameter ResolveInstanceParameter(Document doc, long elementId, long parameterId, out Element element, bool requireWritable = true)
+        {
+            element = RequiredElement(doc, elementId);
+            if (element is ElementType || element.Id == null || element.Id.Value != elementId || element.Document == null || !element.Document.Equals(doc))
+                throw new InvalidOperationException("Parameter writes require the explicitly selected current-document instance, not an ElementType.");
+            Parameter selected = null;
+            foreach (Parameter candidate in element.Parameters)
+            {
+                if (candidate == null || candidate.Id == null) throw new InvalidOperationException("Parameter identity is unavailable on the selected instance.");
+                if (candidate.Id.Value != parameterId) continue;
+                if (selected != null) throw new InvalidOperationException("Duplicate parameter identity on the selected instance.");
+                selected = candidate;
+            }
+            if (selected == null) throw new InvalidOperationException("Parameter id " + parameterId + " does not belong to element " + elementId + ".");
+            RequireInstanceParameter(element, selected);
+            if (requireWritable && selected.IsReadOnly) throw new InvalidOperationException("Parameter is read-only: " + parameterId);
+            return selected;
         }
 
         private static object NormalizeParameterValue(Parameter parameter, object value, string label, bool enforceYesNo)
@@ -248,9 +297,8 @@ namespace RevitLocalCodex
         {
             foreach (ParameterWriteExpectation expected in expectations)
             {
-                Element element = RequiredElement(doc, expected.ElementId);
-                Parameter parameter = element.Parameters.Cast<Parameter>().SingleOrDefault(candidate => candidate.Id.Value == expected.ParameterId);
-                if (parameter == null) throw new InvalidOperationException("Parameter id " + expected.ParameterId + " no longer belongs to element " + expected.ElementId + ".");
+                Element element;
+                Parameter parameter = ResolveInstanceParameter(doc, expected.ElementId, expected.ParameterId, out element, false);
                 if (expected.Guarded) VerifyInstanceMetadata(element, parameter, expected.DataType);
                 VerifyParameterValue(parameter, expected.StorageType, expected.Value);
             }

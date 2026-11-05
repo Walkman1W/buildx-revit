@@ -17,7 +17,7 @@ namespace RevitLocalCodex
     // This local queue is an application integration boundary, not a security sandbox.
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
-        private const string HostVersion = "0.8.6";
+        private const string HostVersion = "0.8.7";
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");
@@ -279,6 +279,7 @@ namespace RevitLocalCodex
                     nativeModelQueriesVersion = 1, nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
+                    parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
         }
@@ -849,6 +850,7 @@ namespace RevitLocalCodex
                     nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
+                    parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }
                         .Concat(WorkbenchActions.ReadOperations).Concat(WorkbenchActions.WriteOperations).Concat(FamilyOperations).Concat(VisualInspection.Operations).ToArray() },

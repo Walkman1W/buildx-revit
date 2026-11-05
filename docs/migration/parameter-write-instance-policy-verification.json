@@ -1,0 +1,631 @@
+{
+  "schemaVersion": 1,
+  "recordedDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "observedUtc": "2026-11-05T00:39:38.940Z",
+  "sourceBaseCommit": "8ef1c6f0c4e02bc0c3a309ab1737ccf01cbb3b42",
+  "version": "0.8.7-internal-instance-parameter-policy",
+  "slice": {
+    "task": "BX-006",
+    "tool": "revit_set_parameters",
+    "operation": "set_parameters",
+    "hostVersion": "0.8.7",
+    "assemblyVersion": "0.8.7.0",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "expected_document": {
+          "type": "string",
+          "description": "Exact path returned by workbench status; must be in the host allowed-document list.",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "rollback",
+            "commit"
+          ],
+          "default": "rollback",
+          "description": "rollback reads the result then undoes model changes; commit keeps changes in memory without saving."
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "properties": {
+              "element_id": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "parameter_id": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "maximum": -2
+                  },
+                  {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                ]
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "value_unit": {
+                "type": "string",
+                "enum": [
+                  "internal"
+                ]
+              }
+            },
+            "required": [
+              "element_id",
+              "parameter_id",
+              "value"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "expected_document",
+        "changes"
+      ],
+      "additionalProperties": false
+    },
+    "capability": {
+      "parameterWriteTargetPolicyVersion": 1,
+      "parameterWriteTargetPolicy": "instance_only"
+    },
+    "namedSingleWriteMinimumUnchanged": "0.8.5/nativeParameterWritesVersion:1/set_parameter_value",
+    "targetPreflight": "All static targets resolve to valid current-document instances and actual parameter owners before any Set",
+    "targetStorage": "Copied request data and normalized IDs; no live Revit object cache",
+    "revalidation": [
+      "before_each_Set",
+      "immediate_readback",
+      "after_regenerate",
+      "after_inner_commit"
+    ],
+    "requireWritableOnlyBeforeSet": true,
+    "staticIllegalTargetZeroSet": true,
+    "dynamicDriftMayHaveEarlierSets": true,
+    "legacyNumericIdsAndSevenFieldRowsPreserved": true,
+    "unknownErrorsProvideRollbackProof": false,
+    "unknownResultAutomaticReplay": false,
+    "namedTypeWriteEnabled": false,
+    "arbitraryScriptsConfined": false
+  },
+  "checks": [
+    {
+      "name": "instance-target-policy",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/policy-final.tap.log",
+      "sha256": "42333ec3c48930fc78f36e02f96e146b9dc8730e560dd78bee5029bcb70e0cd7",
+      "passed": 87,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-parameter-writes",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/writes-final.tap.log",
+      "sha256": "71bf6534095031f1f0b07f84a8305ef4b39f821c2a08a58bd7663aa6fbf1593e",
+      "passed": 117,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "single-instance-writes",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/single-write-final.tap.log",
+      "sha256": "73037fc099f47f3f51f8858508928dac1a1f47f690410734a8c9e23c5c78b3f1",
+      "passed": 125,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "native-queries-catalog-serial",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/native-final.tap.log",
+      "sha256": "ce639f61292bc6291f05773fa11e74fb41296d059588ac2a5c8ce5b318b564bc",
+      "passed": 182,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "type-parameter-reads",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/type-read-final.tap.log",
+      "sha256": "d52ca5555ce425ea4660212e3d0fee25f81a1c3ba148184c9821886f8ace48ff",
+      "passed": 24,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "single-parameter-reads-ui",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/single-read-final.tap.log",
+      "sha256": "482a1709b8127fedcb773efee91cee12f9ed696a22017aa4743aed4893439ea8",
+      "passed": 79,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "type-impact",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/impact-final.tap.log",
+      "sha256": "a26c2f9e5f86460390bdc6f38b0d0a56dd068817717734c38006ccec021cc2b8",
+      "passed": 65,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "layout",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/layout-final.tap.log",
+      "sha256": "298c1a631a567cb43d2373bade63e4e1192720c6c7212f54290598e0ada04f8f",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "legacy-session-catalog",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/catalog-final.tap.log",
+      "sha256": "5d0908b83b714312ebf19156b7bc94c145c597ee86b07dd79a6d21f3c68e63b5",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "node-owner",
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/node-owner-final.tap.log",
+      "sha256": "ff5d778f492e2b42eb66092119cfb40342106877a3577893274c24c24c153d44",
+      "passed": 57,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "producer": {
+    "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/producer-summary.json",
+    "recordSha256": "dbdf81ab4248d475a9b2cec4b5d3addc4029dc855c6f4108a6b702fe4b2a751e",
+    "evidence": "artifacts/parameter-write-instance-policy-validation-20261105-01/producer-evidence.json",
+    "evidenceSha256": "c2ba9b265ee83d38daae8ecfd8c8cc4a53486f9a4040230d9210d68d0845148f",
+    "verification": {
+      "command": "node --test parameter-write-instance-policy-producer.test.mjs native-parameter-write-producer.test.mjs native-single-parameter-write-producer.test.mjs",
+      "exitCode": 0,
+      "tests": 247,
+      "passed": 247,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 57459.4793,
+      "newPolicyTests": 64,
+      "legacyProducerTests": 91,
+      "singleProducerTests": 92,
+      "output": "Tool execution transcript; final project regression logs are recorded separately by root"
+    },
+    "rootRevalidatedProducerCounts": {
+      "legacy": 91,
+      "single": 92,
+      "newPolicy": 64
+    },
+    "behavior": {
+      "preflightAllTargetsBeforeSet": true,
+      "noLiveRevitObjectsRetainedInTargets": true,
+      "refetchBeforeEachWrite": true,
+      "refetchImmediatelyAfterSet": true,
+      "allExpectationReadbackChecksInstanceOwner": true,
+      "requireWritableOnlyBeforeSet": true,
+      "guardedOnlyBeforeStateAndDataType": true,
+      "legacyIdAndUnitInterpretationUnchanged": true,
+      "noOpChecksOwner": true,
+      "staticTypeOrForeignOwnerZeroSets": true,
+      "dynamicOwnerDriftDoesNotClaimZeroEarlierSets": true,
+      "scriptSandboxClaimed": false,
+      "genericErrorProvidesRollbackProof": false
+    },
+    "sourceEvidence": {
+      "actionsSha256": "6ca0b19f94f65a3a6e573eb89ba2f7e05ee0f4990533d903bc4d97471afbadaa",
+      "hostSha256": "7a01f4ed99f7a21f4aad15d53352c3b9af11331ca924f6b65b5fb669e46d6015",
+      "peersSha256": "e570e2a97fee4cb0e3d42d641c395b62857ff961305ea7943aef6628ab3ce4e6",
+      "exactIdSourceSha256": "847f3a8c8340b32376bae002e6a108dfe250a315e8f4400970e3476bb58d8758",
+      "exactIdFragments": {
+        "internal static string SignedId(": {
+          "sha256": "7a389b1364f6a9065420c8af75ece5acc16a34967260bcde589b17baf0ace79a",
+          "characters": 105
+        },
+        "internal static long ExactId(": {
+          "sha256": "208cdcb4abcef1e3753a3c9776dfe64f8a02dea05dabb4b35e25b44c0070faae",
+          "characters": 107
+        },
+        "internal static long ExactSignedId(": {
+          "sha256": "7ed88b95f425def10fbfa866df7a91aefd6952b0468c39871c8880dbadfa0719",
+          "characters": 284
+        },
+        "private static long RequiredId(": {
+          "sha256": "cd705f00294849b986547458980a0668039f6ac17f0cefb0428e1c55dc3e8d03",
+          "characters": 1853
+        }
+      },
+      "generatedSha256": "a6ae42f5a602fb1bb28e91132962ac9a01b3c7d71af2723c717b26a8fa62716e",
+      "fragments": {
+        "parameterWrite": {
+          "sha256": "cb67cf2cd3a7a221958b055d1915a82b6faafdc085b5d06b3eb3899baf36059b",
+          "characters": 16297
+        },
+        "private static object DescribedId(": {
+          "sha256": "c8d5e647b1d08ebdc743a7f14f03c75e337adc68a7d8b016518d5346d5cfa63c",
+          "characters": 243
+        },
+        "private static object DescribeElement(": {
+          "sha256": "2cfb501b12c58c55877e8a3757d65ce961a73c6ef817a8d02b65def1099d441a",
+          "characters": 628
+        },
+        "private static object InternalValue(": {
+          "sha256": "2c73a83ebcf92b1e67db11b6dcff09f3a532c8e4ad61d900cba7cc551d21e3fe",
+          "characters": 529
+        },
+        "private static Element RequiredElement(": {
+          "sha256": "61fdec71928281a1a7e0ed9c4fd349f0ee71cc82b201cb1da61975b3752a58b6",
+          "characters": 323
+        },
+        "private static object Required(": {
+          "sha256": "6113fbe08518b7f6d8f846e824d9340f37515532fe0d7e2af426620057109133",
+          "characters": 288
+        },
+        "private static IList RequiredList(": {
+          "sha256": "4700b3e935a13759920c9e7204fcad0014112d59070225fff84b52a17df74d9b",
+          "characters": 405
+        },
+        "private static string OptionalString(": {
+          "sha256": "d054cce629358953ce7feb742df2c96ad5bdf58627417301f173a76b06baaf4d",
+          "characters": 358
+        },
+        "private static long ElementIdValue(": {
+          "sha256": "699d567fc11ff7a51156b32bae4fa0595b2e1206ef41d9e005f8e1decc60655f",
+          "characters": 118
+        },
+        "private static long Integer(": {
+          "sha256": "287ccf22e76f9c6004ba43dd04d7689ef44a86056281d6a6b74ffb477acec87f",
+          "characters": 413
+        },
+        "private static double FiniteNumber(": {
+          "sha256": "2b185702449c4d3f40f5e0be7bebb5bd48d26679ef4cabbd494d5dedcb21b44e",
+          "characters": 554
+        },
+        "private static void Fields(": {
+          "sha256": "8324cca146092482944753aa2bb920b6770d236db82930025e58f8cdb1528196",
+          "characters": 267
+        },
+        "private sealed class RejectErrors": {
+          "sha256": "b84ab08985f5d6aa22825a711545398ec590197717af9a202d96320301416dee",
+          "characters": 465
+        },
+        "writeOperations": {
+          "sha256": "5c2e49c61e60ad1136c7acb4e773d551f135926dbb141f79ee37860f892d8157",
+          "characters": 160
+        },
+        "isWrite": {
+          "sha256": "7c55985524312439bcfe7fe86e2ca34af281bdb2001ea4adf612fb47b97a8335",
+          "characters": 118
+        },
+        "hostWrite": {
+          "sha256": "65764a8d017b098b3c3e68037b2e6fe7f8bdf9716a865a2c941f5b06f6eb815a",
+          "characters": 3109
+        },
+        "private sealed class ScriptExecutionFailure": {
+          "sha256": "f9e171f4154a40dd9082d6a0204009438ecf3571fbcf9019ef3629d94dc2eaff",
+          "characters": 660
+        },
+        "private static Dictionary<string, object> BoundedFailureError(": {
+          "sha256": "3b590965bfc3be0eef58f9ac6bd30fa14b32774dd87ab82818fc9170b54c1787",
+          "characters": 621
+        },
+        "private object FreezeResult(": {
+          "sha256": "8223e4b9ce27f5c5c9e6b87cf1ad87e3ad229980931bc5722c9020d478dc78a6",
+          "characters": 516
+        },
+        "private static IDictionary<string, object> ScriptParameters(": {
+          "sha256": "602714f003b42351dabb413577085c6295e9b044b7f3740492ab7bf0e0f67585",
+          "characters": 937
+        },
+        "private static string ExpectedDocument(": {
+          "sha256": "ac22fdd5cb6d042ccae2c24f598c55d9f7716fad661074c64c914b2d2869a591",
+          "characters": 368
+        },
+        "private static void RequireDocument(": {
+          "sha256": "233637753d1074908622590cb4b7ca227228608127a3c33ca652484ba8715252",
+          "characters": 820
+        }
+      },
+      "scope": "Exact production Write/SetParameters/shared ID parser/helpers and Host write transaction-group branch; API, access policy and other providers are controlled peers; no Autodesk load or real Revit/model execution"
+    }
+  },
+  "nodeOwner": {
+    "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/node-owner-summary.json",
+    "recordSha256": "147c1f8c777e0bc823efdb1a2b21e66652a08a836dd737719ec8b1408e0f2e74",
+    "passed": 57,
+    "failed": 0
+  },
+  "hostChecks": {
+    "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/host-final/results.json",
+    "sourceProof": "artifacts/parameter-write-instance-policy-validation-20261105-01/host-final/source-proof.json",
+    "passed": 80,
+    "failed": 0,
+    "scope": "Original scheduler/claim/validation/receipt producer methods; controlled event and Dispatch peers; no Revit API"
+  },
+  "apiCompilation": {
+    "record": "artifacts/buildx-source-20261105-11/build/build-record.json",
+    "recordSha256": "3672b46865ccb998bb990087a4a5a3858a64485383e077146c4baaa13a7f8ede",
+    "compilerExitCode": 0,
+    "sources": 33,
+    "webview2Sdk": {
+      "package_id": "Microsoft.Web.WebView2",
+      "version": "1.0.2478.35",
+      "source": "https://api.nuget.org/v3/index.json",
+      "package_sha256": "b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96",
+      "payload_verified_against_package": true,
+      "runtime_bundled": false
+    },
+    "dllSha256": "8cf48e3c7181075243596e706766f060c51a16808e68cdad2e844be975d70b59",
+    "installed": false,
+    "realRevitLoadVerified": false
+  },
+  "candidate": {
+    "schemaVersion": 1,
+    "recordedDate": "2026-11-05",
+    "candidate": "artifacts/buildx-revit2024-instance-parameter-policy-20261105-01",
+    "productVersion": "0.8.7-internal-instance-parameter-policy",
+    "releaseReady": false,
+    "files": 145,
+    "totalBytes": 19440954,
+    "manifestSha256": "0160af973bc331f5fd0ea9c83e94a4708f222fe982c497721ca81814f27fc077",
+    "modules": 99,
+    "imports": 315,
+    "hashMismatches": [],
+    "missingRelativeImports": [],
+    "bareNpmImports": [],
+    "buildMachineAbsolutePathHits": [],
+    "dllDebugDirectoryBytes": 0,
+    "dllSha256": "8cf48e3c7181075243596e706766f060c51a16808e68cdad2e844be975d70b59",
+    "compiler": {
+      "id": "Microsoft.Net.Compilers.Toolset",
+      "version": "5.0.0",
+      "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627",
+      "files": 17,
+      "totalBytes": 16200956,
+      "stampSha256": "0b0d5b4e8f3cfa313d06660267d0e5a935c3c5c012ac8ddc947e749db0f072f7"
+    },
+    "sourceSnapshot": "artifacts/buildx-source-20261105-11",
+    "sourceFiles": 278,
+    "sourceModules": 204,
+    "sourceReferences": 633,
+    "sourceManifestSha256": "d9af00f71a32dace6967a4b6ae04a9fe1ffe5aed57b132942e3700de02091a56",
+    "currentSourceMismatches": [],
+    "buildSources": 33,
+    "missing": [
+      {
+        "file": "private-runtime/argus/2024/ArgusLearning.Core.dll",
+        "reason": "distribution_and_runtime_not_verified"
+      },
+      {
+        "reason": "installer_bootstrap_requires_external_node"
+      },
+      {
+        "reason": "private_node_python_runtime_distribution_unverified"
+      },
+      {
+        "reason": "webview2_runtime_presence_unverified"
+      }
+    ],
+    "realRevitLoadVerified": false,
+    "realModelExecutionVerified": false,
+    "customerMachineVerified": false
+  },
+  "archives": {
+    "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/archive-roundtrip.json",
+    "recordSha256": "6c42d88ec989592d3a67e75f16c8fade814283826bf690fa5753af6e941e271a",
+    "passed": true,
+    "archives": [
+      {
+        "inputsUnchanged": true,
+        "kind": "runtime",
+        "sourceFilesMatchManifest": true,
+        "sha256": "c28f94a9ad1ddf459df50af29794c9f7b3b0e0bd4df1004ec1e3b2e583cec21d",
+        "files": 146,
+        "bytes": 7408436,
+        "entryReadbackVerified": true,
+        "manifestPayloadFiles": 145,
+        "path": "artifacts/BuildX-Revit2024-0.8.7-internal-instance-parameter-policy-20261105.zip",
+        "entryDigestsVerified": 146
+      },
+      {
+        "inputsUnchanged": true,
+        "kind": "source",
+        "sourceFilesMatchManifest": true,
+        "sha256": "a4f0b1f3babda26b53102b0c98c94abf308dd505a2471fd1e477498deb7a4fd9",
+        "files": 280,
+        "bytes": 1156805,
+        "entryReadbackVerified": true,
+        "manifestPayloadFiles": 278,
+        "path": "artifacts/BuildX-Source-0.8.7-internal-instance-parameter-policy-20261105.zip",
+        "entryDigestsVerified": 280
+      }
+    ],
+    "roundtrip": {
+      "runtime": {
+        "ok": true,
+        "filesVerified": 146,
+        "manifestPayloadFiles": 145,
+        "scriptCompiler": {
+          "ok": true,
+          "version": "5.0.0",
+          "files": 17,
+          "packageSha256": "e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627"
+        },
+        "noNodeModules": true,
+        "catalog": {
+          "ok": true,
+          "methods": [
+            "initialize",
+            "notifications/initialized",
+            "tools/list"
+          ],
+          "toolCount": 23,
+          "allReadOnly": true,
+          "typeImpactTool": "revit_get_type_parameter_impact",
+          "impactInputSchemaStrictCompiled": true,
+          "impactOutputSchemaStrictCompiled": true,
+          "exactInputAccepted": true,
+          "mutationInputsRejected": true,
+          "numericInstanceIdsRejected": true,
+          "writeAuthorizationEscalationRejected": true,
+          "legacyBatchWriteExposed": false,
+          "instanceWriteExposed": false,
+          "typeWriteExposed": false,
+          "schemaCompiler": "Workspace Ajv; extracted MCP child has no node_modules",
+          "modelToolsCalled": false,
+          "exitCode": 0
+        },
+        "parameterWriteTargetPolicy": {
+          "modulePresent": true,
+          "imported": true,
+          "pureMemoryProbe": true,
+          "minimumHost": "0.8.7",
+          "version": 1,
+          "policy": "instance_only",
+          "olderHostsAndMissingOrInvalidPolicyRejected": true,
+          "guardedSingleMinimumRemains": "0.8.5",
+          "hostMetadataOccurrences": 2,
+          "assemblyVersion": "0.8.7.0",
+          "compiledSourceHashesMatch": true,
+          "legacyReceiptContractPreserved": true,
+          "incorrectReadbackRejected": true,
+          "businessToolsInvoked": false
+        },
+        "typeParameterImpactOwner": {
+          "modulePresent": true,
+          "imported": true,
+          "pureMemoryProbe": true,
+          "exactInt64ArgumentsAndResultsPreserved": true,
+          "numericInstanceIdsRejected": true,
+          "wrongTypeIdentityRejected": true,
+          "mutationInputsRejected": true,
+          "writeAuthorizationNotGranted": true,
+          "scope": "current_document_direct_type_references",
+          "indirectEffects": "not_assessed"
+        },
+        "queueCreated": false,
+        "inventoryUnchangedAfterProbe": true
+      },
+      "source": {
+        "ok": true,
+        "filesVerified": 280,
+        "snapshotFiles": 278,
+        "manifestSha256": "d9af00f71a32dace6967a4b6ae04a9fe1ffe5aed57b132942e3700de02091a56",
+        "dependencyClosureOk": true,
+        "modules": 204,
+        "references": 633,
+        "buildExcluded": true
+      }
+    },
+    "temporaryCleanup": {
+      "ownerVerified": true,
+      "directoryIdentityVerified": true,
+      "absoluteRealpathVerified": true,
+      "resolvedUnderTemp": true,
+      "removed": true
+    }
+  },
+  "sources": [
+    {
+      "path": "lib/workbench-client.mjs",
+      "bytes": 98493,
+      "sha256": "72cdbcf75f24bbfefcaf32c7b56907e56ace54f06ecf9b8cbcff4c2e1f17e217"
+    },
+    {
+      "path": "lib/native-parameter-writes.mjs",
+      "bytes": 8211,
+      "sha256": "6b93099582cbe9c8c5241cff6a3ffb497c928200a4b80b62702bc396ad1677fb"
+    },
+    {
+      "path": "lib/codex-profile.mjs",
+      "bytes": 28209,
+      "sha256": "1f5f900efb72a54b465f2146a1b710cabb09a23f13303f3fb4b2a7f8c2375690"
+    },
+    {
+      "path": "lib/panel-catalog.mjs",
+      "bytes": 7022,
+      "sha256": "1436e9b83a107eda5ef41d900f9bf7dc9f2537b28f1ded66042cf3f051b73f97"
+    },
+    {
+      "path": "revit-addin/WorkbenchActions.cs",
+      "bytes": 36045,
+      "sha256": "6ca0b19f94f65a3a6e573eb89ba2f7e05ee0f4990533d903bc4d97471afbadaa"
+    },
+    {
+      "path": "revit-addin/WorkbenchHost.cs",
+      "bytes": 61376,
+      "sha256": "7a01f4ed99f7a21f4aad15d53352c3b9af11331ca924f6b65b5fb669e46d6015"
+    },
+    {
+      "path": "revit-addin/LocalCodexRevit.cs",
+      "bytes": 45491,
+      "sha256": "6978f852b4dcdbb199722eaf74b2b80a586694d7a6c5fbaa72641c4aad433082"
+    },
+    {
+      "path": "public/parameter-change-field.mjs",
+      "bytes": 20082,
+      "sha256": "254ff07156be53248c3417ae823fb4368f9326c3559ed54ee504fa279db8bc9c"
+    },
+    {
+      "path": "test-support/native-parameter-write-peers.cs",
+      "bytes": 24122,
+      "sha256": "e570e2a97fee4cb0e3d42d641c395b62857ff961305ea7943aef6628ab3ce4e6"
+    },
+    {
+      "path": "tools/build-brain-candidate-files.json",
+      "bytes": 10086,
+      "sha256": "c0e125c74ccc2bab9739675f19a05369bed8232886805bc6f6643fffd8da53ed"
+    }
+  ],
+  "failureHistory": [
+    {
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/node-initial-test-failures.observed.json",
+      "cause": "Test authoring mistakes: schema wrapper access and an overly strict ban on valid terminal diagnostics; corrected tests without relaxing product checks."
+    },
+    {
+      "record": "artifacts/parameter-write-instance-policy-validation-20261105-01/native-initial-parallel-timing-failure.tap.log",
+      "sha256": "782edd359269dd7763dd2b3e9a37eab027bea13f6b5f0da1de1e576b17be8aaf",
+      "initialPassed": 180,
+      "initialFailed": 2,
+      "cause": "One old subtest plus its parent failed because the controlled peer had not recorded the renamed request after its fixed 35ms wait.",
+      "finalRecord": "artifacts/parameter-write-instance-policy-validation-20261105-01/native-final.tap.log",
+      "finalCommandFlag": "--test-concurrency=1",
+      "finalPassed": 182,
+      "productionOrAssertionsChangedForRerun": false,
+      "remainingTestLimitation": "The existing fixed-wait test remains sensitive to parallel scheduling; this slice did not modify it."
+    }
+  ],
+  "notVerified": [
+    "real Revit plugin load and model effects",
+    "real WebView/Codex integrated UI",
+    "clean customer install/upgrade/uninstall",
+    "trusted named type-write confirmation and impact revalidation",
+    "arbitrary script effects",
+    "Argus distribution/runtime and native replacement acceptance",
+    "external Node bootstrap",
+    "private Node/Python distribution",
+    "WebView2 Runtime",
+    "pypdf/third-party/plugin licensing",
+    "data upgrade/restore",
+    "license backend"
+  ],
+  "userServicesRestarted": false,
+  "installedPluginReplaced": false,
+  "realModelWritten": false,
+  "publishedRelease": false,
+  "releaseReady": false,
+  "next": "Implement trusted mandatory named type-write approval across manual and AI paths, with write-time before-state/impact revalidation; retain explicit arbitrary-script boundaries."
+}

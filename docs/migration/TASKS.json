@@ -51,10 +51,10 @@
       "title": "常用参数与建模命令迁移",
       "status": "in_progress",
       "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收",
-      "currentSlice": "Native read-only type parameter impact: explicit type/parameter IDs, complete bounded direct references and original facts; no type-write authorization; host 0.8.6",
-      "evidence": "TYPE-PARAMETER-IMPACT-VERIFICATION.zh-CN.md; type-parameter-impact-verification.json; new impact group 65/65, C# new/old producers 71/71, query/catalog 182/182, type reads 24/24, single reads/UI 79/79, legacy writes 117/117, instance writes 124/124, layout 105/105, legacy catalog/session 23/23, host 80/80; 273-file snapshot, 33-source Revit 2024 API compilation",
-      "milestone": "type_parameter_impact_read_source_and_isolated_validation_complete",
-      "remaining": "Trusted forced type-wide approval across manual/AI and legacy batch/script boundaries; write-time impact revalidation; common modelling commands and real Revit acceptance",
+      "currentSlice": "Legacy named parameter write restricted to instance targets with complete target preflight and fresh per-stage owner resolution; host 0.8.7 explicit target policy gate",
+      "evidence": "PARAMETER-WRITE-INSTANCE-POLICY-VERIFICATION.zh-CN.md; parameter-write-instance-policy-verification.json; policy87/87, batch117/117, single125/125, query182/182 serial, type24/24, single-read/UI79/79, impact65/65, layout105/105, catalog23/23, host80/80; 278-file snapshot and 33-source Revit 2024 API compilation; initial fixed-35ms parallel test failure preserved",
+      "milestone": "named_parameter_instance_target_boundary_source_and_isolated_validation_complete",
+      "remaining": "Trusted named type-write forced approval and write-time before/impact revalidation; explicit script boundaries; common commands, native schematic/annotation and real Revit/customer acceptance",
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false
     },
@@ -75,15 +75,15 @@
       "title": "清理已替代模块与专属依赖",
       "status": "in_progress",
       "acceptance": "消费者与运行依赖闭包已核对；只清理新工程，原始研究材料与用户数据保留",
-      "evidence": "Built-in-only Node runtime and pinned private compiler; latest 273-file source closure, 17-file compiler and 23-read MCP verified. Type impact reuses the parameter fact/ID/budget owners and adds no runtime dependency. Argus/ScriptRunner consumers preserved; no 103-tool expansion. Blockers in TYPE-PARAMETER-IMPACT-VERIFICATION.zh-CN.md."
+      "evidence": "Built-in-only runtime and pinned private compiler; 278-file source closure, 17-file compiler and 23-read MCP verified. Named parameter setters share ID/value/unit and instance target owners. Argus/ScriptRunner consumers retained. Blockers in PARAMETER-WRITE-INSTANCE-POLICY-VERIFICATION.zh-CN.md."
     },
     {
       "id": "BX-010",
       "title": "Revit 2024 安装候选与客户验收",
       "status": "in_progress",
       "acceptance": "来源清单、哈希、私有运行时、首装升级恢复卸载及实际Revit验收有依据；不捆绑Codex",
-      "evidence": "TYPE-PARAMETER-IMPACT-VERIFICATION.zh-CN.md; type-parameter-impact-verification.json; 0.8.6-internal-type-parameter-impact, 145 runtime files, 273-file source snapshot; actual 33-source Revit 2024 API build and ZIP entry/extracted closure/compiler/MCP readback; releaseReady:false; previous candidates and external blockers retained",
-      "milestone": "type_parameter_impact_internal_candidate_generated",
+      "evidence": "PARAMETER-WRITE-INSTANCE-POLICY-VERIFICATION.zh-CN.md; parameter-write-instance-policy-verification.json; 0.8.7-internal-instance-parameter-policy, 145 runtime files and 278-source snapshot; actual 33-source API compilation, ZIP entry/extracted compiler/closure/MCP checks; releaseReady:false; previous candidates and external blockers retained",
+      "milestone": "named_parameter_instance_policy_internal_candidate_generated",
       "internalCandidateGenerated": true,
       "installable": false,
       "realRevitLoadVerified": false,

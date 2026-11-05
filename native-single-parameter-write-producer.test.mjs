@@ -89,8 +89,11 @@ test('actual guarded single-parameter write refuses types, wrong owners and malf
   await t.test('shared unit, readonly, integer, string and finite-value rules remain mandatory',async()=>{
     for(const input of [fixture('Double',1,2,{change:{value_unit:'mm'}}),fixture('Double',1,2,{change:{value_unit:undefined}}),fixture('Double',1,2,{parameter:{readOnly:true}}),fixture('Integer',1,1.5),fixture('String','原',2),fixture('String','原',null),fixture('Double',1,2,{nonFiniteValue:'nan'})]){const result=await produce(input);rejected(result,/unit|read-only|integer|string|null|finite/i,0);restored(result);}
   });
-  await t.test('legacy operation retains numeric DTOs, its accepted type targets and its existing metadata behavior',async()=>{
-    const result=await produce({operation:'set_parameters',sourceIsType:true,parameters:[{id:1,storage:'Double',value:1,behavior:'dataTypeDrift'}],args:{changes:[{element_id:100,parameter_id:1,value:2,value_unit:'internal'}]}});assert.equal(result.ok,true,JSON.stringify(result.error));assert.equal(result.result.value.changes[0].element_id,100);assert.equal(result.result.value.changes[0].parameter_id,1);assert.equal(result.result.value.changes[0].data_type,'changed-immediately');
+  await t.test('legacy operation refuses ElementType targets before any Set',async()=>{
+    const result=await produce({operation:'set_parameters',sourceIsType:true,parameters:[{id:1,storage:'Double',value:1}],args:{changes:[{element_id:100,parameter_id:1,value:2,value_unit:'internal'}]}});rejected(result,/instance|ElementType/,0);restored(result);
+  });
+  await t.test('legacy instance operation retains numeric DTOs and its existing metadata behavior',async()=>{
+    const result=await produce({operation:'set_parameters',parameters:[{id:1,storage:'Double',value:1,behavior:'dataTypeDrift'}],args:{changes:[{element_id:100,parameter_id:1,value:2,value_unit:'internal'}]}});assert.equal(result.ok,true,JSON.stringify(result.error));assert.equal(result.result.value.changes[0].element_id,100);assert.equal(result.result.value.changes[0].parameter_id,1);assert.equal(result.result.value.changes[0].data_type,'changed-immediately');
   });
 });
 

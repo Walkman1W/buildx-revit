@@ -63,6 +63,8 @@ BuildX 界面或 Codex 工具
 
 ## 系统图优先复用现有原生代码
 
+0.8.7 在新工程收口旧批量 `set_parameters` 的 ElementType 目标：整批实例归属预检、逐项及写后三阶段按 ID 重取，由独立实例策略门禁拒绝旧宿主。旧单项 0.8.5 能力保持。见 [具名参数写实例策略验证](PARAMETER-WRITE-INSTANCE-POLICY-VERIFICATION.zh-CN.md)。这不限制任意 C# 的全部效果，也未启用具名类型写入；专门可信确认与写前影响集复核仍待完成。
+
 当前可复用的代码为 `SchematicModel.cs`、`SchematicRevitService.cs`、`SchematicEditorWindow.cs`、`SchematicWindowEntry.cs` 和 `lib/native-schematic-tools.mjs`。源码包含物理连接读取、BFS 基础布局、可编辑 DTO、矩形符号、文字及原生详图线输出；路径不调用 `ArgusLearning.Core.dll`。
 
 这些是可复用源码，尚不能作为产品界面已交付的证明。`LocalCodexRevit.cs:72-73` 当前明确没有在产品 Ribbon 暴露未完成编辑器。源码和既有发布边界文档将其声明为自研，正式建库时仍保留实现来源记录。

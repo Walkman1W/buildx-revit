@@ -271,5 +271,10 @@
   "native-type-parameter-impact-ui.test.mjs",
   "test-support/native-type-parameter-impact-producer.mjs",
   "test-support/native-type-parameter-impact-peers.cs",
-  "test-support/native-type-parameter-impact-fixtures.mjs"
+  "test-support/native-type-parameter-impact-fixtures.mjs",
+  "parameter-write-instance-policy-contract.test.mjs",
+  "parameter-write-instance-policy-producer.test.mjs",
+  "parameter-write-instance-policy-transport.test.mjs",
+  "parameter-write-instance-policy-ui.test.mjs",
+  "test-support/parameter-write-instance-policy-fixtures.mjs"
 ]
