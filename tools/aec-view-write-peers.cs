@@ -7,7 +7,7 @@ using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 namespace Autodesk.Revit.DB {
  public enum BuiltInCategory { OST_TitleBlocks=-2000280, Other=-1 }
- public class ElementId { public long Value; public ElementId(long v){Value=v;} public ElementId(BuiltInCategory v){Value=(long)v;} }
+ public class ElementId { public static readonly ElementId InvalidElementId=new ElementId(-1); public long Value; public ElementId(long v){Value=v;} public ElementId(BuiltInCategory v){Value=(long)v;} }
  public class Category { public ElementId Id; }
  public class Element { public ElementId Id; public string Name; public bool Pinned; public bool IsValidObject=true; public Category Category; public ElementId OwnerViewId; public virtual ElementId GetTypeId(){return null;} }
  public class ElementType:Element {}
@@ -18,7 +18,7 @@ namespace Autodesk.Revit.DB {
  public enum ViewType { FloorPlan, ThreeD }
  public class ViewFamilyType:ElementType { public ViewFamily ViewFamily; }
  public class Level:Element { public double ProjectElevation; public static Level Create(Document d,double n){throw new Exception("unused");} }
- public class View:Element { public bool IsTemplate; public ViewType ViewType; public ElementId TypeId; public override ElementId GetTypeId(){return TypeId;} }
+ public class View:Element { public bool IsTemplate; public bool Compatible=true; public int SetterCalls; private ElementId templateId=ElementId.InvalidElementId; public ElementId ViewTemplateId { get { return templateId; } set { SetterCalls++; templateId=value; } } public bool IsValidViewTemplate(ElementId id){return Compatible;} public ViewType ViewType; public ElementId TypeId; public override ElementId GetTypeId(){return TypeId;} }
  public class ViewSchedule:View {}
  public class ViewPlan:View { public Level GenLevel; public static ViewPlan Create(Document d,ElementId t,ElementId l){d.Calls++; var v=new ViewPlan { Id=new ElementId(100), TypeId=t, GenLevel=(Level)d.GetElement(l), ViewType=ViewType.FloorPlan }; d.Elements[v.Id.Value]=v; return v;} }
  public class View3D:View { public bool IsPerspective; public static View3D CreateIsometric(Document d,ElementId t){d.Calls++; var v=new View3D { Id=new ElementId(101), TypeId=t, ViewType=ViewType.ThreeD }; d.Elements[v.Id.Value]=v; return v;} }
@@ -76,9 +76,20 @@ namespace RevitLocalCodex {
   static object RunDuct(Document d,long system){return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},"create_duct",new Dictionary<string,object>{{"duct_type_id",5L},{"system_type_id",system},{"level_id",3L},{"start_mm",new double[]{100,200,300}},{"end_mm",new double[]{1100,400,500}}});}
   static object RunViewport(Document d,object sheet,object view,object x,object y){return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},"place_viewport_on_sheet",new Dictionary<string,object>{{"expected_document","test"},{"mode","write"},{"sheet_id",sheet},{"view_id",view},{"x_mm",x},{"y_mm",y}});}
   static Document ViewportDoc(){var d=Doc();d.Elements[20]=new ViewSheet{Id=new ElementId(20)};d.Elements[21]=new View{Id=new ElementId(21)};return d;}
+  static object RunTemplate(Document d,object view,object template){return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},"apply_view_template",new Dictionary<string,object>{{"expected_document","test"},{"mode","write"},{"view_id",view},{"template_id",template}});}
+  static Document TemplateDoc(){var d=Doc();d.Elements[30]=new View{Id=new ElementId(30)};d.Elements[31]=new View{Id=new ElementId(31),IsTemplate=true};return d;}
   static void ExpectFailure(Action a,string label){try{a();}catch(InvalidOperationException){Console.WriteLine("PASS "+label);return;}throw new Exception("Expected failure: "+label);}
   static void Main(){
    Console.WriteLine("Offline controlled peers only; no Revit or model lifecycle validation.");
+   var td=TemplateDoc();var tv=(View)td.Elements[30];var tr=RunTemplate(td,30L,31L);Assert((long)Prop(tr,"element_id")==30 && Prop(tr,"before_template_id")==null && (long)Prop(tr,"template_id")==31 && (bool)Prop(tr,"changed") && tv.SetterCalls==1,"template change facts");Console.WriteLine("PASS template changed from invalid prior ID");
+   tr=RunTemplate(td,30L,31L);Assert((long)Prop(tr,"before_template_id")==31 && !(bool)Prop(tr,"changed") && tv.SetterCalls==1,"template no-op facts");Console.WriteLine("PASS template no-op avoids setter");
+   td=TemplateDoc();tv=(View)td.Elements[30];tv.ViewTemplateId=new ElementId(32);tr=RunTemplate(td,30L,31L);Assert((long)Prop(tr,"before_template_id")==32 && (bool)Prop(tr,"changed"),"prior template facts");Console.WriteLine("PASS template reports prior ID");
+   td=TemplateDoc();((View)td.Elements[30]).Compatible=false;var invalidTemplate=td;ExpectFailure(()=>RunTemplate(invalidTemplate,30L,31L),"template incompatible");Assert(((View)td.Elements[30]).SetterCalls==0,"incompatible setter");
+   td=TemplateDoc();((View)td.Elements[30]).IsTemplate=true;invalidTemplate=td;ExpectFailure(()=>RunTemplate(invalidTemplate,30L,31L),"template invalid target");Assert(((View)td.Elements[30]).SetterCalls==0,"invalid target setter");
+   td=TemplateDoc();((View)td.Elements[31]).IsTemplate=false;invalidTemplate=td;ExpectFailure(()=>RunTemplate(invalidTemplate,30L,31L),"template invalid template");Assert(((View)td.Elements[30]).SetterCalls==0,"invalid template setter");
+   td=TemplateDoc();invalidTemplate=td;ExpectFailure(()=>RunTemplate(invalidTemplate,30.5,31L),"template fractional view ID");Assert(((View)td.Elements[30]).SetterCalls==0,"fractional setter");
+   td=TemplateDoc();td.OnCommit=x=>((View)x.Elements[30]).ViewTemplateId=new ElementId(99);invalidTemplate=td;ExpectFailure(()=>RunTemplate(invalidTemplate,30L,31L),"template post-commit drift");
+
    var vpdoc=ViewportDoc();var vp=RunViewport(vpdoc,20L,21L,-123.5,456.25);Assert((long)Prop(vp,"element_id")==106 && (long)Prop(vp,"sheet_id")==20 && (long)Prop(vp,"view_id")==21 && Math.Abs((double)Prop(vp,"x_mm")+123.5)<0.000001 && Math.Abs((double)Prop(vp,"y_mm")-456.25)<0.000001 && ((Viewport)vpdoc.Elements[106]).Center.Z==0,"viewport facts");Console.WriteLine("PASS viewport negative coordinates and facts");
    vpdoc=ViewportDoc();vpdoc.CanAddViewport=false;var invalidVp=vpdoc;ExpectFailure(()=>RunViewport(invalidVp,20L,21L,0.0,0.0),"viewport ineligible");Assert(vpdoc.Calls==0,"ineligible viewport created");
    vpdoc=ViewportDoc();((ViewSheet)vpdoc.Elements[20]).IsPlaceholder=true;invalidVp=vpdoc;ExpectFailure(()=>RunViewport(invalidVp,20L,21L,0.0,0.0),"viewport placeholder sheet");Assert(vpdoc.Calls==0,"placeholder viewport created");

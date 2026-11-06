@@ -167,3 +167,20 @@ test('viewport is searchable in the full catalog and manual submission requires 
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',sheet_id:'9007199254740993',view_id:'9007199254740994',x_mm:-20,y_mm:30});
  await ui.respond(ui.requests[0],{ok:true,executionId:'viewport-write'});
 });
+
+test('view template is searchable and manual submission requires one confirmation',async t=>{
+ const name='revit_apply_view_template',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+ assert.equal(tool?.label,'应用视图样板');assert.equal(tool.readOnly,false);
+ for(const query of [name,'apply_view_template','avt','应用视图样板'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@avt');const picker=ui.get('model-tool-picker');
+ const option=picker.querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();
+ assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [key,value] of Object.entries({view_id:'9007199254740993',template_id:'9007199254740994'}))ui.get('model-command-'+name+'-'+key).value=value;
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',view_id:'9007199254740993',template_id:'9007199254740994'});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'view-template-write'});
+});

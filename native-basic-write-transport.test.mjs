@@ -172,3 +172,31 @@ test('viewport receipt verifies identities and Euclidean paper-space tolerance w
  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{element_id:'5',...parameters,x_mm:-19.9994,y_mm:30.0006})});
  const result=await invokeWorkbench('revit_place_viewport_on_sheet',args(parameters),f.options());f.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(f.requests.length,1);
 });
+
+test('view template rejects old hosts and invalid IDs before queue, preserving rollback and no-op receipts',async t=>{
+ const operation='apply_view_template',tool='revit_apply_view_template',all=[...operations,operation],patch={...hostPatch,nativeBasicWriteOperations:all};
+ const parameters={view_id:'9007199254740993',template_id:'9007199254740994'};
+ for(const host of [{...patch,version:'0.8.8'},{...patch,nativeBasicWritesVersion:0},{...patch,nativeBasicWriteOperations:operations}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(f.requests.length,0);
+ }
+ const f=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,{element_id:parameters.view_id,before_template_id:null,template_id:parameters.template_id,changed:true})});
+ for(const change of [{view_id:'0'},{view_id:'9223372036854775808'},{view_id:9007199254740992},{view_id:'1.5'},{template_id:'-1'},{template_id:null},{template_id:parameters.view_id},{mode:'invalid'}])
+  await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);
+ const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].operation,operation);assert.equal(f.requests[0].args.mode,'rollback');
+ assert.deepEqual(result.value,{element_id:parameters.view_id,before_template_id:null,template_id:parameters.template_id,changed:true});assert.equal(result.receiptOwner.inspect().value.status,'received');
+ const noop=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,{element_id:parameters.view_id,before_template_id:parameters.template_id,template_id:parameters.template_id,changed:false})});
+ const unchanged=await invokeWorkbench(tool,args(parameters),noop.options());noop.remember(unchanged.receiptOwner);assert.equal(unchanged.value.changed,false);assert.equal(unchanged.receiptOwner.inspect().value.status,'received');assert.equal(noop.requests.length,1);
+});
+
+test('view template mismatched original receipts remain unconfirmed without replay',async t=>{
+ const operation='apply_view_template',all=[...operations,operation],parameters={view_id:'9007199254740993',template_id:'9007199254740994'};
+ const value={element_id:parameters.view_id,before_template_id:null,template_id:parameters.template_id,changed:true};
+ for(const change of [{element_id:'1'},{template_id:'1'},{before_template_id:'0'},{before_template_id:parameters.template_id},{changed:false},{extra:true}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;
+  await assert.rejects(invokeWorkbench('revit_apply_view_template',args(parameters),f.options()),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+  assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
+ }
+});

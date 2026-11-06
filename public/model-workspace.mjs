@@ -577,7 +577,9 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       }
       for (const [key,rule] of fields) {
         const id=command.id === 'search' && ['keyword','category'].includes(key) ? 'model-command-'+key : 'model-command-'+command.id+'-'+key;
-        const label=key==='parameters' && command.tool==='revit_run_command'?'参数值':COMMAND_PARAMETER_LABELS[key] || key;
+        let label=COMMAND_PARAMETER_LABELS[key] || key;
+        if(key==='parameters'&&command.tool==='revit_run_command')label='参数值';
+        if(key==='template_id'&&command.tool==='revit_apply_view_template')label='视图样板 ID';
         const options={document,Event,id,key,rule,label,required:required.has(key),value:draft?.values[key],onChange:invalidate,onCommand};
         const field=command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
           (rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);

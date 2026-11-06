@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -92,9 +92,11 @@ namespace RevitLocalCodex
                 {
                     object result;
                     BasicCreatedExpectation basicCreated = new BasicCreatedExpectation();
+                    ElementId beforeTemplateId = null;
                     bool guardedParameter = operation == "set_parameter_value";
                     var parameterWrites = operation == "set_parameters" || guardedParameter ? new List<ParameterWriteExpectation>() : null;
-                    if (parameterWrites != null) result = SetParameters(doc, args, parameterWrites, guardedParameter);
+                    if (operation == "apply_view_template") result = ApplyViewTemplate(doc, args, out beforeTemplateId);
+                    else if (parameterWrites != null) result = SetParameters(doc, args, parameterWrites, guardedParameter);
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
@@ -107,12 +109,14 @@ namespace RevitLocalCodex
                         doc.Regenerate();
                         VerifyParameterWrites(doc, parameterWrites);
                     }
+                    if (operation == "apply_view_template") { doc.Regenerate(); VerifyViewTemplate(doc, args); }
                     TransactionStatus completion = transaction.Commit();
                     if (completion != TransactionStatus.Committed) throw new InvalidOperationException("Revit did not commit the operation; transaction status: " + completion + ".");
                     // Commit regenerates again and can run updaters. The host's
                     // outer group is still open, so a changed value must throw
                     // before that group can assimilate or publish success.
                     if (parameterWrites != null) VerifyParameterWrites(doc, parameterWrites);
+                    if (operation == "apply_view_template") result = VerifyViewTemplate(doc, args, beforeTemplateId);
                     if (operation == "pin_element" || operation == "unpin_element") VerifyPinned(doc, args, operation == "pin_element");
                     if (basicCreated.Id != null) result = ReadBasicCreated(doc, operation, args, basicCreated.Id);
                     return result;
@@ -392,6 +396,32 @@ namespace RevitLocalCodex
         }
 
         private sealed class BasicCreatedExpectation { internal ElementId Id; }
+
+        private static object ApplyViewTemplate(Document doc, Dictionary<string, object> args, out ElementId beforeTemplateId)
+        {
+            Fields(args, "expected_document", "mode", "view_id", "template_id");
+            if (doc.IsFamilyDocument) throw new InvalidOperationException("View templates require a project document.");
+            View view = RequiredElement(doc, NativeModelQueries.ExactId(args, "view_id")) as View;
+            View template = RequiredElement(doc, NativeModelQueries.ExactId(args, "template_id")) as View;
+            if (view == null || !view.IsValidObject || view.IsTemplate) throw new InvalidOperationException("view_id must identify a valid non-template view.");
+            if (template == null || !template.IsValidObject || !template.IsTemplate) throw new InvalidOperationException("template_id must identify a valid view template.");
+            if (!view.IsValidViewTemplate(template.Id)) throw new InvalidOperationException("The template is not valid for this view.");
+            beforeTemplateId = view.ViewTemplateId;
+            if (beforeTemplateId == null) throw new InvalidOperationException("The current template ID is unavailable.");
+            if (beforeTemplateId.Value != template.Id.Value) view.ViewTemplateId = template.Id;
+            return null;
+        }
+
+        private static object VerifyViewTemplate(Document doc, Dictionary<string, object> args, ElementId beforeTemplateId = null)
+        {
+            long viewId = NativeModelQueries.ExactId(args, "view_id"), templateId = NativeModelQueries.ExactId(args, "template_id");
+            View view = RequiredElement(doc, viewId) as View;
+            View template = RequiredElement(doc, templateId) as View;
+            if (view == null || !view.IsValidObject || view.IsTemplate || template == null || !template.IsValidObject || !template.IsTemplate || view.ViewTemplateId == null || view.ViewTemplateId.Value != templateId)
+                throw new InvalidOperationException("The view template association did not match the requested state.");
+            if (beforeTemplateId == null) return null;
+            return new { element_id = DescribedId(view.Id), before_template_id = beforeTemplateId.Value == ElementId.InvalidElementId.Value ? null : DescribedId(beforeTemplateId), template_id = DescribedId(template.Id), changed = beforeTemplateId.Value != templateId };
+        }
 
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
