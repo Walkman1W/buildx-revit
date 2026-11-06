@@ -131,3 +131,21 @@ test('duct is searchable across the full catalog and its manual form requires co
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',duct_type_id:'9007199254740993',system_type_id:'9007199254740994',level_id:'9007199254740995',start_mm:{x:0,y:2,z:3000},end_mm:{x:1000,y:2,z:3000}});
  await ui.respond(ui.requests[0],{ok:true,executionId:'duct-write'});
 });
+
+
+test('sheet is searchable across the full catalog and manual submission requires confirmation',async t=>{
+ const name='revit_create_sheet',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+ assert.equal(tool?.label,'创建图纸');assert.equal(tool.readOnly,false);
+ for(const query of [name,'create_sheet','cs','创建图纸'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@cs');const picker=ui.get('model-tool-picker');
+ const option=picker.querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();
+ assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [key,value] of Object.entries({name:'建筑平面',number:'A-101',titleblock_id:'9007199254740993'}))ui.get('model-command-'+name+'-'+key).value=value;
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'建筑平面',number:'A-101',titleblock_id:'9007199254740993'});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'sheet-write'});
+});

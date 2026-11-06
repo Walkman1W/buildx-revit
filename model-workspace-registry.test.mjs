@@ -278,3 +278,13 @@ test('duct schema is discoverable in mep and guarded as a rollback model transac
  assert.deepEqual(describeModelOperationSchema({tool:name}).value.inputSchema,registered.inputSchema);
  assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(modelCommandById(name).readOnly,false);
 });
+
+
+test('sheet schema is discoverable in Code Mode views and guarded as a rollback model transaction',()=>{
+ const name='revit_create_sheet',found=[];let offset=0,more=true;
+ while(more){const result=describeModelOperationSchema({domain:'views',offset,limit:3});assert.equal(result.ok,true);found.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+ assert.equal(found.filter(item=>item===name).length,1);assert.equal(supportsModelPermissionTool(name),true);
+ const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);assert.ok(registered);assert.equal(registered.inputSchema.properties.mode.default,'rollback');
+ const exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);assert.deepEqual(exact.value.inputSchema,registered.inputSchema);
+ assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(modelCommandById(name).readOnly,false);
+});

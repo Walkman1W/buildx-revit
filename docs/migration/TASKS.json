@@ -143,6 +143,24 @@
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     },
     {
+      "id": "BX-019",
+      "title": "AEC 普通与占位图纸创建",
+      "status": "in_progress",
+      "acceptance": "按名称和编号创建图纸，指定精确图框类型或留空创建占位，回读图纸及实际图框，保留权限、事务和原回执",
+      "evidence": "AEC-SHEET-WRITE.zh-CN.md",
+      "unmigratedFromOriginal50": 36,
+      "candidateWorkspaceTools": 76,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpSheetChecks": 8,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 108,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
       "id": "BX-018",
       "title": "AEC 直风管创建",
       "status": "in_progress",

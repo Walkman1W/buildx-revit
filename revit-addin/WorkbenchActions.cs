@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -98,7 +98,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -396,6 +396,26 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "create_sheet")
+            {
+                Fields(args, "expected_document", "mode", "name", "number", "titleblock_id");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Sheets can only be created in a project document.");
+                string name = SheetText(args, "name"), number = SheetText(args, "number");
+                ViewSheet sheet;
+                if (args.ContainsKey("titleblock_id"))
+                {
+                    FamilySymbol symbol = RequiredElement(doc, NativeModelQueries.ExactId(args, "titleblock_id")) as FamilySymbol;
+                    if (symbol == null || symbol.Category == null || symbol.Category.Id.Value != (long)BuiltInCategory.OST_TitleBlocks)
+                        throw new InvalidOperationException("titleblock_id must identify a title block FamilySymbol in the current document.");
+                    sheet = ViewSheet.Create(doc, symbol.Id);
+                }
+                else sheet = ViewSheet.CreatePlaceholder(doc);
+                sheet.Name = name;
+                sheet.SheetNumber = number;
+                created.Id = sheet.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_duct")
             {
                 Fields(args, "expected_document", "mode", "duct_type_id", "system_type_id", "level_id", "start_mm", "end_mm");
@@ -507,6 +527,28 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "create_sheet")
+            {
+                ViewSheet sheet = element as ViewSheet;
+                bool placeholder = !args.ContainsKey("titleblock_id");
+                if (sheet == null || !sheet.IsValidObject || !String.Equals(sheet.Name, SheetText(args, "name"), StringComparison.Ordinal)
+                    || !String.Equals(sheet.SheetNumber, SheetText(args, "number"), StringComparison.Ordinal) || sheet.IsPlaceholder != placeholder)
+                    throw new InvalidOperationException("Created sheet identity, name, number or placeholder state changed.");
+                ElementId typeId = null;
+                using (var collector = new FilteredElementCollector(doc).OwnedByView(sheet.Id).OfCategory(BuiltInCategory.OST_TitleBlocks).WhereElementIsNotElementType())
+                {
+                    var titleblocks = collector.ToElements();
+                    if (placeholder && titleblocks.Count != 0) throw new InvalidOperationException("Placeholder sheet unexpectedly owns a title block.");
+                    if (!placeholder)
+                    {
+                        long expectedId = NativeModelQueries.ExactId(args, "titleblock_id");
+                        if (titleblocks.Count != 1 || titleblocks[0].GetTypeId() == null || titleblocks[0].GetTypeId().Value != expectedId)
+                            throw new InvalidOperationException("Created sheet title block count or type changed.");
+                        typeId = titleblocks[0].GetTypeId();
+                    }
+                }
+                return new { element_id = DescribedId(sheet.Id), name = sheet.Name, number = sheet.SheetNumber, is_placeholder = sheet.IsPlaceholder, titleblock_id = DescribedId(typeId) };
+            }
             if (operation == "create_duct")
             {
                 Duct duct = element as Duct;
@@ -590,6 +632,16 @@ namespace RevitLocalCodex
                 return new { element_id = DescribedId(grid.Id), name = grid.Name,
                     start_mm = PointDto(forward ? actualStart : actualEnd), end_mm = PointDto(forward ? actualEnd : actualStart) };
             }
+        }
+
+        private static string SheetText(Dictionary<string, object> args, string key)
+        {
+            string value = Required(args, key) as string;
+            if (String.IsNullOrWhiteSpace(value) || value.Length > 255 || !String.Equals(value, value.Trim(), StringComparison.Ordinal)
+                || value[0] == '\ufeff' || value[value.Length - 1] == '\ufeff'
+                || value.Any(c => c <= '\u001f' || (c >= '\u007f' && c <= '\u009f')))
+                throw new InvalidOperationException(key + " must be nonblank, at most 255 UTF-16 units, without surrounding whitespace or control characters.");
+            return value;
         }
 
         private static void VerifyPinned(Document doc, Dictionary<string, object> args, bool desired)
