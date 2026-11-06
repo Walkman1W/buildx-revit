@@ -143,6 +143,24 @@
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     },
     {
+      "id": "BX-020",
+      "title": "AEC 图纸视口放置",
+      "status": "in_progress",
+      "acceptance": "精确图纸与视图 ID、纸面毫米中心，验证放置资格并回读视口，保留权限、事务和原回执",
+      "evidence": "AEC-VIEWPORT-WRITE.zh-CN.md",
+      "unmigratedFromOriginal50": 35,
+      "candidateWorkspaceTools": 77,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpViewportChecks": 8,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 112,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
       "id": "BX-019",
       "title": "AEC 普通与占位图纸创建",
       "status": "in_progress",

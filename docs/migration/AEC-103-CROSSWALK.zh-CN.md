@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **76 项**，包括 43 项只读查询和 33 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **77 项**，包括 43 项只读查询和 34 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、17 项已接入候选、14 项有关联工具、36 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、18 项已接入候选、14 项有关联工具、35 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-本批增加普通和占位图纸创建。既有候选涵盖直风管、直线电气导管、楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[图纸验收](AEC-SHEET-WRITE.zh-CN.md) · [风管验收](AEC-DUCT-WRITE.zh-CN.md) · [导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
+本批增加普通图纸上的视口放置。既有候选涵盖普通和占位图纸、直风管、直线电气导管、楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[视口验收](AEC-VIEWPORT-WRITE.zh-CN.md) · [图纸验收](AEC-SHEET-WRITE.zh-CN.md) · [风管验收](AEC-DUCT-WRITE.zh-CN.md) · [导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
 
 ## 模型查询与检查
 
@@ -89,7 +89,7 @@ AEC 侧有 **27 项已有同名工具、17 项已接入候选、14 项有关联�
 | `revit_list_sheets` | 列出图纸 | 已有同名 |
 | `revit_create_sheet` | 创建图纸 | 候选 · 指定名称、编号与可选图框类型 ID，留空创建占位图纸，回读事务结果。 |
 | `revit_delete_sheet` | 删除图纸 | 未接入 |
-| `revit_place_viewport_on_sheet` | 将视图放到图纸 | 未接入 |
+| `revit_place_viewport_on_sheet` | 将视图放到图纸 | 候选 · 精确图纸与视图 ID，纸面毫米中心坐标，验证资格并回读实际视口。 |
 | `revit_batch_create_sheets_from_csv` | 从 CSV 批量建图纸 | 未接入 |
 | `revit_populate_titleblock` | 填写图框参数 | 未接入 |
 | `revit_list_titleblocks` | 列出已载图框类型 | 已有同名 |

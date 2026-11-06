@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -98,7 +98,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -396,6 +396,21 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "place_viewport_on_sheet")
+            {
+                Fields(args, "expected_document", "mode", "sheet_id", "view_id", "x_mm", "y_mm");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Viewports can only be placed in a project document.");
+                ViewSheet sheet = RequiredElement(doc, NativeModelQueries.ExactId(args, "sheet_id")) as ViewSheet;
+                View view = RequiredElement(doc, NativeModelQueries.ExactId(args, "view_id")) as View;
+                if (sheet == null || !sheet.IsValidObject || sheet.IsPlaceholder) throw new InvalidOperationException("sheet_id must identify a valid non-placeholder sheet.");
+                if (view == null || !view.IsValidObject || view.IsTemplate || view is ViewSheet || view is ViewSchedule) throw new InvalidOperationException("view_id must identify a valid viewport-compatible view.");
+                double x = FiniteNumber(Required(args, "x_mm"), "x_mm"), y = FiniteNumber(Required(args, "y_mm"), "y_mm");
+                if (!Viewport.CanAddViewToSheet(doc, sheet.Id, view.Id)) throw new InvalidOperationException("The view cannot be added to this sheet.");
+                Viewport viewport = Viewport.Create(doc, sheet.Id, view.Id, new XYZ(Feet(x), Feet(y), 0));
+                created.Id = viewport.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_sheet")
             {
                 Fields(args, "expected_document", "mode", "name", "number", "titleblock_id");
@@ -527,6 +542,19 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "place_viewport_on_sheet")
+            {
+                Viewport viewport = element as Viewport;
+                long sheetId = NativeModelQueries.ExactId(args, "sheet_id"), viewId = NativeModelQueries.ExactId(args, "view_id");
+                if (viewport == null || !viewport.IsValidObject || viewport.SheetId.Value != sheetId || viewport.ViewId.Value != viewId)
+                    throw new InvalidOperationException("Created viewport identity changed.");
+                XYZ center = viewport.GetBoxCenter();
+                double x = Millimeters(center.X), y = Millimeters(center.Y);
+                double dx = x - FiniteNumber(Required(args, "x_mm"), "x_mm"), dy = y - FiniteNumber(Required(args, "y_mm"), "y_mm");
+                if (Double.IsNaN(x) || Double.IsInfinity(x) || Double.IsNaN(y) || Double.IsInfinity(y) || Math.Sqrt(dx * dx + dy * dy) > 0.001)
+                    throw new InvalidOperationException("Created viewport center changed.");
+                return new { element_id = DescribedId(viewport.Id), sheet_id = DescribedId(viewport.SheetId), view_id = DescribedId(viewport.ViewId), x_mm = x, y_mm = y };
+            }
             if (operation == "create_sheet")
             {
                 ViewSheet sheet = element as ViewSheet;

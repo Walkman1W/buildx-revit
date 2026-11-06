@@ -143,3 +143,32 @@ test('sheet mismatched original receipt remains unconfirmed without replay',asyn
   assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
  }
 });
+
+
+test('viewport checks host capability and input before queue, retaining exact rollback receipt',async t=>{
+ const operation='place_viewport_on_sheet',tool='revit_place_viewport_on_sheet',all=[...operations,operation],patch={...hostPatch,nativeBasicWriteOperations:all};
+ const parameters={sheet_id:'9007199254740993',view_id:'9007199254740994',x_mm:-20,y_mm:30};
+ for(const host of [{...patch,version:'0.8.8'},{...patch,nativeBasicWritesVersion:0},{...patch,nativeBasicWriteOperations:operations}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(f.requests.length,0);
+ }
+ const value={element_id:'9007199254740995',...parameters};
+ const f=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{sheet_id:'0'},{sheet_id:'9223372036854775808'},{sheet_id:9007199254740992},{view_id:'-1'},{view_id:'1.5'},{x_mm:NaN},{x_mm:Infinity},{y_mm:-Infinity},{mode:'invalid'}])
+  await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);
+ const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].operation,operation);assert.equal(f.requests[0].args.mode,'rollback');
+ assert.deepEqual(result.value,value);assert.equal(result.receiptOwner.inspect().value.status,'received');
+});
+
+test('viewport receipt verifies identities and Euclidean paper-space tolerance without replay',async t=>{
+ const operation='place_viewport_on_sheet',all=[...operations,operation],parameters={sheet_id:'9007199254740993',view_id:'9007199254740994',x_mm:-20,y_mm:30};
+ for(const change of [{element_id:'0'},{sheet_id:'9007199254740992'},{view_id:'4'},{x_mm:-19.9992,y_mm:30.0008},{x_mm:NaN},{y_mm:Infinity},{extra:true}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{element_id:'5',...parameters,...change})});let owner;
+  await assert.rejects(invokeWorkbench('revit_place_viewport_on_sheet',args(parameters),f.options()),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+  assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
+ }
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{element_id:'5',...parameters,x_mm:-19.9994,y_mm:30.0006})});
+ const result=await invokeWorkbench('revit_place_viewport_on_sheet',args(parameters),f.options());f.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(f.requests.length,1);
+});

@@ -14,6 +14,7 @@
 
 ## 已核对与待验
 
+- AEC 候选新增图纸视口放置，原 50 项未接入能力还剩 35 项。生产 C# 受控夹具 30/30、宿主 105/105、Node 串行 112/112，36 份 C# 使用 Revit 2024 API 引用编译通过。Code Mode、全目录 `@` 和命令栏确认通过受控验证，真实 Revit 纸面定位、事务和 WebView 待验。[视口验收](AEC-VIEWPORT-WRITE.zh-CN.md)
 - AEC 候选新增普通与占位图纸创建，原 50 项未接入能力还剩 36 项。生产 C# 受控夹具 22/22、宿主 105/105、Node 串行 108/108，36 份 C# 使用 Revit 2024 API 引用编译通过。Code Mode、全目录 `@` 和命令栏确认通过受控验证，真实 Revit 图框创建、事务与 WebView 待验。[图纸验收](AEC-SHEET-WRITE.zh-CN.md)
 - AEC 候选新增直风管，原 50 项未接入能力还剩 37 项。生产 C# 受控夹具 14/14、宿主 105/105、Node 串行 104/104，36 份 C# 使用 Revit 2024 API 引用编译通过。Code Mode、完整目录 `@` 和命令栏确认已通过受控验证，真实 Revit 事务、默认截面和 WebView 待验。[风管验收](AEC-DUCT-WRITE.zh-CN.md)
 - AEC 候选新增直线电气导管，原 50 项未接入能力还剩 38 项。生产方法受控夹具 10/10、宿主 105/105、Node 串行 100/100，36 份 C# 的 Revit 2024 API 引用编译通过。Code Mode、`@` 和命令栏受控路径已验，真实 Revit 事务和 WebView 待验。[导管验收](AEC-CONDUIT-WRITE.zh-CN.md)

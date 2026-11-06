@@ -288,3 +288,16 @@ test('sheet schema is discoverable in Code Mode views and guarded as a rollback 
  const exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);assert.deepEqual(exact.value.inputSchema,registered.inputSchema);
  assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(modelCommandById(name).readOnly,false);
 });
+
+
+test('viewport is discoverable in views and requires a guarded model transaction',async()=>{
+ const name='revit_place_viewport_on_sheet',found=[];let offset=0,more=true;
+ while(more){const result=describeModelOperationSchema({domain:'views',offset,limit:3});assert.equal(result.ok,true);found.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+ assert.equal(found.filter(item=>item===name).length,1);assert.equal(supportsModelPermissionTool(name),true);
+ const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);assert.ok(registered);assert.equal(registered.inputSchema.properties.mode.default,'rollback');
+ assert.deepEqual(describeModelOperationSchema({tool:name}).value.inputSchema,registered.inputSchema);
+ assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(modelCommandById(name).readOnly,false);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
+ const result=await dispatcher.invokeCommand(name,{sheet_id:'1',view_id:'2',x_mm:0,y_mm:0},{confirmed:false});
+ assert.equal(result.ok,false);assert.equal(calls,0);
+});
