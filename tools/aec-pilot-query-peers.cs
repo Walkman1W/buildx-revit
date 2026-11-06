@@ -66,6 +66,11 @@ namespace Autodesk.Revit.DB
         public Transform Placement;
         public Transform GetTotalTransform() { return Placement; }
     }
+    internal sealed class Group : Element
+    {
+        public List<ElementId> Members = new List<ElementId>();
+        public IList<ElementId> GetMemberIds() { return Members; }
+    }
     internal sealed class ViewSheet : View
     {
         public string SheetNumber;
@@ -118,12 +123,13 @@ namespace RevitLocalCodex
 
     internal static class AecPilotPeerProgram
     {
-        private const string SheetId = "9007199254740993";
+        private const string SheetId = "9007199254740994";
+        private const string GroupId = "9007199254740993";
         private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         private static readonly string[] Queries = {
             "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets",
             "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters",
-            "get_warnings", "get_rvt_links", "get_link_instances"
+            "get_warnings", "get_rvt_links", "get_link_instances", "get_group_members"
         };
 
         private static Document Fixture()
@@ -134,7 +140,10 @@ namespace RevitLocalCodex
             doc.Settings.Categories.AddRange(new[] { walls, titleblocks });
             for (int index = 249; index >= 0; index--)
                 doc.Add(new ViewSheet { Id = new ElementId(index + 100), SheetNumber = "A" + index.ToString("000"), Name = "普通图纸" });
-            var sheet = new ViewSheet { Id = new ElementId(9007199254740993L), SheetNumber = "Z01", Name = "总图" };
+            var group = new Group { Id = new ElementId(9007199254740993L), Category = new Category { Id = new ElementId((long)BuiltInCategory.OST_IOSModelGroups) } };
+            group.Members.AddRange(new[] { new ElementId(503), new ElementId(502) });
+            doc.Add(group);
+            var sheet = new ViewSheet { Id = new ElementId(9007199254740994L), SheetNumber = "Z01", Name = "总图" };
             sheet.Viewports.Add(new ElementId(500));
             foreach (int parameterId in new[] { -123, 510 })
                 sheet.Parameters.Add(new Parameter { Id = new ElementId(parameterId), Definition = new Definition { Name = "同名参数" }, StorageType = StorageType.String, HasValue = true, Value = "原值" });
@@ -188,7 +197,7 @@ namespace RevitLocalCodex
 
         private static Dictionary<string, object> Arguments(string query)
         {
-            return query == "get_sheet_info"
+            return query == "get_group_members" ? new Dictionary<string, object> { { "group_id", GroupId } } : query == "get_sheet_info"
                 ? new Dictionary<string, object> { { "sheet_id", SheetId } }
                 : new Dictionary<string, object>();
         }
@@ -225,7 +234,7 @@ namespace RevitLocalCodex
             var warnings = Rows(results["get_warnings"], "items");
             Check(warnings.Length == 5 && WarningIds(warnings[0], "failing_element_ids").SequenceEqual(new[] { "2", "9" }) &&
                 !WarningIds(warnings[1], "additional_element_ids").Any() &&
-                WarningIds(warnings[2], "failing_element_ids").SequenceEqual(new[] { "2", "10", SheetId }) &&
+                WarningIds(warnings[2], "failing_element_ids").SequenceEqual(new[] { "2", "10", GroupId }) &&
                 Json.Serialize(warnings[2]) == Json.Serialize(warnings[3]) &&
                 (string)warnings[4]["failure_definition_id"] == "00000002-0000-0000-0000-000000000000", "warning order, exact IDs and duplicate rows");
             doc.Warnings.Reverse();
@@ -282,6 +291,33 @@ namespace RevitLocalCodex
             Reject(doc, "get_sheet_info", new Dictionary<string, object> { { "sheet_id", 9007199254740993L } });
             Reject(doc, "list_sheets", new Dictionary<string, object> { { "limit", 201 } });
             CheckWarningsAndLinks(doc, results);
+            var members = results["get_group_members"];
+            Check((string)members["group_id"] == GroupId && Rows(members, "items").Select(row => (string)row["id"]).SequenceEqual(new[] { "503", "502" }) && Rows(members, "items").All(row => row.Count == 1), "group order and default fields");
+            var page = Read(doc, "get_group_members", new Dictionary<string, object> { { "group_id", GroupId }, { "offset", 1 }, { "limit", 1 }, { "fields", new[] { "name", "category", "type_id" } } });
+            var member = Rows(page, "items").Single();
+            Check((string)member["id"] == "502" && (string)member["name"] == "A1" && member["type_id"] == null && (string)((Dictionary<string, object>)member["category"])["built_in_category"] == "OST_TitleBlocks" && !(bool)page["has_more"], "group pagination and requested fields");
+            Reject(doc, "get_group_members", new Dictionary<string, object> { { "group_id", "503" } });
+            Reject(doc, "get_group_members", new Dictionary<string, object> { { "group_id", GroupId }, { "fields", new[] { "name", "name" } } });
+            Reject(doc, "get_group_members", new Dictionary<string, object> { { "group_id", GroupId }, { "limit", 201 } });
+            var group = (Group)doc.Elements.First(element => element is Group);
+            group.Members.Add(new ElementId(503));
+            Reject(doc, "get_group_members", Arguments("get_group_members"));
+            group.Members.RemoveAt(group.Members.Count - 1);
+            group.Members.Add(new ElementId(9007199254740993L));
+            Reject(doc, "get_group_members", Arguments("get_group_members"));
+            group.Members.RemoveAt(group.Members.Count - 1);
+            group.Members.Add(new ElementId(-1));
+            Reject(doc, "get_group_members", Arguments("get_group_members"));
+            group.Members.RemoveAt(group.Members.Count - 1);
+            var savedCategory = group.Category;
+            group.Category = new Category { Id = new ElementId((long)BuiltInCategory.OST_Walls) };
+            Reject(doc, "get_group_members", Arguments("get_group_members"));
+            group.Category = savedCategory;
+            var oversized = new Document();
+            var hugeGroup = new Group { Id = new ElementId(1), Category = savedCategory };
+            hugeGroup.Members.AddRange(Enumerable.Range(2, 100001).Select(id => new ElementId(id)));
+            oversized.Add(hugeGroup);
+            Reject(oversized, "get_group_members", new Dictionary<string, object> { { "group_id", "1" } });
 
             const int repeats = 50;
             var byTool = new Dictionary<string, double[]>();
@@ -302,7 +338,7 @@ namespace RevitLocalCodex
                 byTool.Add(operation, times);
             }
             var allTimes = byTool.Values.SelectMany(times => times).OrderBy(time => time).ToArray();
-            Check(!doc.IsModified && doc.Elements.Count == 265, "fixture model changed");
+            Check(!doc.IsModified && doc.Elements.Count == 266, "fixture model changed");
             Console.WriteLine(Json.Serialize(new {
                 tool_count = Queries.Length, repeated_calls = allTimes.Length, failures = 0,
                 p50_ms = Percentile(allTimes, 0.50), p95_ms = Percentile(allTimes, 0.95), max_ms = allTimes.Last(),

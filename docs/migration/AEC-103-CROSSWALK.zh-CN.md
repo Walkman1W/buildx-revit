@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区源码注册 **64 项**，包括 40 项只读查询和 24 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区源码注册 **65 项**，包括 41 项只读查询和 24 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、5 项已接入候选、14 项有关联工具、48 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、6 项已接入候选、14 项有关联工具、47 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-五项候选包括模型警告、RVT 链接定义、链接实例、明细表正文读取和修订实例查询。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。后续可优先补模型组成员，再按用途补风管、电气导管、图纸和标注的具名操作。
+六项候选包括模型警告、RVT 链接定义、链接实例、明细表正文、修订实例和模型组成员查询。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。后续可按用途补风管、电气导管、图纸和标注的具名操作。
 
 ## 模型查询与检查
 
@@ -24,7 +24,7 @@ AEC 侧有 **27 项已有同名工具、5 项已接入候选、14 项有关联�
 | `revit_get_phases` | 读取阶段 | 已有同名 |
 | `revit_get_phase_filters` | 读取阶段过滤器 | 已有同名 |
 | `revit_get_design_options` | 读取设计选项 | 已有同名 |
-| `revit_get_group_members` | 读取模型组成员 | 未接入 |
+| `revit_get_group_members` | 读取模型组成员 | 候选 · 原序分页，按需读取成员字段。[验收](AEC-GROUP-MEMBERS.zh-CN.md) |
 | `revit_get_rvt_links` | 列出 RVT 链接类型 | 本批候选 |
 | `revit_get_link_instances` | 读取链接放置与坐标变换 | 本批候选 |
 | `revit_check_clashes` | 检查类别之间的碰撞 | 未接入 |

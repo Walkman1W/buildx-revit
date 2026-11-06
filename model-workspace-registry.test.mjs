@@ -20,6 +20,19 @@ import {readonlyPanelCommandSchema} from './lib/workbench-client.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
 const session='f'.repeat(32),document={title:'Registry sample',path:'D:\\samples\\registry.rvt',activeViewId:12,activeViewType:'ThreeD',modified:false};
+test('group members discovery paginates elements and returns the exact named schema',()=>{
+  const name='revit_get_group_members',found=[];
+  let offset=0,more=true;
+  while(more){const result=describeModelOperationSchema({domain:'elements',offset,limit:3});
+    assert.equal(result.ok,true);found.push(...result.value.tools.map(tool=>tool.name));
+    more=result.value.hasMore;offset+=3;
+  }
+  assert.equal(found.filter(item=>item===name).length,1);
+  const registered=MODEL_AI_READ_TOOLS.find(tool=>tool.name===name);
+  const exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);
+  assert.deepEqual(exact.value.inputSchema,registered.inputSchema);
+  assert.deepEqual(exact.value.outputSchema,registered.outputSchema);
+});
 const status=()=>({hostSession:session,document:{...document},request_id:'11111111-1111-4111-8111-111111111111'});
 const catalog=()=>({data:[{name:'revit_workbench',runtimeStatus:'connected',authStatus:'unsupported',resources:[],resourceTemplates:[],toolsError:null,
   tools:Object.fromEntries(MODEL_AI_READ_TOOLS.map(tool=>[tool.name,structuredClone(tool)]))}]});

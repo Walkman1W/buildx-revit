@@ -381,6 +381,12 @@ namespace RevitLocalCodex {
             var request = new Dictionary<string, object> { { "atomicRead", true } };
             if (!WorkbenchActions.IsRead(operation) || RequiresProjectEdit(operation) || !AtomicReadRequested(request, operation))
                 throw new Exception("Named read did not enter the read-only atomic route: " + operation);
+            if (operation == "get_group_members") {
+                bool rejected = false;
+                try { AtomicReadRequested(new Dictionary<string, object>(), operation); }
+                catch (InvalidOperationException) { rejected = true; }
+                if (!rejected) throw new Exception("Group members was admitted without an atomic snapshot");
+            }
             var result = (Dictionary<string, object>)DispatchAtomicRead(new UIApplication(), operation,
                 new Dictionary<string, object>(), "fixture", null);
             if (!(bool)result["atomicReadSnapshot"] || Convert.ToString(result["operation"]) != operation || DispatchCalls != 1 || selectedDocument != "D:\\fixture.rvt")
@@ -630,7 +636,7 @@ namespace RevitLocalCodex {
                 foreach(string name in new[]{"queue-oldest-finalized-file","queue-time-tie","queue-observed-retained","queue-observed-missing","queue-observed-claimed","queue-observed-receipt","queue-observed-expired","queue-invalid-and-claimed-excluded"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckQueueOrder(name));}
                 foreach(string name in new[]{"atomic-auto-bind","atomic-explicit-mismatch","atomic-document-changed","atomic-null-status","atomic-null-health","atomic-native-document","atomic-invalid-flag","atomic-write-refused","idle-empty","idle-pending","idle-bounded","atomic-equivalent-wrapper","atomic-same-path-new-document","atomic-invalid-before","atomic-invalid-after","atomic-view-changed","atomic-null-to-document"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
                 foreach(string name in new[]{"atomic-preparation-success","atomic-preparation-document-changed","atomic-preparation-view-changed","atomic-preparation-without-snapshot"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
-                foreach(string operation in new[]{"get_warnings","get_rvt_links","get_link_instances","get_pipe_network","get_revision_sequences","get_schedule_data"}){current=operation;results.Add(new WorkbenchHost(Path.Combine(root,operation)).CheckNamedRead(operation));}
+                foreach(string operation in new[]{"get_warnings","get_rvt_links","get_link_instances","get_pipe_network","get_revision_sequences","get_schedule_data","get_group_members"}){current=operation;results.Add(new WorkbenchHost(Path.Combine(root,operation)).CheckNamedRead(operation));}
                 foreach(string name in new[]{"wake-once-and-timing","wake-stale-after-completion","wake-stale-after-dispose","wake-abort-failure-retry","wake-post-failure-expired","wake-raise-denied","wake-shutdown","wake-cleanup-blocks-next"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckWake(name));}
                 foreach(string name in new[]{"thread-no-api-capture","thread-same-api-once","thread-different-managed","thread-different-native","thread-capture-null","thread-capture-zero","thread-later-zero","thread-current-managed-error","thread-current-native-error","thread-post-failure","thread-post-exception","thread-pending-not-accepted","thread-recapture-clears","thread-api-failure-clears","thread-execute-capture","thread-recapture-valid"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckThreadWake(name));}
                 foreach(string name in new[]{"active-no-window","active-invalid-window","active-other-process","active-other-thread","active-zero-owner","active-changed-before-post","active-get-error","active-validity-error","active-owner-error","active-process-error","active-reacquire-each-request","active-reused-foreign-window"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckActiveWindowWake(name));}

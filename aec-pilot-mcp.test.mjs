@@ -66,6 +66,10 @@ const pumpNetwork={operation:'get_pipe_network',name:'revit_get_pipe_network',ar
     {from_element_id:'31',from_connector_id:1,to_element_id:'32',to_connector_id:0},
     {from_element_id:'32',from_connector_id:1,to_element_id:'33',to_connector_id:0}]
 }};
+const groupMembers={operation:'get_group_members',name:'revit_get_group_members',
+  args:{group_id:sheetId,offset:1,limit:1,fields:['name','category','type_id']},
+  value:{...page([{id:'7',name:'first',category:null,type_id:null},{id:'8',name:null,
+    category:{id:'-2000011',name:'墙',built_in_category:'OST_Walls'},type_id:sheetId}],{offset:1,limit:1}),group_id:sheetId}};
 
 // Use the unchanged MCP entry, SDK and real filesystem queue. A controlled peer
 // supplies all model data, so these timings describe transport only.
@@ -248,6 +252,33 @@ test('the pump network can be queried through the normal workspace MCP read path
   const tool=catalog.tools.find(tool=>tool.name===pumpNetwork.name);
   assert.equal(tool.annotations.readOnlyHint,true);
   await measuredCall(f,pumpNetwork);
+  assert.equal(f.requests.size,1);
+});
+
+test('group members are published as an atomic paginated read with exact IDs and reject invalid inputs',async t=>{
+  const f=await fixture(t,{extraCalls:[groupMembers]});
+  const tool=(await f.client.listTools()).tools.find(tool=>tool.name===groupMembers.name);
+  assert.ok(tool?.outputSchema);assert.equal(tool.annotations.readOnlyHint,true);
+  await measuredCall(f,groupMembers);
+  for(const args of [{group_id:'0'},{group_id:'9223372036854775808'},
+    {group_id:sheetId,offset:-1},{group_id:sheetId,limit:201},
+    {group_id:sheetId,fields:['name','name']},{group_id:sheetId,fields:['invalid']}]){
+    const result=await toolCall(f.client,{name:groupMembers.name,args});
+    assert.equal(result.isError,true,JSON.stringify(args));
+    assert.equal(result.structuredContent.buildxToolOutcome.outcome,'not_started');
+  }
+  assert.equal(f.requests.size,1);assert.deepEqual(await fs.readdir(f.inbox),[]);
+  const older=await fixture(t,{extraCalls:[groupMembers],olderHost:true});
+  const rejected=await toolCall(older.client,groupMembers);
+  assert.equal(rejected.isError,true);assert.equal(rejected.structuredContent.buildxToolOutcome.outcome,'not_started');
+  assert.equal(older.requests.size,0);
+});
+
+test('group member response with an unrequested property remains unconfirmed',async t=>{
+  const call={...groupMembers,args:{group_id:sheetId},value:{...page([{id:'8',name:'unexpected'}]),group_id:sheetId}};
+  const f=await fixture(t,{extraCalls:[call]});
+  const result=await toolCall(f.client,call);
+  assert.equal(result.isError,true);assert.equal(result.structuredContent.buildxToolOutcome.outcome,'unconfirmed');
   assert.equal(f.requests.size,1);
 });
 

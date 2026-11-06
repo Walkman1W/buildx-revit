@@ -29,7 +29,7 @@ namespace Autodesk.Revit.DB {
         public static double ConvertFromInternalUnits(double value,ForgeTypeId unit){return value*(unit==UnitTypeId.Millimeters?304.8:unit==UnitTypeId.SquareMeters?0.09290304:0.028316846592);}
         public static bool IsMeasurableSpec(ForgeTypeId spec){return spec==SpecTypeId.Length||spec==SpecTypeId.Area||spec==SpecTypeId.Volume;}
     }
-    internal enum BuiltInCategory {OST_Walls=-2000011,OST_Doors=-2000023,OST_Windows=-2000014,OST_Floors=-2000032,OST_Roofs=-2000035,OST_Ceilings=-2000038,OST_Columns=-2000100,OST_StructuralColumns=-2001330,OST_StructuralFraming=-2001320,OST_PipeCurves=-2008044,OST_PipeFitting=-2008049,OST_PipeAccessory=-2008055,OST_DuctCurves=-2008000,OST_DuctFitting=-2008010,OST_DuctAccessory=-2008016,OST_MechanicalEquipment=-2001140,OST_PlumbingFixtures=-2001160,OST_Furniture=-2000080,OST_GenericModel=-2000151,OST_TitleBlocks=-2000280}
+    internal enum BuiltInCategory {OST_Walls=-2000011,OST_Doors=-2000023,OST_Windows=-2000014,OST_Floors=-2000032,OST_Roofs=-2000035,OST_Ceilings=-2000038,OST_Columns=-2000100,OST_StructuralColumns=-2001330,OST_StructuralFraming=-2001320,OST_PipeCurves=-2008044,OST_PipeFitting=-2008049,OST_PipeAccessory=-2008055,OST_DuctCurves=-2008000,OST_DuctFitting=-2008010,OST_DuctAccessory=-2008016,OST_MechanicalEquipment=-2001140,OST_PlumbingFixtures=-2001160,OST_Furniture=-2000080,OST_GenericModel=-2000151,OST_TitleBlocks=-2000280,OST_IOSModelGroups=-2000095}
     internal enum BuiltInParameter {CURVE_ELEM_LENGTH,HOST_AREA_COMPUTED,HOST_VOLUME_COMPUTED,OPTION_SET_ID}
     internal enum StorageType {None,Integer,Double,String,ElementId}
     internal enum ViewType {FloorPlan,ThreeD}

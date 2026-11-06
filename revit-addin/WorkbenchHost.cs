@@ -51,7 +51,7 @@ namespace RevitLocalCodex
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
-        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data" };
+        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members" };
 
         internal string SessionId { get { return session; } }
 
@@ -737,6 +737,8 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("Model preparation requires an atomic read snapshot.");
                 if (operation == "get_pipe_network")
                     throw new InvalidOperationException("Pipe network query requires an atomic read snapshot.");
+                if (operation == "get_group_members")
+                    throw new InvalidOperationException("Group members query requires an atomic read snapshot.");
                 return false;
             }
             if (!AtomicReadOperations.Contains(operation))

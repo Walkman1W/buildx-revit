@@ -13,7 +13,7 @@ namespace RevitLocalCodex
         internal static readonly string[] Operations = {
             "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets",
             "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters",
-            "get_warnings", "get_rvt_links", "get_link_instances"
+            "get_warnings", "get_rvt_links", "get_link_instances", "get_group_members"
         };
         private const int MaximumWarningElementIds = 200;
         private const int MaximumWarningDescriptionLength = 8192;
@@ -23,6 +23,7 @@ namespace RevitLocalCodex
         internal static object Read(Document doc, string operation, Dictionary<string, object> args)
         {
             var budget = new NativeModelQueries.ReadBudget();
+            if (operation == "get_group_members") return GroupMembers(doc, args, budget);
             if (operation == "get_sheet_info")
             {
                 NativeModelQueries.Fields(args, "expected_document", "sheet_id");
@@ -222,6 +223,61 @@ namespace RevitLocalCodex
             if (coordinates.Any(value => Double.IsNaN(value) || Double.IsInfinity(value)))
                 throw new InvalidOperationException("Revit returned a non-finite link transform.");
             return coordinates;
+        }
+
+        private static object GroupMembers(Document doc, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
+        {
+            NativeModelQueries.Fields(args, "expected_document", "group_id", "offset", "limit", "fields");
+            long groupId = NativeModelQueries.ExactId(args, "group_id");
+            int offset = NativeModelQueries.Page(args, "offset", 0, 0, int.MaxValue);
+            int limit = NativeModelQueries.Page(args, "limit", 100, 1, 200);
+            var fields = new List<string>();
+            object raw;
+            if (args.TryGetValue("fields", out raw))
+            {
+                var values = raw as System.Collections.IEnumerable;
+                if (values == null || raw is string || raw is System.Collections.IDictionary) throw new InvalidOperationException("fields must be an array.");
+                foreach (object value in values)
+                {
+                    string field = value as string;
+                    if (field == null || !new[] { "name", "category", "type_id" }.Contains(field, StringComparer.Ordinal) || fields.Contains(field))
+                        throw new InvalidOperationException("Invalid or duplicate field.");
+                    fields.Add(field);
+                }
+            }
+            var group = doc.GetElement(new ElementId(groupId)) as Group;
+            if (group == null || !group.IsValidObject || group.Category == null || group.Category.Id.Value != (long)BuiltInCategory.OST_IOSModelGroups)
+                throw new InvalidOperationException("group_id must identify a model group instance in the current document.");
+            IList<ElementId> ids = group.GetMemberIds();
+            var seen = new HashSet<long>();
+            foreach (ElementId id in ids)
+            {
+                budget.Scan();
+                long memberId = PositiveIdValue(id);
+                if (memberId == groupId || !seen.Add(memberId)) throw new InvalidOperationException("Revit returned a self-referencing or duplicate member ID.");
+            }
+            var items = new List<object>();
+            foreach (ElementId id in ids.Skip(offset).Take(limit))
+            {
+                var row = new Dictionary<string, object> { { "id", ExactPositiveId(id) } };
+                if (fields.Count > 0)
+                {
+                    Element element = doc.GetElement(id);
+                    if (element == null || !element.IsValidObject) throw new InvalidOperationException("Could not read a group member.");
+                    foreach (string field in fields)
+                    {
+                        if (field == "name") row[field] = element.Name;
+                        else if (field == "category") row[field] = element.Category == null ? null : CategoryRow(element.Category);
+                        else { ElementId typeId = element.GetTypeId(); row[field] = typeId != null && typeId.Value > 0 ? Id(typeId) : null; }
+                    }
+                }
+                budget.Reserve(row);
+                items.Add(row);
+            }
+            var coverage = new { scanned = ids.Count, complete = true, stop_reason = (string)null };
+            budget.Reserve(coverage);
+            return new { schema_version = 1, group_id = ExactIdText(groupId), items = items.ToArray(), offset, limit,
+                total = ids.Count, has_more = (long)offset + items.Count < ids.Count, coverage };
         }
 
         private static object SheetInfo(Document doc, long sheetId, NativeModelQueries.ReadBudget budget)

@@ -89,6 +89,20 @@
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false,
       "customerMachineVerified": false
+    },
+    {
+      "id": "BX-013",
+      "title": "AEC 模型组成员只读迁移",
+      "status": "in_progress",
+      "acceptance": "精确组实例 ID、原序分页、按需字段、原子文档绑定与原回执，并验证工作区检索和命令提交",
+      "evidence": "AEC-GROUP-MEMBERS.zh-CN.md",
+      "unmigratedFromOriginal50": 47,
+      "controlledHostChecks": 103,
+      "controlledCSharpReadChecks": 700,
+      "nodeRegressionChecks": 101,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitCommandBarVerified": false
     }
   ]
 }

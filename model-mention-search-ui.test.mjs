@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {createInputUi,session,flush,UiEvent} from './test-support/model-input-ui-fixture.mjs';
 import {modelMentionMatches} from './public/model-workspace.mjs';
 import {MODEL_COMMAND_CATALOG} from './lib/model-command-catalog.mjs';
+import {PANEL_TOOL_CATALOG} from './lib/panel-catalog.mjs';
 
 const catalog=[{name:'revit_get_sheets',label:'图纸列表',readOnly:true},{name:'revit_get_schedule_data',label:'明细表数据',readOnly:true},{name:'revit_create_schedule',label:'创建明细表',readOnly:false}];
 const state={workspace:{kind:'model',supportsModelContext:true},ready:true,commandsReady:true,directCommandsAvailable:true,historyAvailable:true,account:{required:false},connectionGeneration:1,codexAccount:{accountRevision:1,status:'unavailable'}};
@@ -35,4 +36,23 @@ test('command bar click dispatches the new AEC revision read through the existin
  row.querySelectorAll('.model-command-run')[0].click();await flush();
  assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].url,'/api/command');assert.equal(ui.requests[0].body.commandId,'revit_get_revision_sequences');
  await ui.respond(ui.requests[0],{ok:true,executionId:'fixture-read'});
+});
+
+test('group members can be found by English name, initials and label and manually read once',async t=>{
+ const tool=PANEL_TOOL_CATALOG.find(item=>item.name==='revit_get_group_members');
+ assert.equal(tool?.label,'模型组成员');assert.equal(tool.readOnly,true);
+ for(const query of ['revit_get_group_members','ggm','模型组成员'])
+   assert.equal(modelMentionMatches([tool],query)[0]?.name,tool.name);
+ const ui=await setup(t,[tool]);
+ ui.input('@ggm');ui.get('model-tool-picker').querySelectorAll('.model-tool-option')[0].click();
+ assert.equal(ui.get('prompt').value,'@revit_get_group_members ');assert.equal(ui.requests.length,0);
+ ui.document.body.querySelectorAll('.model-tab')[1].click();
+ ui.emit('state',{...state,toolCatalog:[tool],commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===tool.name);
+ assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ ui.get('model-command-revit_get_group_members-group_id').value='9007199254740993';
+ row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].url,'/api/command');
+ assert.equal(ui.requests[0].body.commandId,tool.name);assert.equal(ui.requests[0].body.parameters.group_id,'9007199254740993');
+ await ui.respond(ui.requests[0],{ok:true,executionId:'group-read'});
 });
