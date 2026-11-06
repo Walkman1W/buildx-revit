@@ -143,6 +143,24 @@
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     },
     {
+      "id": "BX-018",
+      "title": "AEC 直风管创建",
+      "status": "in_progress",
+      "acceptance": "精确风管类型、机械系统类型与标高，毫米端点，核对实际中心线，保留权限、事务及原回执",
+      "evidence": "AEC-DUCT-WRITE.zh-CN.md",
+      "unmigratedFromOriginal50": 37,
+      "candidateWorkspaceTools": 75,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpDuctChecks": 4,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 104,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
       "id": "BX-016",
       "title": "AEC 楼层平面图与等轴测三维视图",
       "status": "in_progress",

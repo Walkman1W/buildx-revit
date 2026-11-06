@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **74 项**，包括 43 项只读查询和 31 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **75 项**，包括 43 项只读查询和 32 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、15 项已接入候选、14 项有关联工具、38 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、16 项已接入候选、14 项有关联工具、37 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-本批增加直线电气导管创建。既有候选涵盖楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
+本批增加直风管创建。既有候选涵盖直线电气导管、楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[风管验收](AEC-DUCT-WRITE.zh-CN.md) · [导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
 
 ## 模型查询与检查
 
@@ -63,7 +63,7 @@ AEC 侧有 **27 项已有同名工具、15 项已接入候选、14 项有关联�
 | `revit_create_column` | 创建结构柱 | 未接入 |
 | `revit_create_beam` | 创建结构梁 | 未接入 |
 | `revit_create_foundation` | 创建基础 | 未接入 |
-| `revit_create_duct` | 创建风管 | 未接入 |
+| `revit_create_duct` | 创建风管 | 候选 · 精确风管类型、机械系统类型和标高 ID，毫米端点，回读实际中心线。 |
 | `revit_create_pipe` | 创建管道 | 已有同名 |
 | `revit_move_element` | 移动构件 | 关联能力 · `revit_move_elements`。批量接口可接收单一构件。 |
 | `revit_copy_element` | 复制构件 | 关联能力 · `revit_copy_elements`。批量接口可接收单一构件。 |

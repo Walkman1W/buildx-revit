@@ -18,7 +18,7 @@ namespace RevitLocalCodex
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
         private const string HostVersion = "0.8.9";
-        private static readonly string[] NativeBasicWriteOperations = { "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_conduit" };
+        private static readonly string[] NativeBasicWriteOperations = { "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_conduit", "create_duct" };
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");

@@ -6,6 +6,7 @@ using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
 using Autodesk.Revit.DB.Electrical;
+using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.UI;
 
 namespace RevitLocalCodex
@@ -14,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -97,7 +98,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -395,6 +396,25 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "create_duct")
+            {
+                Fields(args, "expected_document", "mode", "duct_type_id", "system_type_id", "level_id", "start_mm", "end_mm");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Duct can only be created in a project document.");
+                DuctType ductType = RequiredElement(doc, NativeModelQueries.ExactId(args, "duct_type_id")) as DuctType;
+                MechanicalSystemType systemType = RequiredElement(doc, NativeModelQueries.ExactId(args, "system_type_id")) as MechanicalSystemType;
+                Level ductLevel = RequiredElement(doc, NativeModelQueries.ExactId(args, "level_id")) as Level;
+                if (ductType == null) throw new InvalidOperationException("duct_type_id must identify a DuctType.");
+                if (systemType == null) throw new InvalidOperationException("system_type_id must identify a MechanicalSystemType.");
+                if (ductLevel == null) throw new InvalidOperationException("level_id must identify a Level.");
+                XYZ ductStart = MillimeterPoint(Required(args, "start_mm"), "start_mm");
+                XYZ ductEnd = MillimeterPoint(Required(args, "end_mm"), "end_mm");
+                CheckCurveLength(uiapp, ductStart, ductEnd);
+                if (ductStart.DistanceTo(ductEnd) < Feet(2.54)) throw new InvalidOperationException("Duct length must be at least 2.54 mm.");
+                Duct duct = Duct.Create(doc, systemType.Id, ductType.Id, ductLevel.Id, ductStart, ductEnd);
+                created.Id = duct.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_conduit")
             {
                 Fields(args, "expected_document", "mode", "conduit_type_id", "level_id", "start_mm", "end_mm", "diameter_mm");
@@ -487,6 +507,26 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "create_duct")
+            {
+                Duct duct = element as Duct;
+                long typeId = NativeModelQueries.ExactId(args, "duct_type_id"), systemId = NativeModelQueries.ExactId(args, "system_type_id"), levelId = NativeModelQueries.ExactId(args, "level_id");
+                if (duct == null || !duct.IsValidObject || duct.GetTypeId().Value != typeId || duct.ReferenceLevel == null || duct.ReferenceLevel.Id.Value != levelId)
+                    throw new InvalidOperationException("Created duct identity, type or reference level changed.");
+                Parameter systemParameter = duct.get_Parameter(BuiltInParameter.RBS_DUCT_SYSTEM_TYPE_PARAM);
+                if (systemParameter == null || systemParameter.StorageType != StorageType.ElementId || !systemParameter.HasValue || systemParameter.AsElementId() == null || systemParameter.AsElementId().Value != systemId)
+                    throw new InvalidOperationException("Created duct system type changed.");
+                LocationCurve ductLocation = duct.Location as LocationCurve;
+                Line ductLine = ductLocation == null ? null : ductLocation.Curve as Line;
+                if (ductLine == null || !ductLine.IsBound) throw new InvalidOperationException("Created duct is not a straight bounded line.");
+                XYZ requestedStart = MillimeterPoint(Required(args, "start_mm"), "start_mm"), requestedEnd = MillimeterPoint(Required(args, "end_mm"), "end_mm");
+                XYZ actualStart = ductLine.GetEndPoint(0), actualEnd = ductLine.GetEndPoint(1);
+                bool forward = actualStart.DistanceTo(requestedStart) <= Feet(0.001) && actualEnd.DistanceTo(requestedEnd) <= Feet(0.001);
+                bool reverse = actualEnd.DistanceTo(requestedStart) <= Feet(0.001) && actualStart.DistanceTo(requestedEnd) <= Feet(0.001);
+                if (!forward && !reverse) throw new InvalidOperationException("Created duct endpoints changed.");
+                return new { element_id = DescribedId(duct.Id), duct_type_id = DescribedId(duct.GetTypeId()), system_type_id = DescribedId(systemParameter.AsElementId()), level_id = DescribedId(duct.ReferenceLevel.Id),
+                    start_mm = PointDto(forward ? actualStart : actualEnd), end_mm = PointDto(forward ? actualEnd : actualStart) };
+            }
             if (operation == "create_conduit")
             {
                 Conduit conduit = element as Conduit;

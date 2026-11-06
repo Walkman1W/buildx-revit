@@ -4,6 +4,7 @@ using System.Reflection;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.DB.Electrical;
+using Autodesk.Revit.DB.Mechanical;
 namespace Autodesk.Revit.DB {
  public class ElementId { public long Value; public ElementId(long v){Value=v;} }
  public class Element { public ElementId Id; public string Name; public bool Pinned; public virtual ElementId GetTypeId(){return null;} }
@@ -18,10 +19,10 @@ namespace Autodesk.Revit.DB {
  public class XYZ { public double X,Y,Z; public XYZ(double x=0,double y=0,double z=0){X=x;Y=y;Z=z;} public double DistanceTo(XYZ p){return Math.Sqrt(Math.Pow(X-p.X,2)+Math.Pow(Y-p.Y,2)+Math.Pow(Z-p.Z,2));} }
  public class Line { public XYZ A,B; public bool IsBound=true; public static Line CreateBound(XYZ a,XYZ b){return new Line{A=a,B=b};} public XYZ GetEndPoint(int i){return i==0?A:B;} }
  public class LocationCurve { public object Curve; }
- public enum BuiltInParameter { RBS_CONDUIT_DIAMETER_PARAM } public enum StorageType { Double }
- public class Parameter { public StorageType StorageType=StorageType.Double; public bool HasValue=true,IsReadOnly; public double Value; public double AsDouble(){return Value;} public bool Set(double v){if(IsReadOnly)return false;Value=v;return true;} }
+ public enum BuiltInParameter { RBS_CONDUIT_DIAMETER_PARAM, RBS_DUCT_SYSTEM_TYPE_PARAM } public enum StorageType { Double, ElementId }
+ public class Parameter { public StorageType StorageType=StorageType.Double; public bool HasValue=true,IsReadOnly; public double Value; public ElementId IdValue; public ElementId AsElementId(){return IdValue;} public double AsDouble(){return Value;} public bool Set(double v){if(IsReadOnly)return false;Value=v;return true;} }
  public class Grid:Element { public object Curve; public static Grid Create(Document d,Line l){throw new Exception("unused");} }
- public class Document { public bool IsFamilyDocument; public bool ReverseConduit,FailDiameter; public Dictionary<long,Element> Elements=new Dictionary<long,Element>(); public int Calls; public Action<Document> OnCommit; public Element GetElement(ElementId id){Element e; return Elements.TryGetValue(id.Value,out e)?e:null;} public void Regenerate(){} }
+ public class Document { public bool IsFamilyDocument; public bool ReverseConduit,FailDiameter,ReverseDuct; public Dictionary<long,Element> Elements=new Dictionary<long,Element>(); public int Calls; public Action<Document> OnCommit; public Element GetElement(ElementId id){Element e; return Elements.TryGetValue(id.Value,out e)?e:null;} public void Regenerate(){} }
  public enum TransactionStatus { Started, Committed, RolledBack }
  public class FailureHandlingOptions { public FailureHandlingOptions SetFailuresPreprocessor(object p){return this;} public FailureHandlingOptions SetClearAfterRollback(bool v){return this;} }
  public class Transaction:IDisposable { Document d; TransactionStatus s; public Transaction(Document d,string n){this.d=d;} public TransactionStatus Start(){return s=TransactionStatus.Started;} public FailureHandlingOptions GetFailureHandlingOptions(){return new FailureHandlingOptions();} public void SetFailureHandlingOptions(FailureHandlingOptions o){} public TransactionStatus Commit(){s=TransactionStatus.Committed;if(d.OnCommit!=null)d.OnCommit(d);return s;} public TransactionStatus GetStatus(){return s;} public void RollBack(){s=TransactionStatus.RolledBack;} public void Dispose(){} }
@@ -30,6 +31,11 @@ namespace Autodesk.Revit.DB.Electrical {
  using Autodesk.Revit.DB;
  public class ConduitType:ElementType {}
  public class Conduit:Element { public bool IsValidObject=true; public ElementId TypeId; public Level ReferenceLevel; public object Location; public Parameter Diameter=new Parameter(); public override ElementId GetTypeId(){return TypeId;} public Parameter get_Parameter(BuiltInParameter p){return Diameter;} public static Conduit Create(Document d,ElementId t,XYZ a,XYZ b,ElementId l){d.Calls++; var c=new Conduit{Id=new ElementId(102),TypeId=t,ReferenceLevel=(Level)d.GetElement(l),Location=new LocationCurve{Curve=Line.CreateBound(d.ReverseConduit?b:a,d.ReverseConduit?a:b)}};c.Diameter.IsReadOnly=d.FailDiameter;d.Elements[102]=c;return c;} }
+}
+namespace Autodesk.Revit.DB.Mechanical {
+ using Autodesk.Revit.DB;
+ public class DuctType:ElementType {} public class MechanicalSystemType:ElementType {}
+ public class Duct:Element { public bool IsValidObject=true; public ElementId TypeId; public Level ReferenceLevel; public object Location; public Parameter SystemParameter; public override ElementId GetTypeId(){return TypeId;} public Parameter get_Parameter(BuiltInParameter p){return SystemParameter;} public static Duct Create(Document d,ElementId s,ElementId t,ElementId l,XYZ a,XYZ b){d.Calls++;var x=new Duct{Id=new ElementId(103),TypeId=t,ReferenceLevel=(Level)d.GetElement(l),SystemParameter=new Parameter{StorageType=StorageType.ElementId,IdValue=s},Location=new LocationCurve{Curve=Line.CreateBound(d.ReverseDuct?b:a,d.ReverseDuct?a:b)}};d.Elements[103]=x;return x;} }
 }
 namespace Autodesk.Revit.UI { public class UIDocument { public Document Document; } public class UIApplication { public UIDocument ActiveUIDocument; } }
 namespace RevitLocalCodex {
@@ -55,9 +61,10 @@ namespace RevitLocalCodex {
  class Program {
   static void Assert(bool c,string m){if(!c)throw new Exception(m);}
   static object Prop(object x,string n){return x.GetType().GetProperty(n).GetValue(x,null);}
-  static Document Doc(){var d=new Document();d.Elements[1]=new ViewFamilyType{Id=new ElementId(1),ViewFamily=ViewFamily.FloorPlan};d.Elements[2]=new ViewFamilyType{Id=new ElementId(2),ViewFamily=ViewFamily.ThreeDimensional};d.Elements[3]=new Level{Id=new ElementId(3)};d.Elements[4]=new ConduitType{Id=new ElementId(4)};return d;}
+  static Document Doc(){var d=new Document();d.Elements[1]=new ViewFamilyType{Id=new ElementId(1),ViewFamily=ViewFamily.FloorPlan};d.Elements[2]=new ViewFamilyType{Id=new ElementId(2),ViewFamily=ViewFamily.ThreeDimensional};d.Elements[3]=new Level{Id=new ElementId(3)};d.Elements[4]=new ConduitType{Id=new ElementId(4)};d.Elements[5]=new DuctType{Id=new ElementId(5)};d.Elements[6]=new MechanicalSystemType{Id=new ElementId(6)};return d;}
   static object Run(Document d,string op,long type){var a=new Dictionary<string,object>{{"name","Test view"},{"view_family_type_id",type}};if(op=="create_floor_plan_view")a["level_id"]=3L;return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},op,a);}
   static object RunConduit(Document d,long type,double length){return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},"create_conduit",new Dictionary<string,object>{{"conduit_type_id",type},{"level_id",3L},{"start_mm",new double[]{100,0,0}},{"end_mm",new double[]{100+length,0,0}},{"diameter_mm",25.0}});}
+  static object RunDuct(Document d,long system){return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},"create_duct",new Dictionary<string,object>{{"duct_type_id",5L},{"system_type_id",system},{"level_id",3L},{"start_mm",new double[]{100,200,300}},{"end_mm",new double[]{1100,400,500}}});}
   static void ExpectFailure(Action a,string label){try{a();}catch(InvalidOperationException){Console.WriteLine("PASS "+label);return;}throw new Exception("Expected failure: "+label);}
   static void Main(){
    Console.WriteLine("Offline controlled peers only; no Revit or model lifecycle validation.");
@@ -71,6 +78,10 @@ namespace RevitLocalCodex {
    d=Doc();d.FailDiameter=true;var fail=d;ExpectFailure(()=>RunConduit(fail,4,1000),"conduit diameter set failure");
    d=Doc();bad=d;ExpectFailure(()=>RunConduit(bad,1,1000),"conduit wrong type");Assert(d.Calls==0,"wrong type created conduit");
    d=Doc();bad=d;ExpectFailure(()=>RunConduit(bad,4,1),"conduit short geometry");Assert(d.Calls==0,"short geometry created conduit");
+   d=Doc();d.ReverseDuct=true;var duct=RunDuct(d,6);var start=(double[])Prop(duct,"start_mm");var end=(double[])Prop(duct,"end_mm");Assert((long)Prop(duct,"element_id")==103 && (long)Prop(duct,"duct_type_id")==5 && (long)Prop(duct,"system_type_id")==6 && (long)Prop(duct,"level_id")==3 && Math.Abs(start[0]-100)<0.001 && Math.Abs(start[1]-200)<0.001 && Math.Abs(start[2]-300)<0.001 && Math.Abs(end[0]-1100)<0.001 && Math.Abs(end[1]-400)<0.001 && Math.Abs(end[2]-500)<0.001,"duct facts and caller endpoint order");Console.WriteLine("PASS duct facts and caller endpoint order");
+   d=Doc();bad=d;ExpectFailure(()=>RunDuct(bad,4),"duct wrong system class");Assert(d.Calls==0,"wrong system created duct");
+   d=Doc();d.OnCommit=x=>((Duct)x.Elements[103]).SystemParameter.IdValue=new ElementId(4);drift=d;ExpectFailure(()=>RunDuct(drift,6),"duct post-commit system drift");
+   d=Doc();d.OnCommit=x=>((Line)((LocationCurve)((Duct)x.Elements[103]).Location).Curve).B=new XYZ(9,9,9);drift=d;ExpectFailure(()=>RunDuct(drift,6),"duct post-commit endpoint drift");
   }
  }
 }
