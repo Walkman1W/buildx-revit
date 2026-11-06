@@ -6,7 +6,7 @@ import os from 'node:os';
 import Ajv from 'ajv';
 import {invokeAtomicWorkbenchRead,invokeWorkbench,workbenchFailureEvidence} from './lib/workbench-client.mjs';
 import {createModelToolDispatcher} from './lib/model-tool-dispatch.mjs';
-import {NATIVE_MODEL_QUERY_NAMES,NATIVE_MODEL_QUERY_OPERATION_BY_TOOL,NATIVE_MODEL_QUERY_TOOLS} from './lib/native-model-queries.mjs';
+import {NATIVE_MODEL_QUERY_NAMES,NATIVE_MODEL_QUERY_OPERATION_BY_TOOL,NATIVE_MODEL_QUERY_TOOLS,MODEL_PREPARATION_QUERY_NAME,MODEL_PREPARATION_OPERATION,MODEL_PREPARATION_QUERY_TOOL} from './lib/native-model-queries.mjs';
 import {loadNativeModelQueryProducer} from './test-support/native-model-query-producer.mjs';
 
 const session='e'.repeat(32),document={title:'Native sample',path:'',activeViewId:12,activeViewType:'ThreeD',modified:true};
@@ -18,7 +18,7 @@ async function fixture(t,{host={},doc=document,respond=true,corrupt=null,onReque
   const requests=[],errors=[];let stopped=false;
   const envelope=(request,business)=>{
     if(failure)return {id:request.id,hostSession:session,ok:false,...failure,completedUtc:new Date().toISOString()};
-    const snapshot={hostSession:session,hostVersion:identity.version,document:doc,capabilities:{atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:Object.values(NATIVE_MODEL_QUERY_OPERATION_BY_TOOL)}};
+    const snapshot={hostSession:session,hostVersion:identity.version,document:doc,capabilities:{atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:identity.nativeModelQueryOperations}};
     const value={operation:request.operation,hostSession:session,document:doc===null?null:{title:doc.title,path:doc.path},modifiedByOperation:false,value:business??{schema_version:1,status:doc===null?'no_document':'ready',document_open:doc!==null}};
     const result={operation:request.operation,hostSession:session,atomicReadSnapshot:true,snapshot,value};
     if(corrupt)corrupt(result,request);
@@ -112,6 +112,25 @@ test('all six actual C# business DTOs cross the real Node atomic queue boundary'
     assert.equal(validate(value),true,JSON.stringify(validate.errors));
     assert.equal(value.value.schema_version,1);assert.equal(value.document.path,doc.path);assert.equal(f.requests.length,1);
   }
+});
+
+test('the actual C# preparation DTO crosses one atomic queue through the normal command dispatcher', {skip:process.platform!=='win32'},async t=>{
+  const produce=await loadNativeModelQueryProducer(t);
+  const doc={title:'Query fixture',path:'D:\\fixture.rvt',activeViewId:2001,activeViewType:'FloorPlan',modified:false};
+  const f=await fixture(t,{doc,businessProducer:produce,host:{nativeModelQueryOperations:[MODEL_PREPARATION_OPERATION]}});
+  const sourceDocument={session,title:doc.title,path:doc.path};
+  const dispatch=createModelToolDispatcher();
+  const result=await dispatch.invokeCommand(MODEL_PREPARATION_QUERY_NAME,{}, {sourceDocument,root:f.root,timeout:4000});
+  assert.equal(result.ok,true,result.error?.message);
+  t.after(()=>result.receiptOwner.close());
+  const validate=new Ajv({strict:false}).compile(MODEL_PREPARATION_QUERY_TOOL.outputSchema);
+  assert.equal(validate(result.value.data),true,JSON.stringify(validate.errors));
+  assert.deepEqual(result.value.data.value.selection_ids,['10000','9007199254740993']);
+  assert.deepEqual(result.value.data.value.levels.map(item=>item.element_id),['1','2']);
+  assert.equal(f.requests.length,1);
+  assert.deepEqual(result.value.requestIds,[f.requests[0].id]);
+  assert.equal(f.requests[0].args.expected_document,doc.path);
+  assert.equal(f.requests[0].atomicRead,true);
 });
 
 test('all six queries share sourceDocument guards through manual and MCP dispatch',async()=>{

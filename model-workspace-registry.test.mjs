@@ -9,7 +9,8 @@ import {fileURLToPath} from 'node:url';
 import {MODEL_COMMAND_CATALOG,MODEL_WORKSPACE_TOOL_NAMES,modelCommandById} from './lib/model-command-catalog.mjs';
 import {PANEL_WORKBENCH_TOOLS,PANEL_CONFIRMED_ONLY_TOOLS,READ_TOOLS,MODEL_WORKSPACE_TOOLS,MODEL_AI_READ_TOOLS,MODEL_AI_EFFECT_TOOLS} from './lib/panel-tools.mjs';
 import {supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
-import {NATIVE_MODEL_QUERY_TOOLS} from './lib/native-model-queries.mjs';
+import {describeModelOperationSchema} from './lib/model-operation-contracts.mjs';
+import {NATIVE_MODEL_QUERY_TOOLS,MODEL_PREPARATION_QUERY_NAME} from './lib/native-model-queries.mjs';
 import {NATIVE_PARAMETER_QUERY_TOOLS} from './lib/native-parameter-queries.mjs';
 import {ACCESS_FILE_TOOLS} from './lib/access-file-tools.mjs';
 import {createModelToolDispatcher,invokeModelCommand} from './lib/model-tool-dispatch.mjs';
@@ -27,6 +28,7 @@ test('the complete inventory includes the native model and type-parameter contra
   assert.equal(MODEL_COMMAND_CATALOG.length,PANEL_WORKBENCH_TOOLS.length+PANEL_CONFIRMED_ONLY_TOOLS.length);
   assert.equal(new Set(MODEL_COMMAND_CATALOG.map(item=>item.id)).size,MODEL_COMMAND_CATALOG.length);
   assert.equal(modelCommandById('revit_capture_model_snapshot').readOnly,true);
+  assert.equal(modelCommandById(MODEL_PREPARATION_QUERY_NAME).group,'模型查询');
   assert.equal(modelCommandById('revit_place_door').readOnly,false);
   assert.equal(modelCommandById('revit_family_create_cabinet').readOnly,false);
   assert.equal(modelCommandById('revit_family_save_cabinet').readOnly,false);
@@ -58,6 +60,14 @@ test('the legacy external query group keeps six tools while the owned workbench 
 test('the product profile owns one exact local MCP catalog without requiring the optional AEC server',()=>{
   assert.equal(MODEL_SERVER_PROFILE,MODEL_WORKSPACE_SESSION_PROFILE);
   const profile=createCodexSessionProfile(root,{profile:MODEL_SERVER_PROFILE}),composition=panelProfile(MODEL_SERVER_PROFILE);
+  const instructions=profile.buildInstructions();
+  assert.doesNotMatch(instructions,/\b(?:TessellatedShapeBuilder|AreTargetAndFallbackCompatible|Mesh|Salvage)\b/);
+  assert.match(instructions,/生成 Revit C# 前[^。\n]*只提供脚本[^。\n]*个人命令[^。\n]*先调用 buildx_model_operation_schema\(\{tool:"revit_execute_csharp"\}\)[^。\n]*再编写代码/);
+  assert.match(instructions,/起草个人命令前[^。\n]*先调用 buildx_model_operation_schema\(\{tool:"revit_save_command"\}\)/);
+  assert.match(instructions,/Revit 版本和文档类型选用已核实的 API/);
+  assert.match(instructions,/不兼容的写法，改用等价的受支持实现/);
+  assert.match(instructions,/不影响用户目标的可选项才可省略，并说明省略项/);
+  assert.match(instructions,/必需项无法等价实现时，提交脚本前说明缺口/);
   assert.deepEqual(profile.toolNames,MODEL_AI_READ_TOOLS.map(tool=>tool.name));assert.equal(profile.supportsTurnAttachments,true);
   assert.deepEqual(profile.dynamicTools.map(item=>item.name),['buildx_project_search','buildx_project_read','buildx_project_table','buildx_materials_list','buildx_materials_read',...ACCESS_FILE_TOOLS.map(item=>item.name),'buildx_model_operation_schema','buildx_model_operation']);
   assert.ok(Buffer.byteLength(JSON.stringify(profile.dynamicTools))<=32768);
@@ -67,16 +77,12 @@ test('the product profile owns one exact local MCP catalog without requiring the
   assert.ok(supported.some(tool=>tool.name==='revit_inspect_elements'));
   assert.deepEqual(operation.inputSchema.properties.tool.enum,supported.map(tool=>tool.name));
   assert.equal(operation.inputSchema.additionalProperties,false);
-  for(const definition of supported){
-    const variant=operation.inputSchema.oneOf.find(item=>item.properties.tool.enum[0]===definition.name);
-    assert.deepEqual(Object.keys(variant.properties.parameters.properties),Object.keys(definition.inputSchema.properties));
-    assert.deepEqual(variant.properties.parameters.required,definition.inputSchema.required);
-    assert.equal(variant.properties.parameters.additionalProperties,definition.inputSchema.additionalProperties);
-  }
-  assert.deepEqual(operation.inputSchema.oneOf.map(item=>item.properties.tool.enum[0]),supported.map(item=>item.name));
+  assert.deepEqual(operation.inputSchema.properties.parameters,{type:'object'});
+  assert.equal(operation.inputSchema.oneOf,undefined);
+  for(const definition of supported)assert.deepEqual(describeModelOperationSchema({tool:definition.name}).value.inputSchema,definition.inputSchema);
   const validate=new Ajv({strict:false}).compile(operation.inputSchema);
   assert.equal(validate({tool:'revit_move_elements',parameters:{expected_document:'C:\\fixture.rvt',element_ids:[1],delta_mm:{x:1,y:0,z:0},mode:'rollback'}}),true);
-  assert.equal(validate({tool:'revit_move_elements',parameters:{code:'unexpected'}}),false);
+  assert.equal(validate({tool:'revit_move_elements',parameters:[]}),false);
   assert.equal(validate({tool:'revit_get_selection',parameters:{}}),false);
   for(const name of ['revit_family_save_job','revit_family_close_job'])assert.equal(validate({tool:name,parameters:{}}),false,name);
   assert.equal(validate({tool:'revit_move_elements',parameters:{expected_document:'C:\\fixture.rvt',element_ids:[1],delta_mm:{x:1,y:0,z:0}},approved:true}),false);

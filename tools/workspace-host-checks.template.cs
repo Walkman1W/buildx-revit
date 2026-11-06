@@ -63,7 +63,12 @@ namespace RevitLocalCodex {
         public override int GetHashCode() { return nativeIdentity.GetHashCode(); }
     }
     internal sealed class UIDocument { public Document Document=new Document(); }
-    internal sealed class UIApplication { public UIDocument ActiveUIDocument=new UIDocument(); }
+    internal sealed class UIApplication {
+        public UIDocument ActiveUIDocument=new UIDocument();
+        public IntPtr MainWindow;
+        public bool ThrowMainWindow;
+        public IntPtr MainWindowHandle { get { if(ThrowMainWindow)throw new IOException("Controlled main-window failure");return MainWindow; } }
+    }
     internal sealed class IdlingEventArgs { public int FastRequests; public void SetRaiseWithoutDelay(){ FastRequests++; } }
     internal sealed class UIControlledApplication { public event EventHandler<IdlingEventArgs> Idling; }
     internal sealed class CadQueryException : Exception { public string Code { get { return "FIXTURE_CAD_ERROR"; } } }
@@ -126,7 +131,10 @@ namespace RevitLocalCodex {
             public uint Native(){if(ThrowNative)throw new IOException("Controlled native thread failure");return NativeId;}
             public uint Process(){if(ThrowProcess)throw new IOException("Controlled process failure");return ProcessId;}
             public IntPtr ActiveWindow(){ActiveReads++;if(ThrowActive)throw new IOException("Controlled active window failure");return ChangeActive&&ActiveReads%2==0?new IntPtr(43):Active;}
-            public bool Valid(IntPtr window){if(ThrowValidity)throw new IOException("Controlled validity failure");return WindowValid&&(window==new IntPtr(42)||window==new IntPtr(43));}
+            public bool MainEnabled=true,MainIconic;
+            public bool Valid(IntPtr window){if(ThrowValidity)throw new IOException("Controlled validity failure");return WindowValid&&window.ToInt64()>=42&&window.ToInt64()<=45;}
+            public bool Enabled(IntPtr window){return MainEnabled;}
+            public bool Iconic(IntPtr window){return MainIconic;}
             public CurrentUiWindowWake.WindowOwner Owner(IntPtr window){if(ThrowOwner)throw new IOException("Controlled owner failure");return new CurrentUiWindowWake.WindowOwner(WindowThreadId??NativeId,WindowProcessId);}
             public bool Post(IntPtr window){Posts++;LastPostedWindow=window;if(ThrowPost)throw new IOException("Controlled window post failure");return PostSucceeds;}
         }
@@ -162,7 +170,7 @@ namespace RevitLocalCodex {
         private string selectedDocument;
         // ORIGINAL_ATOMIC_OPERATIONS
         private string Root { get { return queue; } }
-        public WorkbenchHost(string directory) { queue=directory;activeWindowWake=new CurrentUiWindowWake(uiPeer.Current,uiPeer.Native,uiPeer.Process,uiPeer.ActiveWindow,uiPeer.Valid,uiPeer.Owner,uiPeer.Post); }
+        public WorkbenchHost(string directory) { queue=directory;activeWindowWake=new CurrentUiWindowWake(uiPeer.Current,uiPeer.Native,uiPeer.Process,uiPeer.ActiveWindow,uiPeer.Valid,uiPeer.Enabled,uiPeer.Iconic,uiPeer.Owner,uiPeer.Post); }
         private void InitializeFamilyApprovalObserver(UIApplication uiapp) { }
         private object Dispatch(UIApplication uiapp,string operation,Dictionary<string,object> args,string id,AccessPolicy.Binding access) {
             DispatchCalls++;Thread.Sleep(20);
@@ -319,17 +327,23 @@ namespace RevitLocalCodex {
         public object CheckAtomic(string name) {
             foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
             var uiapp=new UIApplication();var values=new Dictionary<string,object>();
+            bool preparation=name.StartsWith("atomic-preparation-",StringComparison.Ordinal);
             if(name=="atomic-explicit-mismatch")values["expected_document"]="D:\\other.rvt";
             if(name=="atomic-null-status"||name=="atomic-null-health")uiapp.ActiveUIDocument=null;
             if(name=="atomic-native-document")values["element_id"]="9223372036854775807";
-            if(name=="atomic-document-changed")changeDocument=true;
+            if(name=="atomic-document-changed"||name=="atomic-preparation-document-changed")changeDocument=true;
             if(name=="atomic-equivalent-wrapper")replaceWrapper=true;
             if(name=="atomic-same-path-new-document"){changeDocument=true;preserveChangedDocumentPath=true;}
             if(name=="atomic-invalid-before")uiapp.ActiveUIDocument.Document.IsValidObject=false;
             if(name=="atomic-invalid-after")invalidateDocument=true;
-            if(name=="atomic-view-changed")changeView=true;
+            if(name=="atomic-view-changed"||name=="atomic-preparation-view-changed")changeView=true;
             if(name=="atomic-null-to-document"){uiapp.ActiveUIDocument=null;openAfterNull=true;}
-            if(name=="atomic-invalid-flag"||name=="atomic-write-refused") {
+            if(name=="atomic-preparation-without-snapshot") {
+                foreach(var request in new[]{new Dictionary<string,object>(),new Dictionary<string,object>{{"atomicRead",false}}}) {
+                    bool rejected=false;try{AtomicReadRequested(request,"get_model_preparation");}catch(InvalidOperationException){rejected=true;}
+                    if(!rejected||DispatchCalls!=0)throw new Exception("Model preparation admitted without an atomic snapshot");
+                }
+            } else if(name=="atomic-invalid-flag"||name=="atomic-write-refused") {
                 var request=new Dictionary<string,object>{{"atomicRead",name=="atomic-invalid-flag"?(object)"true":true}};
                 bool rejected=false;try{AtomicReadRequested(request,name=="atomic-write-refused"?"execute_csharp":"status");}catch(InvalidOperationException){rejected=true;}
                 if(!rejected||DispatchCalls!=0)throw new Exception("Invalid atomic request admitted");
@@ -352,15 +366,26 @@ namespace RevitLocalCodex {
                 }
             } else {
                 bool rejected=false;object result=null;
-                try{result=DispatchAtomicRead(uiapp,name=="atomic-null-health"?"health":name=="atomic-native-document"?"get_element_geometry":name=="atomic-null-status"||name=="atomic-null-to-document"?"status":"get_selection",values,"fixture",null);}catch(InvalidOperationException){rejected=true;}
-                bool expectedRejection=name=="atomic-explicit-mismatch"||name=="atomic-document-changed"||name=="atomic-same-path-new-document"||name=="atomic-invalid-before"||name=="atomic-invalid-after"||name=="atomic-view-changed"||name=="atomic-null-to-document";
+                try{result=DispatchAtomicRead(uiapp,preparation?"get_model_preparation":name=="atomic-null-health"?"health":name=="atomic-native-document"?"get_element_geometry":name=="atomic-null-status"||name=="atomic-null-to-document"?"status":"get_selection",values,"fixture",null);}catch(InvalidOperationException){rejected=true;}
+                bool expectedRejection=name=="atomic-explicit-mismatch"||name=="atomic-document-changed"||name=="atomic-same-path-new-document"||name=="atomic-invalid-before"||name=="atomic-invalid-after"||name=="atomic-view-changed"||name=="atomic-null-to-document"||name=="atomic-preparation-document-changed"||name=="atomic-preparation-view-changed";
                 if(rejected!=expectedRejection)throw new Exception("Wrong atomic document outcome: "+name);
                 if(name=="atomic-auto-bind"&&(selectedDocument!="D:\\fixture.rvt"||DispatchCalls!=1))throw new Exception("Missing single-dispatch document binding");
                 if(name=="atomic-invalid-before"&&DispatchCalls!=0)throw new Exception("Invalid initial document reached Dispatch");
                 if(name=="atomic-equivalent-wrapper"&&DispatchCalls!=1)throw new Exception("Equivalent native document was not read exactly once");
+                if(preparation&&(DispatchCalls!=1||(rejected&&result!=null)))throw new Exception("Model preparation dispatched twice or leaked a partial result");
                 if(!rejected) { var data=(Dictionary<string,object>)result;if(!(bool)data["atomicReadSnapshot"]||Convert.ToString(data["hostSession"])!=session)throw new Exception("Invalid atomic result identity"); }
             }
             return new {name,passed=true,dispatchCalls=DispatchCalls};
+        }
+        public object CheckNamedRead(string operation) {
+            var request = new Dictionary<string, object> { { "atomicRead", true } };
+            if (!WorkbenchActions.IsRead(operation) || RequiresProjectEdit(operation) || !AtomicReadRequested(request, operation))
+                throw new Exception("Named read did not enter the read-only atomic route: " + operation);
+            var result = (Dictionary<string, object>)DispatchAtomicRead(new UIApplication(), operation,
+                new Dictionary<string, object>(), "fixture", null);
+            if (!(bool)result["atomicReadSnapshot"] || Convert.ToString(result["operation"]) != operation || DispatchCalls != 1 || selectedDocument != "D:\\fixture.rvt")
+                throw new Exception("Named read did not bind its document and dispatch once: " + operation);
+            return new {name=operation,passed=true,dispatchCalls=DispatchCalls};
         }
         public object CheckWake(string name) {
             File.Reset();
@@ -498,6 +523,64 @@ namespace RevitLocalCodex {
             if(!(bool)response["ok"]||Convert.ToString(message["kind"])!="WM_NULL"||Convert.ToString(message["state"])!=expectedState||(bool)message["attempted"]!=attempted||uiPeer.Posts!=expectedPosts||DispatchCalls!=(second?2:1))throw new Exception("Window message changed real execution or lost its receipt");
             return new {name,passed=true,activeWindowMessagePosts=uiPeer.Posts,nativeRaises=externalEvent.Raises,dispatchCalls=DispatchCalls,message};
         }
+        public object CheckMainWindowWake(string name) {
+            File.Reset();
+            foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
+            var uiapp=new UIApplication {MainWindow=new IntPtr(44)};
+            CaptureApiThread(uiapp);
+            uiPeer.Active=IntPtr.Zero;
+            string expectedState="main_window_posted";
+            IntPtr expectedTarget=uiapp.MainWindow;
+            switch(name) {
+                case "main-window-posted": break;
+                case "main-window-active-preferred":
+                    uiPeer.Active=expectedTarget=new IntPtr(42);expectedState="posted";break;
+                case "main-window-active-appeared":
+                    uiPeer.ChangeActive=true;expectedState="main_window_skipped_active";break;
+                case "main-window-invalid":
+                    uiPeer.WindowValid=false;expectedState="main_window_invalid";break;
+                case "main-window-foreign-thread":
+                    uiPeer.WindowThreadId=92;expectedState="main_window_unverified";break;
+                case "main-window-foreign-process":
+                    uiPeer.WindowProcessId=778;expectedState="main_window_unverified";break;
+                case "main-window-disabled":
+                    uiPeer.MainEnabled=false;expectedState="main_window_disabled";break;
+                case "main-window-minimized":
+                    uiPeer.MainIconic=true;expectedState="main_window_minimized";break;
+                case "main-window-post-failure":
+                    uiPeer.PostSucceeds=false;expectedState="main_window_post_failed";break;
+                case "main-window-refreshed":
+                    uiapp.MainWindow=expectedTarget=new IntPtr(45);CaptureApiThread(uiapp);break;
+                case "main-window-recapture-error":
+                    uiapp.ThrowMainWindow=true;CaptureApiThread(uiapp);expectedState="no_active_window";break;
+                case "main-window-recapture-error-with-active":
+                    uiapp.ThrowMainWindow=true;CaptureApiThread(uiapp);
+                    uiPeer.Active=expectedTarget=new IntPtr(42);expectedState="posted";break;
+                default: throw new Exception("Unknown main-window check");
+            }
+            bool attempted=expectedState=="main_window_posted"||expectedState=="main_window_post_failed"||expectedState=="posted";
+            string id=Guid.NewGuid().ToString();
+            string receiptFile=Path.Combine(queue,"outbox",id+".json");
+            AddRequest(id,DateTime.UtcNow.AddMinutes(1).ToString("o"),false,false,false);
+            PollQueue(null);
+            SchedulerObservation observation=pendingObservation;
+            pendingWakeOperation.Deliver();
+            EnterUiWake(observation);
+            PollQueue(null);
+            if(uiPeer.Posts!=(attempted?1:0)||attempted&&uiPeer.LastPostedWindow!=expectedTarget||
+                observation.ActiveWindowMessageState!=expectedState||observation.ActiveWindowMessageAttempted!=attempted)
+                throw new Exception("Main-window fallback picked an invalid target, was repeated, or lost diagnostics");
+            if(externalEvent.Raises!=1||DispatchCalls!=0||File.Exists(receiptFile))
+                throw new Exception("Main-window fallback raised again or invented a business result");
+            Execute(uiapp);
+            var response=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(receiptFile));
+            var timing=(Dictionary<string,object>)response["timing"];
+            var message=(Dictionary<string,object>)((Dictionary<string,object>)timing["uiWake"])["activeWindowMessage"];
+            if(!(bool)response["ok"]||Convert.ToString(message["state"])!=expectedState||(bool)message["attempted"]!=attempted||
+                externalEvent.Raises!=1||DispatchCalls!=1)
+                throw new Exception("Main-window fallback changed the original execution or receipt");
+            return new {name,passed=true,activeWindowMessagePosts=uiPeer.Posts,nativeRaises=externalEvent.Raises,dispatchCalls=DispatchCalls,message};
+        }
         public object CheckImmediateFollowUp() {
             File.Reset();
             foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
@@ -546,9 +629,12 @@ namespace RevitLocalCodex {
                 foreach(string name in new[]{"matched-success","dispatch-failure","expired","invalid-deadline","wrong-session","wrong-id","malformed-json","different-next-request","pending-result","unobserved-execute","optional-timing-budget","publication-write-failure","publication-rename-failure"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).Check(name));}
                 foreach(string name in new[]{"queue-oldest-finalized-file","queue-time-tie","queue-observed-retained","queue-observed-missing","queue-observed-claimed","queue-observed-receipt","queue-observed-expired","queue-invalid-and-claimed-excluded"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckQueueOrder(name));}
                 foreach(string name in new[]{"atomic-auto-bind","atomic-explicit-mismatch","atomic-document-changed","atomic-null-status","atomic-null-health","atomic-native-document","atomic-invalid-flag","atomic-write-refused","idle-empty","idle-pending","idle-bounded","atomic-equivalent-wrapper","atomic-same-path-new-document","atomic-invalid-before","atomic-invalid-after","atomic-view-changed","atomic-null-to-document"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
+                foreach(string name in new[]{"atomic-preparation-success","atomic-preparation-document-changed","atomic-preparation-view-changed","atomic-preparation-without-snapshot"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
+                foreach(string operation in new[]{"get_warnings","get_rvt_links","get_link_instances","get_pipe_network","get_revision_sequences","get_schedule_data"}){current=operation;results.Add(new WorkbenchHost(Path.Combine(root,operation)).CheckNamedRead(operation));}
                 foreach(string name in new[]{"wake-once-and-timing","wake-stale-after-completion","wake-stale-after-dispose","wake-abort-failure-retry","wake-post-failure-expired","wake-raise-denied","wake-shutdown","wake-cleanup-blocks-next"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckWake(name));}
                 foreach(string name in new[]{"thread-no-api-capture","thread-same-api-once","thread-different-managed","thread-different-native","thread-capture-null","thread-capture-zero","thread-later-zero","thread-current-managed-error","thread-current-native-error","thread-post-failure","thread-post-exception","thread-pending-not-accepted","thread-recapture-clears","thread-api-failure-clears","thread-execute-capture","thread-recapture-valid"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckThreadWake(name));}
                 foreach(string name in new[]{"active-no-window","active-invalid-window","active-other-process","active-other-thread","active-zero-owner","active-changed-before-post","active-get-error","active-validity-error","active-owner-error","active-process-error","active-reacquire-each-request","active-reused-foreign-window"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckActiveWindowWake(name));}
+                foreach(string name in new[]{"main-window-posted","main-window-active-preferred","main-window-active-appeared","main-window-invalid","main-window-foreign-thread","main-window-foreign-process","main-window-disabled","main-window-minimized","main-window-post-failure","main-window-refreshed","main-window-recapture-error","main-window-recapture-error-with-active"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckMainWindowWake(name));}
                 foreach(string name in new[]{"idle-diagnostic-initial-raise","idle-diagnostic-pending","idle-diagnostic-saturation","idle-diagnostic-next-owner","idle-diagnostic-expired"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckIdleDiagnostics(name));}
                 current="idle-immediate-follow-up";results.Add(new WorkbenchHost(Path.Combine(root,current)).CheckImmediateFollowUp());
             } catch(Exception error) {

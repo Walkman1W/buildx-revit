@@ -11,6 +11,10 @@ if(flags.length!==0&&(flags.length!==1||!['--read-only','--workspace'].includes(
   process.stderr.write('Usage: node workbench-mcp.mjs [--read-only|--workspace]\n');process.exit(2);
 }
 const readOnly=flags[0]==='--read-only',workspace=flags[0]==='--workspace',readOnlyNames=new Set(READONLY_WORKBENCH_TOOL_NAMES);
+const receiptBridge=workspace?await import('./lib/chat-read-receipts.mjs'):null;
+const receiptProducer=receiptBridge?.createChatReadReceiptProducer({
+  key:process.env[receiptBridge.CHAT_READ_RECEIPT_KEY_ENV],port:Number(process.env[receiptBridge.CHAT_READ_RECEIPT_PORT_ENV])
+});
 // Legacy/read-only entries retain their original dependency boundary.
 const workspaceDispatch=workspace?(await import('./lib/model-tool-dispatch.mjs')).invokeModelTool:null;
 const workspaceTools=workspace?(await import('./lib/panel-tools.mjs')).MODEL_AI_READ_TOOLS:null;
@@ -33,23 +37,30 @@ input.on('line',async line=>{
     else if(request.method==='ping')result={};
     else if(request.method==='tools/list')result={tools};
     else if(request.method==='tools/call'){
-      const events=[];
+      const events=[];let receiptProof=null,retainReceiptOwner=false;
       try{
         const name=request.params.name,args=request.params.arguments||{};
         if(!exposedNames.has(name)||readOnly&&!readOnlyNames.has(name))throw new Error('此会话不提供该工具。');
         const onTiming=value=>{const data=sanitizePanelAudit('phase-timing.jsonl',value);if(data&&events.length<8)events.push(data);};
-        const value=workspace?await workspaceDispatch(name,args,{onTiming}):isCommandTool(name)?await invokeCommand(name,args,{execute:invokeWorkbench}):await invokeWorkbench(name,args,readOnly?{onTiming}:{});
+        retainReceiptOwner=Boolean(receiptProducer&&(isNativeModelQuery(name)||isNativeParameterQuery(name)));
+        const value=workspace?await workspaceDispatch(name,args,{onTiming,...retainReceiptOwner?{retainReceiptOwner:true}:{}}):isCommandTool(name)?await invokeCommand(name,args,{execute:invokeWorkbench}):await invokeWorkbench(name,args,readOnly?{onTiming}:{});
+        if(retainReceiptOwner)await value?.receiptOwner?.close();
         result={content:[{type:'text',text:JSON.stringify(value)}],...(isNativeModelQuery(name)||isNativeParameterQuery(name)?{structuredContent:value}:{}),isError:false};
       }
       catch(error){
         // MCP's isError describes a failed tool call, not necessarily a failed
         // Revit operation. Only the transport's typed algebra can establish a
         // definite outcome; all other exceptions remain unconfirmed.
-        const outcome=workbenchFailureEvidence(error).outcome;
-        result={content:[{type:'text',text:error.producerResult?JSON.stringify({error:{message:error.message,outcome:error.modelOutcome},result:error.producerResult}):error.message}],isError:true,
+        const {outcome,requestIds,receiptOwner}=workbenchFailureEvidence(error);
+        if(retainReceiptOwner&&outcome==='unconfirmed'&&requestIds.length===1)
+          receiptProof=receiptProducer.retain(request.params.name,requestIds[0],receiptOwner);
+        if(!receiptProof)await receiptOwner?.close();
+        const message=receiptProof?'Revit 查询的原回执尚未确认，请勿自动重试。':error.message;
+        result={content:[{type:'text',text:error.producerResult?JSON.stringify({error:{message,outcome:error.modelOutcome},result:error.producerResult}):message}],isError:true,
           structuredContent:{buildxToolOutcome:{schemaVersion:1,outcome:['not_started','expired','failed'].includes(outcome)?outcome:'unconfirmed'}}};
       }
-      if(events.length)result._meta={'buildx/phaseTiming':{schemaVersion:1,events}};
+      if(events.length||receiptProof)result._meta={...events.length?{'buildx/phaseTiming':{schemaVersion:1,events}}:{},
+        ...receiptProof?{[receiptBridge.CHAT_READ_RECEIPT_META]:receiptProof}:{}};
     }else{send({jsonrpc:'2.0',id:request.id,error:{code:-32601,message:'Unknown method'}});return;}
     send({jsonrpc:'2.0',id:request.id,result});
   }catch(error){send({jsonrpc:'2.0',id:request?.id??null,error:{code:-32600,message:error.message}});}

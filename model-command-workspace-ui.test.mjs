@@ -2,12 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createInputUi,session,flush,UiEvent} from './test-support/model-input-ui-fixture.mjs';
 import {MODEL_COMMAND_CATALOG} from './lib/model-command-catalog.mjs';
+import {MODEL_SERVER_PROFILE,panelProfile} from './lib/panel-profile.mjs';
 import {modelSchemaParameters,modelCommandPresentation} from './public/model-workspace.mjs';
 
 const state={workspace:{kind:'model',supportsModelContext:true},ready:false,commandsReady:true,commandReadiness:'local',
   directCommandsAvailable:true,commandCatalog:MODEL_COMMAND_CATALOG,historyAvailable:true,account:{required:false},
   connectionGeneration:1,codexAccount:{accountRevision:1,status:'unavailable'}};
 async function setup(t){const ui=await createInputUi();t.after(()=>ui.close());ui.emit('state',state);ui.emit('conversation',{busy:false,session:session()});await flush();return ui;}
+
+test('workspace tool count uses the registered Revit catalog and survives count-only reconnect updates',async t=>{
+  const ui=await setup(t),catalog=panelProfile(MODEL_SERVER_PROFILE).catalog;
+  const reads=catalog.filter(tool=>tool.readOnly).length, count=catalog.length;
+  const label=`Revit 工具总数 ${count} 项 · 只读查询 ${reads} 项 · 其他操作 ${count-reads} 项`;
+  ui.emit('state',{...state,toolCount:reads,toolCatalog:[...catalog,catalog[0],{name:'<invalid>'}]});
+  const badge=ui.get('model-tools-toggle'),drawerCount=ui.get('tool-count');
+  assert.equal(badge.textContent,`工具 ${count}`);
+  assert.equal(badge.title,label);
+  assert.equal(drawerCount.textContent,label);
+  assert.equal(ui.get('tool-list').childElementCount,catalog.length);
+  ui.emit('state',{...state,toolCount:0});
+  assert.equal(badge.textContent,`工具 ${count}`);
+  assert.equal(drawerCount.textContent,label);
+  ui.emit('state',{...state,toolCount:0,toolCatalog:[]});
+  assert.equal(badge.textContent,'工具');
+  assert.equal(drawerCount.textContent,'正在读取目录');
+});
 
 test('create command stays directly below search and remains available with no matching or saved commands',async t=>{
   const ui=await setup(t),list=ui.get('model-command-list'),search=list.querySelectorAll('.model-command-filter')[0],create=ui.get('model-create-command'),area=list.querySelectorAll('.command-create-area')[0],items=list.querySelectorAll('.model-command-items')[0];

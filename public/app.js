@@ -1,4 +1,4 @@
-import { markdownBlocks, toolStatus, messageStatus, previewText, sessionMessages, legacyDelta } from './chat-view.mjs';
+import { markdownBlocks, toolStatus, messageStatus, previewText, sessionMessages, legacyDelta, modelToolEntries, modelToolCountLabel } from './chat-view.mjs';
 
 const $ = id => document.getElementById(id);
 let client;
@@ -14,7 +14,7 @@ let streamConnected = false, streamRecoveryPending = false, recoveryWorkspace = 
 // endpoint. It never grants tool or write authority. A restricted page cannot
 // regain model context from a late status/snapshot or a reconnect response.
 let fixedWorkspace = null, modelContextAllowed = true, sourceToolCount = 0;
-let modelUiEnabled = false, modelToolCount = 0, modelAccount = null, modelConfirmation = null;
+let modelUiEnabled = false, modelAccount = null, modelConfirmation = null;
 let modelSelectionAvailable=false, modelChoices=[], selectedModel='', selectedEffort='', modelPickerError='', modelPickerLoading=false, modelPickerAttempted=false, modelPickerRevision=0;
 const modelPreferenceKey='buildx-model-preference-v1';
 let modelPreference=readModelPreference();
@@ -36,6 +36,7 @@ const settledDynamicApprovals = new Set();
 let modelPermission=null, modelPermissionPending=null, modelPermissionTimer=null, modelPermissionMessage='',serverBusyOperation=null;
 let accessPolicy=null,accessPolicyPending=null,accessPolicyMessage='';
 let modelReceipt=null,modelReceiptPending=null,modelReceiptMessage='',modelReceiptAckSubmitted=false;
+let terminal=null,terminalPending=null,terminalMessage='',terminalRevision=0,terminalStale=false;
 let turnAttachmentsAvailable = false, attachmentRead = null;
 let skillsSupported=false,skillChoices=[],skillSelection=new Set(),skillRevision=null,skillRead=null,observedSkillsRevision=null;
 let mcpCandidatesAvailable=false,mcpCandidateRead=null;
@@ -171,12 +172,36 @@ function clearModelPermission(message='权限尚未核实。'){
   if(modelPermissionTimer)clearTimeout(modelPermissionTimer);modelPermissionTimer=null;
   modelPermission=null;modelPermissionPending=null;modelPermissionMessage=message;
 }
+const modelPermissionChecking=()=>Boolean(modelPermissionPending)||serverBusyOperation==='model-permission-check';
+const modelPermissionRequestCurrent=owner=>modelPermissionPending===owner&&owner.accountEpoch===accountEpoch&&owner.contextEpoch===contextEpoch&&owner.conversationId===lastSession?.conversation?.id&&owner.identityKey===commandIdentityKey();
 function clearModelReceipt(){modelReceipt=null;modelReceiptPending=null;modelReceiptMessage='';modelReceiptAckSubmitted=false;}
+function clearTerminal({keepJob=false}={}){
+  terminal=keepJob?terminal:null;
+  terminalPending=null;terminalMessage='';terminalStale=keepJob;terminalRevision++;
+}
+function applyTerminal(value){
+  if(!modelUiEnabled||!modelContextAllowed||!commandConversationId())return false;
+  if(value===null){clearTerminal();return true;}
+  if(!value||['available','enabled','eligible'].some(key=>typeof value[key]!=='boolean'))return false;
+  const job=value.job;
+  if(job!=null&&(!job||typeof job.requestId!=='string'||!job.requestId||
+    !['powershell','python'].includes(job.interpreter)||
+    !['starting','running','stop_requested','exited','not_started','unconfirmed'].includes(job.status)||
+    ['cwd','script','stdout','stderr'].some(key=>typeof job[key]!=='string')||
+    ['stdoutTruncated','stderrTruncated','exitConfirmed'].some(key=>typeof job[key]!=='boolean')||
+    !(job.exitCode===null||Number.isInteger(job.exitCode))))return false;
+  const changedJob=terminal?.job?.requestId!==job?.requestId;
+  if(changedJob&&terminalPending?.action!=='enable')terminalPending=null;
+  terminal=value;terminalRevision++;terminalStale=false;
+  if(!terminalPending)terminalMessage='';
+  return true;
+}
 function canRecoverModelReceipt(receipt){
   const check=receipt?.check,recovery=check?.recovery,failure=check?.evidence?.nativeFailure;
   return ['revit_execute_csharp','revit_run_command'].includes(receipt?.tool)&&check?.terminal===false&&recovery?.kind==='script_failure'&&recovery.requiresReview===true&&
     recovery.modelRollback==='unknown'&&recovery.externalEffects==='unknown'&&failure?.outcome==='failed'&&failure.started===true&&failure.phase==='dispatch';
 }
+const canRestoreVisualReceipt=receipt=>receipt?.tool==='revit_inspect_elements'&&receipt.check?.canRestoreVisual===true;
 function applyModelReceipt(value){
   if(value===null){clearModelReceipt();return;}
   const str=(v,max)=>typeof v==='string'&&v.length>0&&v.length<=max&&!/[\u0000-\u001f\u007f]/.test(v);
@@ -204,13 +229,14 @@ function applyModelPermission(value){
   if(modelPermission&&value.revision===modelPermission.revision&&(value.level!==modelPermission.level||value.documentLabel!==modelPermission.documentLabel||value.expiresAt!==modelPermission.expiresAt)){clearModelPermission('权限状态不一致，请重新连接。');return false;}
   if(modelPermissionTimer)clearTimeout(modelPermissionTimer);
   modelPermission=Object.freeze({available:true,level:value.level,revision:value.revision,conversationId,documentLabel:value.documentLabel,expiresAt:value.expiresAt});
-  modelPermissionMessage='';
+  if(!modelPermissionPending)modelPermissionMessage='';
   if(value.expiresAt!==null){const bound=modelPermission;modelPermissionTimer=setTimeout(()=>{if(modelPermission===bound){clearModelPermission('本次授权已过期，请重新选择。');updateButtons();}},Math.min(value.expiresAt-Date.now(),2147483647));}
   return true;
 }
 function connectionIssue(message) {
   clearAccessPolicy('连接已中断，访问范围尚未核实。');
   clearModelPermission('连接已中断，权限尚未核实。');
+  clearTerminal({keepJob:true});
   ready = false; commandsReady = false; $('status-dot').className = 'dot error'; $('status-text').textContent = message;
   clearSkills('连接尚未核实，请重新读取技能。');
   renderCodexSetup(null);
@@ -496,13 +522,16 @@ function publishModelView() {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent('buildx-model-view', { detail: {
     enabled: modelUiEnabled && modelContextAllowed, ready, commandsReady, busy,
-    blocked: busy || Boolean(modelPermissionPending) || pendingRequests.has('session') || commandPending(), account: modelAccount, confirmation: modelConfirmation,
-    toolCatalog, ...(commandCatalog!==null?{commandCatalog}:{}), toolCount: modelToolCount, hasMessages: messages.length > 0, accountEpoch, contextEpoch, mcpCandidatesAvailable,
+    blocked: busy || modelPermissionChecking() || pendingRequests.has('session') || commandPending(), account: modelAccount, confirmation: modelConfirmation,
+    toolCatalog, ...(commandCatalog!==null?{commandCatalog}:{}), hasMessages: messages.length > 0, accountEpoch, contextEpoch, mcpCandidatesAvailable,
     history:{ ...historyState, available:historyEnabled(), activeId:activeConversationId || historyState.activeId },
     activeId:activeConversationId, commandConversationId:commandConversationId(), commandIdentityKey:commandIdentityKey(), readOnly:historyEnabled() && conversationReadOnly,
-    modelPermission, modelPermissionPending:Boolean(modelPermissionPending), modelPermissionMessage,
+    modelPermission, modelPermissionPending:modelPermissionChecking(), modelPermissionMessage,
+    modelPermissionStatusRefreshAvailable:modelPermissionPending?.delayed===true||serverBusyOperation==='model-permission-check',
+    modelPermissionStatusRefreshing:Boolean(statusRead),
     accessPolicy,accessPolicyPending:Boolean(accessPolicyPending),accessPolicyMessage,
     modelReceipt,modelReceiptPending:Boolean(modelReceiptPending),modelReceiptPendingAction:modelReceiptPending?.action??null,modelReceiptMessage,modelReceiptAckSubmitted,
+    terminal,terminalPendingAction:terminalPending?.action??null,terminalMessage,terminalStale,
     persistence:lastSession?.conversation?.persistence || lastSession?.persistence || null,
     directCommandsAvailable:directCommandsAvailable && Boolean(commandConversationId()), commands:commandIdentityVisible ? [...commandResults.values()] : [],
     commandStopPending:pendingRequests.has('interrupt'),
@@ -641,7 +670,7 @@ function applyWorkspace(workspace) {
 function updateButtons() {
   if (dynamicApproval && (['pending','submitting'].includes(dynamicApproval.state) && !dynamicApprovalCurrent(dynamicApproval) || dynamicApprovalAwaitingResult(dynamicApproval) && !dynamicApprovalScopeCurrent(dynamicApproval))) invalidateDynamicApproval();
   if (!busy && !commandPending()) commandStopUnavailable = false;
-  const permissionChecking=Boolean(modelPermissionPending)||serverBusyOperation==='model-permission-check';
+  const permissionChecking=modelPermissionChecking();
   const blocked = busy || permissionChecking || pendingRequests.has('session') || commandPending();
   const readOnly = historyEnabled() && conversationReadOnly;
   const switchingConversation = historyEnabled() && pendingRequests.has('session');
@@ -689,7 +718,7 @@ function renderTools(state) {
   }
   const ownsCatalog = !sourceWorkspace() || state.workspace?.kind === 'source-development';
   if (Array.isArray(state.toolCatalog) && ownsCatalog) {
-    toolCatalog = state.toolCatalog;
+    toolCatalog = modelUiEnabled ? modelToolEntries(state.toolCatalog) : state.toolCatalog;
     $('tool-list').replaceChildren(...toolCatalog.map(tool => {
       const item = node('li'), heading = node('div', 'tool-heading');
       heading.append(node('span', '', tool.label || tool.name), node('span', 'tool-badge' + (tool.readOnly ? '' : ' writes'), tool.readOnly ? '只读' : '操作'));
@@ -701,18 +730,19 @@ function renderTools(state) {
     else if (Number.isInteger(state.toolCount)) sourceToolCount = state.toolCount;
   }
   const count = sourceWorkspace() ? sourceToolCount : Number.isInteger(state.toolCount) ? state.toolCount : 0;
-  $('tool-count').textContent = toolCatalog.length ? (modelUiEnabled?`已连接 ${count} 项 · 目录 ${toolCatalog.length} 项`:`已加载 ${count} / ${toolCatalog.length} 项`) : '正在读取目录';
+  $('tool-count').textContent = toolCatalog.length ? (modelUiEnabled ? modelToolCountLabel(toolCatalog) : `已加载 ${count} / ${toolCatalog.length} 项`) : '正在读取目录';
   $('tool-note').textContent = sourceWorkspace() && !toolCatalog.length
     ? '正在读取源码工具目录；尚未取得本工作区的工具说明。'
     : count > 0
     ? sourceWorkspace() ? '只读源码目录已加载；工具返回仍需核对来源、原始 SHA256 和覆盖状态，目录可见不等于每项已运行。'
-      : '目录包含需独立授权的操作；目录可见不等于操作已就绪。能否执行仍取决于 Revit 连接、宿主版本和当前文档。'
+      : '只读查询通过 MCP 连接；目录中的操作经统一入口调用，并核对权限、Revit 连接、宿主版本及当前文档。目录可见不等于操作已就绪或已执行。'
     : '当前尚未确认工具加载。目录中的功能不代表已连接或已运行。';
 }
 function status(state = {}) {
   if (!applyWorkspace(state.workspace)) { if (customerWorkspace()) { ready = false; updateButtons(); } return false; }
   if(Object.hasOwn(state,'busyOperation'))serverBusyOperation=state.busyOperation==='model-permission-check'?'model-permission-check':null;
   else if(state.busy===false)serverBusyOperation=null;
+  if(modelPermissionPending&&serverBusyOperation==='model-permission-check')modelPermissionPending.sawServerCheck=true;
   if(Object.hasOwn(state,'steerAvailable'))steerAvailable=modelUiEnabled&&state.steerAvailable===true;
   if(Object.hasOwn(state,'steerReceiptsAvailable')){
     const wasAvailable=steerReceiptsAvailable;steerReceiptsAvailable=modelUiEnabled&&state.steerReceiptsAvailable===true;
@@ -731,6 +761,8 @@ function status(state = {}) {
   // A Codex disconnect or new AI connection cannot discard that recovery path.
   const receiptAccountChanged=Object.hasOwn(state,'account')&&modelAccount!==null&&(state.account?.signedIn!==modelAccount.signedIn||state.account?.user?.id!==modelAccount.user?.id||state.account?.required!==modelAccount.required);
   if(!modelUiEnabled||receiptAccountChanged)clearModelReceipt();
+  if(!modelUiEnabled||receiptAccountChanged)clearTerminal();
+  else if(modelIdentityChanged||state.error===true||state.codexAccount?.status==='invalidated')clearTerminal({keepJob:true});
   if(Object.hasOwn(state,'skillsAvailable'))skillsSupported=modelUiEnabled&&state.skillsAvailable===true;
   if(!modelUiEnabled)skillsSupported=false;
   if(Object.hasOwn(state,'mcpCandidatesAvailable'))mcpCandidatesAvailable=modelUiEnabled&&state.mcpCandidatesAvailable===true;
@@ -753,7 +785,6 @@ function status(state = {}) {
   if(previousCommandIdentity!==commandIdentityKey() && messages.length)renderConversation();
   if (Object.hasOwn(state, 'account')) modelAccount = state.account;
   if (Object.hasOwn(state, 'codexConfirmation')) modelConfirmation = state.codexConfirmation;
-  if (Number.isInteger(state.toolCount)) modelToolCount = state.toolCount;
   if (!modelUiEnabled) { directCommandsAvailable = false; clearCommands(); }
   const wasHistoryAvailable = historyAvailable;
   if (Object.hasOwn(state,'historyAvailable')) historyAvailable = modelUiEnabled && state.historyAvailable === true;
@@ -830,18 +861,22 @@ function renderMarkdown(parent, text, message) {
   }
   parent.replaceChildren(fragment);
 }
-function toolCard(messageId, tool) {
+const originalReadReceiptLabels={received:'原回执确认查询成功',expired:'原请求已过期，未执行',not_started:'原回执确认未执行',failed:'原回执确认失败'};
+function toolCard(messageId, tool, receipt) {
   const id = messageId + ':' + tool.id;
   const currentStatus = ['running', 'returned', 'failed', 'unknown'].includes(tool.status) ? tool.status : 'unknown';
-  const details = node('details', 'tool-call ' + currentStatus), summary = node('summary');
+  const receiptLabel=currentStatus==='unknown'&&receipt&&Object.hasOwn(originalReadReceiptLabels,receipt.status)?originalReadReceiptLabels[receipt.status]:null;
+  const displayedStatus=receiptLabel?(receipt.status==='received'?'returned':'failed'):currentStatus;
+  const details = node('details', 'tool-call ' + displayedStatus), summary = node('summary');
   details.open = openedTools.has(id);
   details.addEventListener('toggle', () => { if (!details.isConnected) return; if (details.open) openedTools.add(id); else openedTools.delete(id); });
-  summary.append(node('span', 'tool-indicator'), node('span', 'tool-name', tool.label || tool.name || '工具调用'), node('span', 'tool-status', toolStatus(currentStatus)));
+  summary.append(node('span', 'tool-indicator'), node('span', 'tool-name', tool.label || tool.name || '工具调用'), node('span', 'tool-status', receiptLabel||toolStatus(currentStatus)));
   const content = node('div', 'tool-details');
   content.append(node('h4', '', tool.name || '工具'), node('h4', '', '调用参数'), node('pre', '', previewText(tool.argumentsPreview)));
   if (tool.resultPreview !== undefined && tool.resultPreview !== null) content.append(node('h4', '', '返回内容'), node('pre', '', previewText(tool.resultPreview)));
   if (tool.error) content.append(node('h4', '', '错误'), node('pre', 'tool-error', previewText(tool.error)));
-  if (currentStatus === 'unknown') content.append(node('h4', '', sourceWorkspace()
+  if(receiptLabel)content.append(node('h4','','原回执核对'),node('p','',receiptLabel+'。原请求 '+receipt.requestId+'。本轮 Codex 回复保留提交时的结果。'));
+  if (currentStatus === 'unknown'&&!receiptLabel) content.append(node('h4', '', sourceWorkspace()
     ? '尚未取得确定结果；请按来源、哈希和覆盖状态回查。' : customerWorkspace()
       ? '尚未取得确定结果；请先核对本轮回执。' : '尚未取得确定结果；模型写入结果未知时请先回查。'));
   details.append(summary, content); return details;
@@ -875,9 +910,10 @@ function renderConversation() {
         return card;
       }));
       entry.attachments.hidden=!attachments.length;
-      const toolSignature = JSON.stringify(message.tools || []);
+      const toolReceipts=Array.isArray(lastSession?.toolReceipts)?lastSession.toolReceipts.filter(item=>item.messageId===message.id):[];
+      const toolSignature = JSON.stringify([message.tools || [],toolReceipts]);
       if (entry.toolSignature !== toolSignature) {
-        entry.tools.replaceChildren(...(Array.isArray(message.tools) ? message.tools : []).map(tool => toolCard(message.id, tool)));
+        entry.tools.replaceChildren(...(Array.isArray(message.tools) ? message.tools : []).map(tool => toolCard(message.id,tool,toolReceipts.find(item=>item.itemId===tool.id))));
         entry.tools.hidden = !entry.tools.childElementCount;
         entry.toolSignature = toolSignature;
       }
@@ -1072,8 +1108,14 @@ async function showDynamicApproval(value){
 function applyConversation(data = {}, commandEvidence = false) {
   if (!applyWorkspace(data.workspace)) return;
   const sessionRequest=pendingRequests.get('session');
-  const state = data.state && data.state.workspace === undefined && data.workspace !== undefined
-    ? { ...data.state, workspace: data.workspace } : data.state;
+  // A combined conversation snapshot owns its busy projection. state.busy may
+  // also include background history writes; merge the canonical conversation
+  // value before status() publishes any intermediate view to permission UI.
+  const conversationBusy=typeof data.busy==='boolean'?(data.busy||pendingRequests.get('turn')?.waitingForDraft===true):null;
+  const state = data.state ? { ...data.state,
+    ...(data.state.workspace===undefined&&data.workspace!==undefined?{workspace:data.workspace}:{}),
+    ...(conversationBusy===null?{}:{busy:conversationBusy}),
+  } : data.state;
   if (state && !status(state)) return;
   if (modelUiEnabled && data.history?.available === true) historyAvailable = true;
   const wasBusy = busy;
@@ -1107,11 +1149,12 @@ function applyConversation(data = {}, commandEvidence = false) {
     reconcileSteerReceipts(data.session);
     canonical = true; lastSession = data.session; messages = sessionMessages(data.session);
     if(previousSkillsConversation&&skillsConversation()!==previousSkillsConversation)clearSkills('对话已切换，请重新读取技能。');
-    if (priorCommandConversation !== commandConversationId()) clearCommands();
+    if (priorCommandConversation !== commandConversationId()) { clearCommands(); clearTerminal(); }
     if (!changedConversation && contextEpoch !== null && data.session.contextEpoch !== undefined && contextEpoch !== data.session.contextEpoch) {
       const newChat = pendingRequests.get('session')?.route === 'new-chat';
       invalidateRequests();
       clearCommands();
+      clearTerminal({keepJob:true});
       $('context-reset').hidden = newChat;
       if (newChat) { $('include-document').checked = false; $('include-selection').checked = false; $('prompt').focus(); }
     }
@@ -1128,13 +1171,23 @@ function applyConversation(data = {}, commandEvidence = false) {
   if (commandEvidence && Object.hasOwn(data,'command')) applyCommandProjection(data.command);
   if (data.activity) $('activity-text').textContent = data.activity;
   if (data.error) notice(typeof data.error === 'string' ? data.error : previewText(data.error));
-  if(Object.hasOwn(data,'modelPermission'))applyModelPermission(data.modelPermission);
+  if(Object.hasOwn(data,'modelPermission')){
+    const applied=applyModelPermission(data.modelPermission),owner=modelPermissionPending;
+    if(applied&&owner&&modelPermissionRequestCurrent(owner)&&data.busy===false&&serverBusyOperation===null){
+      const confirmed=modelPermission.revision>owner.revision&&modelPermission.level===owner.level;
+      if(confirmed||owner.sawServerCheck&&data.state?.busyOperation===null){
+        modelPermissionPending=null;
+        modelPermissionMessage=confirmed?'已更新本次对话的执行方式。':'服务核实已结束。当前执行方式以服务返回为准。';
+      }
+    }
+  }
   if(Object.hasOwn(data,'accessPolicy'))applyAccessPolicy(data.accessPolicy);
   else if(data.session&&Object.hasOwn(data.session,'accessPolicy'))applyAccessPolicy(data.session.accessPolicy);
   if(Object.hasOwn(data,'userInput'))showUserInput(data.userInput);
   if(Object.hasOwn(data,'dynamicApproval'))showDynamicApproval(data.dynamicApproval);
   if(Object.hasOwn(data,'dynamicApprovalResult'))applyDynamicApprovalResult(data.dynamicApprovalResult);
   if(Object.hasOwn(data,'modelReceipt'))applyModelReceipt(data.modelReceipt);
+  if(Object.hasOwn(data,'terminal'))applyTerminal(data.terminal);
   initializeCommandAuthoring(sessionRequest);
   updateButtons();
   if (wasBusy && !busy && historyEnabled()) { scheduleDraftSave(); if (!Array.isArray(data.history?.sessions)) void refreshHistory(); }
@@ -1175,6 +1228,7 @@ function eventData(event, action) {
 function connectEvents() {
   clearAccessPolicy('连接正在刷新，访问范围尚未核实。');
   clearModelPermission('连接正在刷新，权限尚未核实。');
+  clearTerminal({keepJob:true});
   invalidateStatusRead();
   invalidateHistoryRead();
   stream?.close(); stream = new EventSource('/api/events?client=' + encodeURIComponent(client));
@@ -1246,36 +1300,51 @@ async function changeAccessPolicy(detail){
 }
 async function changeModelPermission(level){
   const current=modelPermission, conversationId=lastSession?.conversation?.id;
-  if(!modelUiEnabled||!modelContextAllowed||!ready||busy||pendingRequests.has('session')||modelPermissionPending||conversationReadOnly||
+  if(!modelUiEnabled||!modelContextAllowed||!ready||busy||pendingRequests.has('session')||modelPermissionChecking()||conversationReadOnly||
     !current||current.conversationId!==conversationId||!['rollback','confirm','automatic'].includes(level)||level===current.level||
     current.expiresAt!==null&&current.expiresAt<=Date.now())return;
   const owner={accountEpoch,contextEpoch,conversationId,identityKey:commandIdentityKey(),revision:current.revision,level};
   modelPermissionPending=owner;modelPermissionMessage='正在等待 Revit 核实当前模型与执行权限…';updateButtons();
-  const matches=()=>modelPermissionPending===owner&&owner.accountEpoch===accountEpoch&&owner.contextEpoch===contextEpoch&&owner.conversationId===lastSession?.conversation?.id&&owner.identityKey===commandIdentityKey();
-  let timer;
+  const matches=()=>modelPermissionRequestCurrent(owner);
+  let timer,deadline;
   try{
-    // The server owns the bounded native verification and its final receipt.
-    // A UI patience timer must not abandon a live 60-second Revit check.
-    timer=setTimeout(()=>{if(matches()){modelPermissionMessage='仍在等待 Revit 核实当前模型；请结束未完成的 Revit 命令，勿重复提交。';updateButtons();}},15000);timer?.unref?.();
-    const result=await post('model-permission',{conversationId,level,expectedRevision:owner.revision});
+    timer=setTimeout(()=>{if(matches()){owner.delayed=true;modelPermissionMessage='仍在等待 Revit 核实当前模型。可刷新服务状态，请勿重复提交。';updateButtons();}},15000);timer?.unref?.();
+    const timeout=new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('执行方式回执超时')),75000);deadline?.unref?.();});
+    const result=await Promise.race([post('model-permission',{conversationId,level,expectedRevision:owner.revision}),timeout]);
     if(!matches())return;
     if(result?.ok!==true||result.modelPermission?.level!==level||result.modelPermission?.conversationId!==conversationId||!Number.isSafeInteger(result.modelPermission?.revision)||result.modelPermission.revision<=owner.revision)throw new Error('权限结果未能核实。');
     if(modelPermission&&modelPermission.revision>result.modelPermission.revision){modelPermissionPending=null;return;}
     if(!applyModelPermission(result.modelPermission))throw new Error('权限结果未能核实。');
     modelPermissionPending=null;modelPermissionMessage='已更新本次对话的模型权限。';
-  }catch(error){if(matches())clearModelPermission(error?.rejected?'权限更新未成功，请重新核实当前状态。':'权限更新结果未确认，请重新核实当前状态。');}
-  finally{clearTimeout(timer);if(modelPermissionPending===owner)modelPermissionPending=null;updateButtons();}
+  }catch(error){
+    if(matches()){
+      clearModelPermission(error?.rejected?'执行方式更新未成功，请重新核实当前状态。':'执行方式回执未确认，请刷新服务状态。');
+      if(!error?.rejected&&!statusRead)void refreshModelPermissionStatus();
+    }
+  }
+  finally{clearTimeout(timer);clearTimeout(deadline);if(modelPermissionPending===owner)modelPermissionPending=null;updateButtons();}
+}
+async function refreshModelPermissionStatus(){
+  if(!modelUiEnabled||!modelContextAllowed||statusRead||pendingRequests.has('session'))return;
+  const owner=modelPermissionPending;
+  try{
+    const data=await refreshStatus();
+    if(owner&&modelPermissionRequestCurrent(owner)&&data?.ready===true&&data.busy===false&&data.busyOperation===null)
+      clearModelPermission('服务已空闲，执行方式回执仍未确认。可以继续聊天或新建对话。');
+  }catch(error){notice(error.message||'服务状态未核实，请稍后刷新。');}
+  finally{updateButtons();}
 }
 async function modelReceiptAction(action,detail){
   const receipt=modelReceipt,conversationId=commandConversationId();
-  if(!modelUiEnabled||!modelContextAllowed||modelAccount?.required===true&&modelAccount.signedIn!==true||action!=='check'&&busy||pendingRequests.has('session')||modelPermissionPending||commandPending()||modelReceiptPending||conversationReadOnly||
+  if(!modelUiEnabled||!modelContextAllowed||modelAccount?.required===true&&modelAccount.signedIn!==true||action!=='check'&&(busy||modelPermissionChecking())||pendingRequests.has('session')||commandPending()||modelReceiptPending||conversationReadOnly||
     !receipt||receipt.checking||receipt.conversationId!==conversationId||detail?.ticket!==receipt.ticket||detail?.conversationId!==conversationId||
-    !['check','acknowledge','recover'].includes(action))return;
+    !['check','acknowledge','recover','restore-visual'].includes(action))return;
   if(action==='acknowledge'&&(modelReceiptAckSubmitted||receipt.check?.terminal!==true||detail?.checkRevision!==receipt.checkRevision))return;
   if(action==='recover'&&(modelReceiptAckSubmitted||!canRecoverModelReceipt(receipt)||detail?.checkRevision!==receipt.checkRevision))return;
+  if(action==='restore-visual'&&(modelReceiptAckSubmitted||!canRestoreVisualReceipt(receipt)||detail?.checkRevision!==receipt.checkRevision))return;
   const confirming=action!=='check';
   const owner={accountEpoch,contextEpoch,conversationId,ticket:receipt.ticket,identityKey:commandIdentityKey(),checkRevision:receipt.checkRevision,action};
-  modelReceiptPending=owner;modelReceiptMessage=action==='check'?'正在检查原回执…':'正在提交确认…';updateButtons();
+  modelReceiptPending=owner;modelReceiptMessage=action==='check'?'正在检查原回执…':action==='restore-visual'?'正在恢复临时检查视图…':'正在提交确认…';updateButtons();
   const current=()=>modelReceiptPending===owner&&owner.accountEpoch===accountEpoch&&owner.contextEpoch===contextEpoch&&owner.conversationId===commandConversationId()&&owner.identityKey===commandIdentityKey()&&modelReceipt?.ticket===owner.ticket;
   const controller=typeof AbortController==='function'?new AbortController():null;let timer;
   try{
@@ -1290,6 +1359,32 @@ async function modelReceiptAction(action,detail){
     modelReceiptMessage=confirming&&!error?.rejected?'确认结果尚未核实，请勿重复提交；请重新连接核对。':error?.message||'原回执仍未核实，请勿重复执行。';
   }}
   finally{clearTimeout(timer);if(modelReceiptPending===owner)modelReceiptPending=null;updateButtons();}
+}
+async function terminalAction(detail){
+  const {action,requestId,enabled}=detail??{},conversationId=commandConversationId(),job=terminal?.job;
+  if(!modelUiEnabled||!modelContextAllowed||!conversationId||detail?.conversationId!==conversationId||terminalPending||
+    modelAccount?.required===true&&modelAccount.signedIn!==true||!['enable','cancel','status'].includes(action))return;
+  if(action==='enable'){
+    if(!ready||!terminal?.available||terminalStale||busy||conversationReadOnly||pendingRequests.has('session')||
+      modelPermissionChecking()||accessPolicyPending||typeof enabled!=='boolean'||enabled===terminal.enabled||
+      enabled&&!terminal.eligible)return;
+  }else if(!job||job.requestId!==requestId||action==='cancel'&&!['starting','running'].includes(job.status))return;
+  const owner={action,accountEpoch,contextEpoch,conversationId,revision:terminalRevision};
+  terminalPending=owner;terminalMessage='';updateButtons();
+  const current=()=>terminalPending===owner&&owner.accountEpoch===accountEpoch&&owner.contextEpoch===contextEpoch&&owner.conversationId===commandConversationId();
+  const controller=new AbortController();let timer;
+  try{
+    const extra={conversationId,...(action==='enable'?{enabled}:{requestId})};
+    const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{reject(new Error('timeout'));controller.abort();},15000);timer?.unref?.();});
+    const result=await Promise.race([post('terminal/'+action,extra,{signal:controller.signal}),timeout]);
+    if(!current())return;
+    if(result?.ok!==true||!Object.hasOwn(result,'terminal'))throw new Error('unconfirmed');
+    if(owner.revision===terminalRevision&&!applyTerminal(result.terminal))throw new Error('unconfirmed');
+  }catch(error){
+    if(current())terminalMessage=error?.rejected?error.message:action==='enable'?'开关结果尚未核实，请刷新对话状态。':'原请求状态尚未核实，请再次核查原请求。';
+  }finally{
+    clearTimeout(timer);if(terminalPending===owner)terminalPending=null;updateButtons();
+  }
 }
 async function loadMcpCandidates(){
   if(!modelUiEnabled||!modelContextAllowed||!mcpCandidatesAvailable||!ready||mcpCandidateRead)return;
@@ -1396,7 +1491,7 @@ async function inspectOriginalCabinetJob(detail) {
   finally{if(current())finishRequest(request);updateButtons();}
 }
 async function send(text, { clearDraft = true } = {}) {
-  const trimmed = text.trim(); if (!ready || busy || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(lastSession?.conversation?.id) || isUncertainSteer(lastSession?.conversation?.id,trimmed)) return;
+  const trimmed = text.trim(); if (!ready || busy || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(lastSession?.conversation?.id) || isUncertainSteer(lastSession?.conversation?.id,trimmed)) return;
   cancelDraftTimer();
   invalidateRequests();
   const request = beginRequest('turn', { draftRevision, draft: $('prompt').value, submittedContext:contextFlags(), waitingForDraft:Boolean(draftSaveWork), accountEpoch, conversationId:activeConversationId, skillsConversation:skillsConversation(), skillIds:Object.freeze([...skillSelection]), model:modelUiEnabled&&modelSelectionAvailable?selectedModel:undefined, effort:modelUiEnabled&&modelSelectionAvailable&&selectedEffort?selectedEffort:undefined, attachments:Object.freeze(pendingAttachments().slice()) });
@@ -1529,7 +1624,7 @@ function initializeCommandAuthoring(request){
   window.dispatchEvent(new CustomEvent('buildx-command-authoring-started',{detail:{conversationId,kind:request.commandKind}}));
 }
 async function createConversation({commandAuthoring=false,commandKind='csharp'}={}){
-  if (busy || commandPending() || pendingRequests.has('session')) return;
+  if (busy || modelPermissionChecking() || commandPending() || pendingRequests.has('session')) return;
   if(commandAuthoring&&(!modelUiEnabled||!modelContextAllowed||!['csharp','sequence'].includes(commandKind)))return;
   const draft = currentDraft(); rememberDraft(); cancelDraftTimer(); invalidateHistoryRead();
   const conversationId=activeConversationId||commandConversationId();
@@ -1600,6 +1695,7 @@ function clearAccountDisplay(isBusy=false){
   clearAccessPolicy('账号已变化，访问范围尚未核实。');
   clearModelPermission('账号已变化，权限尚未核实。');
   clearModelReceipt();
+  clearTerminal();
   clearSkills('账号已变化，请重新读取技能。');skillsSupported=false;
   mcpCandidateRead=null;mcpCandidatesAvailable=false;
   if(typeof window!=='undefined'&&typeof CustomEvent==='function')window.dispatchEvent(new CustomEvent('buildx-mcp-candidates-result',{detail:{status:'cleared'}}));
@@ -1633,10 +1729,13 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pagehide',()=>{clearAccessPolicy();attachmentRead=null;libraryAttachmentEpoch++;closeImagePreview(false);clearAttachmentDrafts();updateButtons();});
   window.addEventListener('keydown',event=>{if(event.key==='Escape'&&imagePreview){event.preventDefault();closeImagePreview();}});
   window.addEventListener('buildx-model-permission-select',event=>{void changeModelPermission(event.detail?.level);});
+  window.addEventListener('buildx-model-permission-refresh',()=>{void refreshModelPermissionStatus();});
   window.addEventListener('buildx-access-policy-select',event=>{void changeAccessPolicy(event.detail);});
   window.addEventListener('buildx-model-receipt-check',event=>{void modelReceiptAction('check',event.detail);});
   window.addEventListener('buildx-model-receipt-acknowledge',event=>{void modelReceiptAction('acknowledge',event.detail);});
   window.addEventListener('buildx-model-receipt-recover',event=>{void modelReceiptAction('recover',event.detail);});
+  window.addEventListener('buildx-model-receipt-restore-visual',event=>{void modelReceiptAction('restore-visual',event.detail);});
+  window.addEventListener('buildx-terminal-action',event=>{void terminalAction(event.detail);});
   window.addEventListener('buildx-model-picker-mounted',publishModelPicker);
   window.addEventListener('buildx-model-picker-refresh',()=>{void loadModels();});
   window.addEventListener('buildx-model-picker-select',event=>{if(modelUiEnabled&&modelSelectionAvailable&&ready&&!busy&&!modelPickerLoading&&!pendingRequests.has('session')&&modelChoices.some(item=>item.model===event.detail?.model)){selectModel(event.detail.model);modelPickerError='';rememberModelPreference();updateButtons();}});

@@ -81,6 +81,18 @@ export function markdownBlocks(value) {
 export function toolStatus(value) {
   return ({ running: '执行中', returned: '已返回', failed: '失败', unknown: '结果未知' })[value] ?? '结果未知';
 }
+export function modelToolEntries(catalog) {
+  if (!Array.isArray(catalog)) return [];
+  const names = new Set();
+  return catalog.slice(0,1024).filter(tool => {
+    if (!tool || typeof tool.name !== 'string' || !/^[A-Za-z][A-Za-z0-9_.:/-]{0,159}$/.test(tool.name) || names.has(tool.name)) return false;
+    names.add(tool.name); return true;
+  });
+}
+export function modelToolCountLabel(catalog) {
+  const readOnly = catalog.filter(tool => tool.readOnly === true).length;
+  return `Revit 工具总数 ${catalog.length} 项 · 只读查询 ${readOnly} 项 · 其他操作 ${catalog.length - readOnly} 项`;
+}
 export function messageStatus(value) {
   return ({ streaming: '生成中', completed: '', failed: '回答失败', interrupted: '已停止', unknown: '结果未知' })[value] ?? '';
 }

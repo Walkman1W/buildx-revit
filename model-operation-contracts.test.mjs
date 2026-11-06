@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Ajv from 'ajv';
 import Ajv2020 from 'ajv/dist/2020.js';
-import {MODEL_AI_EFFECT_TOOLS} from './lib/panel-tools.mjs';
+import {MODEL_AI_EFFECT_TOOLS,MODEL_AI_READ_TOOLS} from './lib/panel-tools.mjs';
 import {supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
 import {MODEL_AGENT_TOOL,MODEL_AGENT_TOOL_WITH_FAMILY_LIFECYCLE} from './lib/model-agent-tool.mjs';
 import {MODEL_OPERATION_SCHEMA_TOOL,modelOperationContracts,describeModelOperationSchema} from './lib/model-operation-contracts.mjs';
@@ -12,15 +12,6 @@ import {createModelPermissionOwner} from './lib/model-permission-owner.mjs';
 
 const documentPath='D:\\controlled\\catalog-budget.rvt';
 const strictAjv=()=>new Ajv2020({strict:true,allErrors:true});
-function sameValidationSchema(full,registered){
-  if(Array.isArray(full)){assert.ok(Array.isArray(registered));assert.equal(registered.length,full.length);full.forEach((entry,index)=>sameValidationSchema(entry,registered[index]));return;}
-  if(full===null||typeof full!=='object'){assert.deepEqual(registered,full);return;}
-  const keys=Object.keys(full).filter(key=>key!=='description'||typeof full[key]!=='string');assert.deepEqual(Object.keys(registered),keys);
-  for(const key of keys){
-    if(['enum','const','default','examples'].includes(key))assert.deepEqual(registered[key],full[key]);
-    else sameValidationSchema(full[key],registered[key]);
-  }
-}
 function schemaSample(rule,key=''){
   if(Object.hasOwn(rule,'const'))return structuredClone(rule.const);
   if(rule.enum)return structuredClone(rule.enum[0]);
@@ -62,7 +53,7 @@ function nestedInvalidSamples(schema,value){
 
 test('on-demand contracts preserve the registered schema without granting model authority',()=>{
   const names=modelOperationContracts(true).map(contract=>contract.name);
-  assert.deepEqual(MODEL_OPERATION_SCHEMA_TOOL.inputSchema.properties.tool.enum,names);
+  assert.deepEqual(MODEL_OPERATION_SCHEMA_TOOL.inputSchema.properties.tool.enum,[...MODEL_AI_READ_TOOLS.map(tool=>tool.name),...names]);
   for(const name of names){
     const original=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);
     const result=describeModelOperationSchema({tool:name});
@@ -76,6 +67,26 @@ test('on-demand contracts preserve the registered schema without granting model 
     assert.throws(()=>{result.value.inputSchema.required.push('injected');},TypeError);
   }
   assert.deepEqual(modelOperationContracts().map(contract=>contract.name),MODEL_AI_EFFECT_TOOLS.filter(tool=>supportsModelPermissionTool(tool.name)).map(tool=>tool.name));
+  const script=describeModelOperationSchema({tool:'revit_execute_csharp'});
+  assert.equal(script.ok,true);
+  const guidance=script.value.inputSchema.properties.code.description;
+  assert.match(guidance,/Revit 2024/);
+  assert.match(guidance,/TessellatedShapeBuilder\.Build\(\)/);
+  assert.match(guidance,/\bSolid\s*\/\s*Abort\b.*\bAnyGeometry\s*\/\s*Mesh\b.*\bMesh\s*\/\s*Salvage\b/s);
+  assert.match(guidance,/\bAreTargetAndFallbackCompatible\b/);
+});
+
+test('domain discovery is bounded and exact read contracts retain their schemas',()=>{
+  const seen=[];
+  for(const domain of ['document','elements','parameters','families','mep','views','commands']){
+    let offset=0,more=true;
+    while(more){const result=describeModelOperationSchema({domain,offset,limit:3});assert.equal(result.ok,true);assert.ok(result.value.tools.length<=3);seen.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+  }
+  assert.deepEqual(new Set(seen),new Set([...MODEL_AI_READ_TOOLS.map(t=>t.name),...modelOperationContracts(true).map(t=>t.name)]));
+  for(const tool of MODEL_AI_READ_TOOLS){const result=describeModelOperationSchema({tool:tool.name}).value;assert.deepEqual(result.inputSchema,tool.inputSchema);assert.deepEqual(result.outputSchema,tool.outputSchema);}
+  const views=describeModelOperationSchema({domain:'views',limit:20}).value.tools.map(tool=>tool.name);
+  for(const name of MODEL_AI_READ_TOOLS.filter(tool=>/schedule|revision/.test(tool.name)).map(tool=>tool.name))assert.ok(views.includes(name),name);
+  for(const input of [{domain:'bad'},{domain:'mep',limit:21},{domain:'mep',offset:-1},{domain:'mep',tool:'revit_execute_csharp'}])assert.equal(describeModelOperationSchema(input).ok,false);
 });
 
 test('schema lookup rejects malformed data, aliases, unknown names and getters without model work',()=>{
@@ -103,9 +114,8 @@ test('wall discovery supplies the exact fields missing from observed malformed m
   const parameters={expected_document:'D:\\BuildXProbe\\Test.rvt',wall_type_id:1740,level_id:355,
     start_mm:{x:0,y:0,z:0},end_mm:{x:4000,y:0,z:0},height_mm:3000,mode:'commit'};
   assert.equal(call({tool:'revit_create_wall',parameters}),true);
-  for(const invalid of [{tool:'revit_create_wall'},{tool:'revit_create_wall',parameters:{}},
-    {tool_name:'revit_create_wall',parameters,mode:'commit'},
-    {tool:'revit_create_wall',parameters:{...parameters,start_point:parameters.start_mm}}])assert.equal(call(invalid),false);
+  for(const invalid of [{tool:'revit_create_wall'}, {tool_name:'revit_create_wall',parameters,mode:'commit'}])assert.equal(call(invalid),false);
+  assert.equal(call({tool:'revit_create_wall',parameters:{}}),true); // Trusted owner validates inner fields.
 });
 
 test('both actual workspace registrations retain at least 4 KiB within the 32 KiB transport budget',t=>{
@@ -119,24 +129,22 @@ test('both actual workspace registrations retain at least 4 KiB within the 32 Ki
   assert.doesNotThrow(()=>new CodexClientCore(process.cwd(),profile));
   assert.deepEqual(profile.dynamicTools.filter(tool=>tool.name!=='buildx_model_operation'),
     profile.familyLifecycleDynamicTools.filter(tool=>tool.name!=='buildx_model_operation'));
-  for(const [tool,lifecycle] of [[MODEL_AGENT_TOOL,false],[MODEL_AGENT_TOOL_WITH_FAMILY_LIFECYCLE,true]])
-    for(const contract of modelOperationContracts(lifecycle))sameValidationSchema(describeModelOperationSchema({tool:contract.name}).value.inputSchema,
-      tool.inputSchema.oneOf.find(variant=>variant.properties.tool.enum[0]===contract.name).properties.parameters);
+  for(const contract of modelOperationContracts(true))assert.deepEqual(describeModelOperationSchema({tool:contract.name}).value.inputSchema,contract.inputSchema);
 });
 
-test('strict Ajv agrees with every original contract on valid samples and each required or closed nested object',t=>{
+test('on-demand contracts retain validation of valid samples and malformed nested data',t=>{
   let operations=0,invalidSamples=0;
   for(const [tool,lifecycle] of [[MODEL_AGENT_TOOL,false],[MODEL_AGENT_TOOL_WITH_FAMILY_LIFECYCLE,true]]){
     const registered=strictAjv().compile(tool.inputSchema),contracts=modelOperationContracts(lifecycle);
     assert.deepEqual(tool.inputSchema.properties.tool.enum,contracts.map(contract=>contract.name));
-    assert.equal(tool.inputSchema.oneOf.length,contracts.length);
+    assert.equal(tool.inputSchema.oneOf,undefined);
     for(const contract of contracts){
       const original=strictAjv().compile(contract.inputSchema),sample=schemaSample(contract.inputSchema);operations++;
       assert.equal(original(sample),true,contract.name+': original controlled schema sample');
       assert.equal(registered({tool:contract.name,parameters:sample}),true,contract.name+': registered sample');
       for(const parameters of nestedInvalidSamples(contract.inputSchema,sample)){
         invalidSamples++;assert.equal(original(parameters),false,contract.name+': original nested invalid sample');
-        assert.equal(registered({tool:contract.name,parameters}),false,contract.name+': registered nested invalid sample');
+        assert.equal(registered({tool:contract.name,parameters}),true,contract.name+': compact registration accepts object for trusted validation');
       }
       for(const input of [{tool:contract.name},{tool:contract.name,parameters:sample,mode:'commit'},{tool_name:contract.name,parameters:sample}])assert.equal(registered(input),false);
     }
@@ -144,8 +152,8 @@ test('strict Ajv agrees with every original contract on valid samples and each r
   assert.ok(invalidSamples>250);t.diagnostic(JSON.stringify({operationVariants:operations,nestedInvalidSamples:invalidSamples}));
 });
 
-test('nested alternatives, enum domains, primitive maps and the user field named description keep their constraints',()=>{
-  const validate=strictAjv().compile(MODEL_AGENT_TOOL.inputSchema),base={expected_document:documentPath};
+test('on-demand nested contracts retain alternatives and constraints',()=>{
+  const validate=({tool,parameters})=>strictAjv().compile(describeModelOperationSchema({tool}).value.inputSchema)(parameters),base={expected_document:documentPath};
   const saved={command_id:'catalog-budget',name:'预算验证',description:'User content named description',code:'return 1;',parameters:{description:'string'}};
   assert.equal(validate({tool:'revit_save_command',parameters:saved}),true);
   for(const parameters of [{...saved,description:42},{...saved,parameters:{description:'object'}},{...saved,code:''}])assert.equal(validate({tool:'revit_save_command',parameters}),false);
@@ -172,6 +180,12 @@ test('compact discovery still grants no execution authority and keeps family and
     expected_state:{storage_type:'Double',has_value:true,value_internal:1,data_type:'length'},expected_instance_ids:['100','101']},isCurrent:()=>true};
   assert.equal(describeModelOperationSchema({tool:request.tool}).ok,true);assert.throws(()=>owner.propose(request),{code:'MODEL_PERMISSION_UNAVAILABLE'});
   owner.setLevel({scope,level:'automatic',isCurrent:()=>true});assert.throws(()=>owner.propose(request),{code:'MODEL_TYPE_PARAMETER_REVIEW_UNAVAILABLE'});
+  for(const [index,tool,parameters,code] of [
+    [0,'revit_create_wall',{},'MODEL_OPERATION_PARAMETERS_INVALID'],
+    [1,'revit_create_wall',{expected_document:documentPath,wall_type_id:1,level_id:1,start_mm:{x:0,y:0,z:0},end_mm:{x:1,y:0,z:0},height_mm:1000,extra:true},'MODEL_OPERATION_PARAMETERS_INVALID'],
+    [2,'revit_execute_csharp',{expected_document:documentPath,code:''},'MODEL_SCRIPT_PARAMETERS_INVALID'],
+    [3,'revit_create_window',{},'MODEL_OPERATION_UNSUPPORTED'],
+  ])assert.throws(()=>owner.propose({...request,callId:'invalid-'+index,tool,parameters}),{code});
   assert.throws(()=>owner.propose({...request,callId:'catalog-family-close',tool:lifecycle.tool,parameters:lifecycle.parameters}),{code:'MODEL_OPERATION_UNSUPPORTED'});
   assert.equal(calls,0);assert.equal((await owner.close()).closed,true);
 });

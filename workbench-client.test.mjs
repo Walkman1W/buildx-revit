@@ -12,6 +12,7 @@ import {invokeCommand} from './lib/command-store.mjs';
 import {FAMILY_PANEL_CONFIRMATION_ONLY} from './lib/family-tools.mjs';
 import {NATIVE_PARAMETER_WRITE_NAMES} from './lib/native-parameter-writes.mjs';
 import {isNativeTypeParameterWrite} from './lib/native-type-parameter-writes.mjs';
+import {isAecPilotQuery,MODEL_PREPARATION_QUERY_NAME,PIPE_NETWORK_QUERY_NAME} from './lib/native-model-queries.mjs';
 import {LEGACY_PANEL_TOOL_NAMES} from './lib/panel-tools.mjs';
 
 test('mutating contracts validate ids, mode and UTF8 bounds',()=>{
@@ -22,7 +23,7 @@ test('mutating contracts validate ids, mode and UTF8 bounds',()=>{
   assert.throws(()=>validateTool('revit_execute_csharp',{expected_document:'a',code:'测'.repeat(22000)}));
   assert.throws(()=>validateTool('revit_workbench_status',{code:'not allowed'}));
 });
-test('MCP lists the complete tool catalog and connection status derives its count',()=>{
+test('legacy MCP lists its complete tool catalog and connection status derives its count',()=>{
   const request=JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'});
   const probe=spawnSync(process.execPath,[fileURLToPath(new URL('./workbench-mcp.mjs',import.meta.url))],{input:request+'\n',encoding:'utf8',windowsHide:true,timeout:5000});
   assert.equal(probe.status,0,probe.stderr);
@@ -31,7 +32,9 @@ test('MCP lists the complete tool catalog and connection status derives its coun
   assert.equal(new Set(ALL_PANEL_TOOLS).size,ALL_PANEL_TOOLS.length);
   for(const tool of WORKBENCH_TOOLS){
     const advertised=tools.find(value=>value.name===tool.name);
-    if(FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name)||isNativeTypeParameterWrite(tool.name))assert.equal(advertised,undefined);
+    const excluded=FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name)||
+      isNativeTypeParameterWrite(tool.name)||isAecPilotQuery(tool.name)||tool.name===MODEL_PREPARATION_QUERY_NAME||tool.name===PIPE_NETWORK_QUERY_NAME;
+    if(excluded)assert.equal(advertised,undefined);
     else assert.deepEqual(advertised,tool);
   }
   for(const tool of MODELLING_TOOLS)assert.deepEqual(tools.find(t=>t.name===tool.name),tool);
