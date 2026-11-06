@@ -123,6 +123,24 @@
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
+      "id": "BX-016",
+      "title": "AEC 楼层平面图与等轴测三维视图",
+      "status": "in_progress",
+      "acceptance": "按精确视图类型与标高 ID 创建并回读，保留具名能力、权限、事务与原回执，验证 Code Mode、@ 与命令栏",
+      "evidence": "AEC-VIEW-WRITES.zh-CN.md",
+      "unmigratedFromOriginal50": 39,
+      "candidateWorkspaceTools": 73,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpViewChecks": 5,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 96,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     }
   ]
 }

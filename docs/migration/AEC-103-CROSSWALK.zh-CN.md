@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **71 项**，包括 43 项只读查询和 28 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **73 项**，包括 43 项只读查询和 30 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、12 项已接入候选、14 项有关联工具、41 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、14 项已接入候选、14 项有关联工具、39 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-本批增加材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[本批验收](AEC-WORKSPACE-WAVE.zh-CN.md)
+本批增加楼层平面图与等轴测三维视图。上一批涵盖材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[视图验收](AEC-VIEW-WRITES.zh-CN.md) · [上一批验收](AEC-WORKSPACE-WAVE.zh-CN.md)
 
 ## 模型查询与检查
 
@@ -83,8 +83,8 @@ AEC 侧有 **27 项已有同名工具、12 项已接入候选、14 项有关联�
 | AEC 工具 | 用途 | BuildX 对照 |
 | --- | --- | --- |
 | `revit_list_views` | 列出视图 | 已有同名 |
-| `revit_create_floor_plan_view` | 创建平面视图 | 未接入 |
-| `revit_create_3d_view` | 创建三维视图 | 未接入 |
+| `revit_create_floor_plan_view` | 创建平面视图 | 候选 · 指定视图类型与标高 ID，受控事务回读。 |
+| `revit_create_3d_view` | 创建三维视图 | 候选 · 指定视图类型 ID，创建等轴测视图并回读。 |
 | `revit_create_section_view` | 创建剖面视图 | 未接入 |
 | `revit_list_sheets` | 列出图纸 | 已有同名 |
 | `revit_create_sheet` | 创建图纸 | 未接入 |

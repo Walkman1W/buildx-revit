@@ -13,7 +13,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_level", "create_grid", "pin_element", "unpin_element" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -96,7 +96,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -405,6 +405,32 @@ namespace RevitLocalCodex
                 VerifyPinned(doc, args, desired);
                 return new { element_id = DescribedId(element.Id), before_pinned = before, pinned = desired, changed = before != desired };
             }
+            if (operation == "create_floor_plan_view" || operation == "create_3d_view")
+            {
+                bool floor = operation == "create_floor_plan_view";
+                if (floor) Fields(args, "expected_document", "mode", "name", "view_family_type_id", "level_id");
+                else Fields(args, "expected_document", "mode", "name", "view_family_type_id");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Views can only be created in a project document.");
+                string name = Required(args, "name") as string;
+                if (String.IsNullOrWhiteSpace(name) || name != name.Trim() || name.Length > 255)
+                    throw new InvalidOperationException("name must be nonblank, at most 255 characters, and have no leading or trailing whitespace.");
+                ViewFamilyType type = RequiredElement(doc, NativeModelQueries.ExactId(args, "view_family_type_id")) as ViewFamilyType;
+                if (type == null) throw new InvalidOperationException("view_family_type_id must identify a ViewFamilyType.");
+                ViewFamily expectedFamily = floor ? ViewFamily.FloorPlan : ViewFamily.ThreeDimensional;
+                if (type.ViewFamily != expectedFamily) throw new InvalidOperationException("view_family_type_id has the wrong view family.");
+                View view;
+                if (floor)
+                {
+                    Level level = RequiredElement(doc, NativeModelQueries.ExactId(args, "level_id")) as Level;
+                    if (level == null) throw new InvalidOperationException("level_id must identify a Level.");
+                    view = ViewPlan.Create(doc, type.Id, level.Id);
+                }
+                else view = View3D.CreateIsometric(doc, type.Id);
+                view.Name = name;
+                created.Id = view.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_level")
             {
                 Fields(args, "expected_document", "mode", "name", "elevation_mm");
@@ -435,6 +461,26 @@ namespace RevitLocalCodex
         {
             Element element = doc.GetElement(id);
             if (element == null || element.Name != OptionalString(args, "name", "")) throw new InvalidOperationException("Created element name or identity changed.");
+            if (operation == "create_floor_plan_view" || operation == "create_3d_view")
+            {
+                bool floor = operation == "create_floor_plan_view";
+                View view = element as View;
+                long typeId = NativeModelQueries.ExactId(args, "view_family_type_id");
+                if (view == null || view.IsTemplate || view.GetTypeId().Value != typeId)
+                    throw new InvalidOperationException("Created view type or template state changed.");
+                if (floor)
+                {
+                    ViewPlan plan = view as ViewPlan;
+                    long levelId = NativeModelQueries.ExactId(args, "level_id");
+                    if (plan == null || plan.ViewType != ViewType.FloorPlan || plan.GenLevel == null || plan.GenLevel.Id.Value != levelId)
+                        throw new InvalidOperationException("Created floor plan view kind or level changed.");
+                    return new { element_id = DescribedId(plan.Id), name = plan.Name, view_family_type_id = DescribedId(plan.GetTypeId()), view_kind = "floor_plan", level_id = DescribedId(plan.GenLevel.Id) };
+                }
+                View3D view3d = view as View3D;
+                if (view3d == null || view3d.ViewType != ViewType.ThreeD || view3d.IsPerspective)
+                    throw new InvalidOperationException("Created 3D view is not isometric.");
+                return new { element_id = DescribedId(view3d.Id), name = view3d.Name, view_family_type_id = DescribedId(view3d.GetTypeId()), view_kind = "isometric_3d" };
+            }
             if (operation == "create_level")
             {
                 Level level = element as Level;

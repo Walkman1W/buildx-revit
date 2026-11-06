@@ -34,6 +34,17 @@ test('group members discovery paginates elements and returns the exact named sch
   assert.deepEqual(exact.value.outputSchema,registered.outputSchema);
 });
 const status=()=>({hostSession:session,document:{...document},request_id:'11111111-1111-4111-8111-111111111111'});
+test('view creation contracts are discoverable in Code Mode views and guarded as model transactions',()=>{
+  const names=['revit_create_floor_plan_view','revit_create_3d_view'];
+  const found=[];let offset=0,more=true;
+  while(more){const result=describeModelOperationSchema({domain:'views',offset,limit:3});assert.equal(result.ok,true);found.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+  for(const name of names){
+    assert.equal(found.filter(item=>item===name).length,1);assert.equal(supportsModelPermissionTool(name),true);
+    const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);assert.ok(registered);
+    const exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);assert.deepEqual(exact.value.inputSchema,registered.inputSchema);
+    assert.equal(registered.inputSchema.properties.mode.default,'rollback');
+  }
+});
 const catalog=()=>({data:[{name:'revit_workbench',runtimeStatus:'connected',authStatus:'unsupported',resources:[],resourceTemplates:[],toolsError:null,
   tools:Object.fromEntries(MODEL_AI_READ_TOOLS.map(tool=>[tool.name,structuredClone(tool)]))}]});
 

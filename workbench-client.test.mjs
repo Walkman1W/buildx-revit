@@ -12,7 +12,7 @@ import {invokeCommand} from './lib/command-store.mjs';
 import {FAMILY_PANEL_CONFIRMATION_ONLY} from './lib/family-tools.mjs';
 import {NATIVE_PARAMETER_WRITE_NAMES} from './lib/native-parameter-writes.mjs';
 import {isNativeTypeParameterWrite} from './lib/native-type-parameter-writes.mjs';
-import {isAecPilotQuery,MODEL_PREPARATION_QUERY_NAME,PIPE_NETWORK_QUERY_NAME} from './lib/native-model-queries.mjs';
+import {isAecPilotQuery,isAecDrawingQuery,MODEL_PREPARATION_QUERY_NAME,PIPE_NETWORK_QUERY_NAME} from './lib/native-model-queries.mjs';
 import {LEGACY_PANEL_TOOL_NAMES} from './lib/panel-tools.mjs';
 
 test('mutating contracts validate ids, mode and UTF8 bounds',()=>{
@@ -30,10 +30,12 @@ test('legacy MCP lists its complete tool catalog and connection status derives i
   const tools=JSON.parse(probe.stdout.trim()).result.tools;
   assert.equal(new Set(tools.map(tool=>tool.name)).size,tools.length);
   assert.equal(new Set(ALL_PANEL_TOOLS).size,ALL_PANEL_TOOLS.length);
+  const scopedNativeWrites=['revit_create_level','revit_create_grid','revit_pin_element','revit_unpin_element','revit_create_floor_plan_view','revit_create_3d_view'];
   for(const tool of WORKBENCH_TOOLS){
     const advertised=tools.find(value=>value.name===tool.name);
     const excluded=FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name)||
-      isNativeTypeParameterWrite(tool.name)||isAecPilotQuery(tool.name)||tool.name===MODEL_PREPARATION_QUERY_NAME||tool.name===PIPE_NETWORK_QUERY_NAME;
+      isNativeTypeParameterWrite(tool.name)||isAecPilotQuery(tool.name)||isAecDrawingQuery(tool.name)||scopedNativeWrites.includes(tool.name)||
+      tool.name===MODEL_PREPARATION_QUERY_NAME||tool.name===PIPE_NETWORK_QUERY_NAME;
     if(excluded)assert.equal(advertised,undefined);
     else assert.deepEqual(advertised,tool);
   }

@@ -1,0 +1,60 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
+namespace Autodesk.Revit.DB {
+ public class ElementId { public long Value; public ElementId(long v){Value=v;} }
+ public class Element { public ElementId Id; public string Name; public bool Pinned; public virtual ElementId GetTypeId(){return null;} }
+ public class ElementType:Element {}
+ public enum ViewFamily { FloorPlan, ThreeDimensional }
+ public enum ViewType { FloorPlan, ThreeD }
+ public class ViewFamilyType:ElementType { public ViewFamily ViewFamily; }
+ public class Level:Element { public double ProjectElevation; public static Level Create(Document d,double n){throw new Exception("unused");} }
+ public class View:Element { public bool IsTemplate; public ViewType ViewType; public ElementId TypeId; public override ElementId GetTypeId(){return TypeId;} }
+ public class ViewPlan:View { public Level GenLevel; public static ViewPlan Create(Document d,ElementId t,ElementId l){d.Calls++; var v=new ViewPlan { Id=new ElementId(100), TypeId=t, GenLevel=(Level)d.GetElement(l), ViewType=ViewType.FloorPlan }; d.Elements[v.Id.Value]=v; return v;} }
+ public class View3D:View { public bool IsPerspective; public static View3D CreateIsometric(Document d,ElementId t){d.Calls++; var v=new View3D { Id=new ElementId(101), TypeId=t, ViewType=ViewType.ThreeD }; d.Elements[v.Id.Value]=v; return v;} }
+ public class XYZ { public double Z; public double DistanceTo(XYZ p){return 0;} }
+ public class Line { public static Line CreateBound(XYZ a,XYZ b){return new Line();} public XYZ GetEndPoint(int i){return new XYZ();} }
+ public class Grid:Element { public object Curve; public static Grid Create(Document d,Line l){throw new Exception("unused");} }
+ public class Document { public bool IsFamilyDocument; public Dictionary<long,Element> Elements=new Dictionary<long,Element>(); public int Calls; public Action<Document> OnCommit; public Element GetElement(ElementId id){Element e; return Elements.TryGetValue(id.Value,out e)?e:null;} public void Regenerate(){} }
+ public enum TransactionStatus { Started, Committed, RolledBack }
+ public class FailureHandlingOptions { public FailureHandlingOptions SetFailuresPreprocessor(object p){return this;} public FailureHandlingOptions SetClearAfterRollback(bool v){return this;} }
+ public class Transaction:IDisposable { Document d; TransactionStatus s; public Transaction(Document d,string n){this.d=d;} public TransactionStatus Start(){return s=TransactionStatus.Started;} public FailureHandlingOptions GetFailureHandlingOptions(){return new FailureHandlingOptions();} public void SetFailureHandlingOptions(FailureHandlingOptions o){} public TransactionStatus Commit(){s=TransactionStatus.Committed;if(d.OnCommit!=null)d.OnCommit(d);return s;} public TransactionStatus GetStatus(){return s;} public void RollBack(){s=TransactionStatus.RolledBack;} public void Dispose(){} }
+}
+namespace Autodesk.Revit.UI { public class UIDocument { public Document Document; } public class UIApplication { public UIDocument ActiveUIDocument; } }
+namespace RevitLocalCodex {
+ internal static class NativeModelQueries { internal static long ExactId(Dictionary<string,object> a,string k){return Convert.ToInt64(a[k]);} }
+ internal static partial class WorkbenchActions {
+  class ParameterWriteExpectation {} class RejectErrors {}
+  static object WriteTypeParameter(UIApplication u,Dictionary<string,object>a){throw new Exception("unused");}
+  static object SetParameters(Document d,Dictionary<string,object>a,List<ParameterWriteExpectation> e,bool g){throw new Exception("unused");}
+  static object TransformElements(Document d,string o,Dictionary<string,object>a){throw new Exception("unused");}
+  static object CreateWall(UIApplication u,Dictionary<string,object>a){throw new Exception("unused");}
+  static object CreatePipe(UIApplication u,Dictionary<string,object>a){throw new Exception("unused");}
+  static void VerifyParameterWrites(Document d,List<ParameterWriteExpectation> e){}
+  static void Fields(Dictionary<string,object>a,params string[] names){foreach(var k in a.Keys)if(Array.IndexOf(names,k)<0)throw new InvalidOperationException("unexpected field");}
+  static object Required(Dictionary<string,object>a,string k){return a[k];}
+  static string OptionalString(Dictionary<string,object>a,string k,string fallback){object v;return a.TryGetValue(k,out v)?(string)v:fallback;}
+  static long ElementIdValue(object v,string k){return Convert.ToInt64(v);}
+  static Element RequiredElement(Document d,long id){var e=d.GetElement(new ElementId(id));if(e==null)throw new InvalidOperationException("missing element");return e;}
+  static object DescribedId(ElementId id){return id.Value;}
+  static double Feet(double v){return v/304.8;} static double Millimeters(double v){return v*304.8;}
+  static double FiniteNumber(object v,string n){return Convert.ToDouble(v);} static XYZ MillimeterPoint(object v,string n){return new XYZ();}
+  static void CheckCurveLength(UIApplication u,XYZ a,XYZ b){} static object PointDto(XYZ p){return null;}
+ }
+ class Program {
+  static void Assert(bool c,string m){if(!c)throw new Exception(m);}
+  static object Prop(object x,string n){return x.GetType().GetProperty(n).GetValue(x,null);}
+  static Document Doc(){var d=new Document();d.Elements[1]=new ViewFamilyType{Id=new ElementId(1),ViewFamily=ViewFamily.FloorPlan};d.Elements[2]=new ViewFamilyType{Id=new ElementId(2),ViewFamily=ViewFamily.ThreeDimensional};d.Elements[3]=new Level{Id=new ElementId(3)};return d;}
+  static object Run(Document d,string op,long type){var a=new Dictionary<string,object>{{"name","Test view"},{"view_family_type_id",type}};if(op=="create_floor_plan_view")a["level_id"]=3L;return WorkbenchActions.Write(new UIApplication{ActiveUIDocument=new UIDocument{Document=d}},op,a);}
+  static void ExpectFailure(Action a,string label){try{a();}catch(InvalidOperationException){Console.WriteLine("PASS "+label);return;}throw new Exception("Expected failure: "+label);}
+  static void Main(){
+   var d=Doc();var p=Run(d,"create_floor_plan_view",1);Assert((long)Prop(p,"element_id")==100 && (long)Prop(p,"view_family_type_id")==1 && (long)Prop(p,"level_id")==3 && (string)Prop(p,"name")=="Test view" && (string)Prop(p,"view_kind")=="floor_plan","floor facts");Console.WriteLine("PASS floor facts");
+   d=Doc();var v=Run(d,"create_3d_view",2);Assert((long)Prop(v,"element_id")==101 && (long)Prop(v,"view_family_type_id")==2 && (string)Prop(v,"name")=="Test view" && (string)Prop(v,"view_kind")=="isometric_3d","3d facts");Console.WriteLine("PASS 3d facts");
+   d=Doc();var bad=d;ExpectFailure(()=>Run(bad,"create_floor_plan_view",2),"wrong family");Assert(d.Calls==0,"wrong family created view");
+   d=Doc();d.OnCommit=x=>x.Elements[100].Name="drift";var drift=d;ExpectFailure(()=>Run(drift,"create_floor_plan_view",1),"post-commit name drift");
+   d=Doc();d.OnCommit=x=>((View3D)x.Elements[101]).IsPerspective=true;drift=d;ExpectFailure(()=>Run(drift,"create_3d_view",2),"post-commit perspective drift");
+  }
+ }
+}

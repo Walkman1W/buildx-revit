@@ -70,3 +70,26 @@ test('group members can be found by English name, initials and label and manuall
  assert.equal(ui.requests[0].body.commandId,tool.name);assert.equal(ui.requests[0].body.parameters.group_id,'9007199254740993');
  await ui.respond(ui.requests[0],{ok:true,executionId:'group-read'});
 });
+
+test('view creation appears in mentions and requires manual confirmation',async t=>{
+ for(const [name,label,initials,extra] of [
+  ['revit_create_floor_plan_view','创建楼层平面图','cfpv',{level_id:'9007199254740994'}],
+  ['revit_create_3d_view','创建等轴测三维视图','c3v',{}],
+ ]){
+  const tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);assert.equal(tool?.label,label);assert.equal(tool.readOnly,false);
+  for(const query of [name,name.replace('revit_',''),initials,label])assert.equal(modelMentionMatches(PANEL_TOOL_CATALOG,query)[0]?.name,name,query);
+  const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@'+initials);ui.get('model-tool-picker').querySelectorAll('.model-tool-option')[0].click();
+  assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+  ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:[tool],commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);
+  row.querySelectorAll('.model-command-apply')[0].click();
+  ui.get('model-command-'+name+'-name').value='Example';ui.get('model-command-'+name+'-view_family_type_id').value='9007199254740993';
+  if(extra.level_id)ui.get('model-command-'+name+'-level_id').value=extra.level_id;
+  row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+  row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+  assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+  assert.equal(ui.requests[0].body.parameters.name,'Example');assert.equal(ui.requests[0].body.parameters.view_family_type_id,'9007199254740993');
+  if(extra.level_id)assert.equal(ui.requests[0].body.parameters.level_id,extra.level_id);
+  await ui.respond(ui.requests[0],{ok:true,executionId:'view-write'});
+ }
+});
