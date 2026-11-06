@@ -1,7 +1,7 @@
 // Native, reusable field presentation. Tool schemas and the server continue to
 // own validation and execution; controls only collect explicit user choices.
 export const COMMAND_PARAMETER_LABELS = Object.freeze({
-  keyword:'关键词',category:'类别',name_contains:'名称包含',limit:'每页数量',offset:'起始位置',
+  keyword:'关键词',category:'类别',category1:'第一类别',category2:'第二类别',name_contains:'名称包含',limit:'每页数量',offset:'起始位置',
   element_id:'构件',element_ids:'构件',type_id:'类型 ID',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
   name:'名称',description:'说明',parameters:'参数定义',parameter_labels:'输入项名称',parameter_options:'下拉选项与模型来源',steps:'只读步骤',source_request_id:'关联执行请求 ID',
   revision:'命令版本',job_handle:'族作业标识',level_id:'标高',wall_type_id:'墙类型',pipe_type_id:'管类型',
@@ -9,7 +9,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   depth_mm:'深度（mm）',height_mm:'高度（mm）',thickness_mm:'板厚（mm）',shelf_count:'层板数量',
   diameter_mm:'管径（mm）',start_mm:'起点（mm）',end_mm:'终点（mm）',delta_mm:'位移（mm）',
   point_mm:'位置（mm）',origin_mm:'起点（mm）',axis_origin_mm:'旋转中心（mm）',
-  angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',template_id:'族模板',changes:'参数修改',
+  angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',elevation_mm:'高程（mm）',tolerance_feet:'包围盒容差（英尺）',fields:'返回字段',template_id:'族模板',changes:'参数修改',
   view_id:'截图视图',sheet_id:'图纸 ID',group_id:'模型组 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
   orientations:'检查视角',pixel_size:'图片长边（像素）',session_handle:'待恢复检查标识',
 });

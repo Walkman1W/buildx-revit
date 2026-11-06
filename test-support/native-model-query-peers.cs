@@ -54,10 +54,12 @@ namespace Autodesk.Revit.DB {
     internal sealed class LocationCurve:Location {public Curve Curve;}
     internal class Element {
         public ElementId Id,LevelId=new ElementId(-1),TypeId=new ElementId(-1);public string Name;public Category Category;public Document Document;public bool IsValidObject=true;public Location Location;public BoundingBoxXYZ Box;
+        public Dictionary<long,double> MaterialVolumes=new Dictionary<long,double>();public ICollection<ElementId> GetMaterialIds(bool paint){return MaterialVolumes.Keys.Select(id=>new ElementId(id)).ToList();}public double GetMaterialVolume(ElementId id){return MaterialVolumes[id.Value];}
         public List<Parameter> Parameters=new List<Parameter>();public Dictionary<BuiltInParameter,Parameter> Measures=new Dictionary<BuiltInParameter,Parameter>();
         public ElementId GetTypeId(){return TypeId;}public BoundingBoxXYZ get_BoundingBox(View view){return Box;}
         public Parameter get_Parameter(BuiltInParameter builtIn){Parameter parameter;return Measures.TryGetValue(builtIn,out parameter)?parameter:null;}
     }
+    internal class Material:Element {}
     internal class ElementType:Element {}
     internal class View:Element {public ViewType ViewType;public bool IsTemplate;}
     internal sealed class Level:Element { public double Elevation,ProjectElevation; }

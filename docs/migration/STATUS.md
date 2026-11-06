@@ -14,6 +14,8 @@
 
 ## 已核对与待验
 
+- AEC 候选本批新增材料用量、碰撞候选、标高、直线轴网、固定与取消固定。候选目录 71 项，原 50 项未接入能力还剩 41 项。聊天 `@` 和命令栏共用字母搜索，真实 Edge 在独立 HTTP 端口使用模拟回执验证。受控宿主 105/105、只读 C# 800/800、36 份 C# 的 Revit 2024 API 引用编译通过。真实 Revit 操作和内嵌 WebView 待验。[本批验收](AEC-WORKSPACE-WAVE.zh-CN.md)
+
 - AEC 模型组成员已接入候选。以模型组实例 ID 原序分页，默认只返回成员 ID，保留原子文档核验和原回执。原 50 项未接入能力还剩 47 项。受控宿主 103/103、生产者 700/700、Node 合组 101/101，36 份 C# 用 Revit 2024 API 引用编译成功。Code Mode、`@ggm` 与命令栏点击已验证受控路径，真实 Revit WebView 待验。[模型组验收](AEC-GROUP-MEMBERS.zh-CN.md)
 - 私有仓库：`https://github.com/Walkman1W/buildx-revit`，默认分支 main 保留规划基线；审查后的业务源码和本轮实现保存在 `codex/native-foundation`。没有合并受保护分支或正式发布。
 - 完整 AEC Revit 静态台账已完成：103 项工具、103 个映射，P0 六项；记录业务分组、schema、来源行号、语义差异和未核实项，不表示 103 项已实现。

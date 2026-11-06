@@ -45,6 +45,8 @@ const calls=[
   {operation:'get_warnings',args:{offset:1,limit:2},value:page([warning,warning,warning],{offset:1,limit:2})},
   {operation:'get_rvt_links',args:{},value:page([{id:sheetId,name:'Coordination.rvt',is_loaded:false,is_nested:true}])},
   {operation:'get_link_instances',args:{},value:page([placement,{...placement,id:'21',transform:null}])},
+  {operation:'calculate_material_quantities',args:{category:'Walls',fields:['name']},value:{...page([{material_id:sheetId,name:'Concrete',volume_cubic_feet:12}]),category:'OST_Walls',element_count:2,includes_paint:false}},
+  {operation:'check_clashes',args:{category1:'Walls',category2:'Doors'},value:{...page([{element1_id:'21',element2_id:sheetId}]),category1:'OST_Walls',category2:'OST_Doors',tolerance_feet:0.01,method:'expanded_axis_aligned_bounding_box',solid_intersection_tested:false,element_count1:2,element_count2:1,missing_box_count1:1,missing_box_count2:0,pairs_checked:1}},
 ].map(call=>({...call,name:'revit_'+call.operation}));
 const byOperation=new Map(calls.map(call=>[call.operation,call]));
 const drawingCalls=[
@@ -177,7 +179,7 @@ function metrics(samples){
 test('BuildX workspace publishes the AEC pilot and wave 2 read contracts and repeatedly reads them through the MCP queue',async t=>{
   const f=await fixture(t);
   const listed=await f.client.listTools();
-  assert.equal(calls.length,13);
+  assert.equal(calls.length,15);
   for(const descriptor of calls){
     const matches=listed.tools.filter(tool=>tool.name===descriptor.name);
     assert.equal(matches.length,1,descriptor.name);

@@ -12,8 +12,8 @@ namespace RevitLocalCodex
     // Explicit, typed Revit operations. All methods are called from ExternalEvent.Execute.
     internal static partial class WorkbenchActions
     {
-        internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe" };
+        internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_level", "create_grid", "pin_element", "unpin_element" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -89,12 +89,14 @@ namespace RevitLocalCodex
                 try
                 {
                     object result;
+                    BasicCreatedExpectation basicCreated = new BasicCreatedExpectation();
                     bool guardedParameter = operation == "set_parameter_value";
                     var parameterWrites = operation == "set_parameters" || guardedParameter ? new List<ParameterWriteExpectation>() : null;
                     if (parameterWrites != null) result = SetParameters(doc, args, parameterWrites, guardedParameter);
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
+                    else if (operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -109,6 +111,8 @@ namespace RevitLocalCodex
                     // outer group is still open, so a changed value must throw
                     // before that group can assimilate or publish success.
                     if (parameterWrites != null) VerifyParameterWrites(doc, parameterWrites);
+                    if (operation == "pin_element" || operation == "unpin_element") VerifyPinned(doc, args, operation == "pin_element");
+                    if (basicCreated.Id != null) result = ReadBasicCreated(doc, operation, args, basicCreated.Id);
                     return result;
                 }
                 catch { if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack(); throw; }
@@ -383,6 +387,79 @@ namespace RevitLocalCodex
             if (Math.Abs(actual - diameter) > Feet(0.001)) throw new InvalidOperationException("Pipe type did not retain the requested diameter.");
             return new { element_id = pipe.Id.Value, pipe_type_id = type.Id.Value, system_type_id = system.Id.Value, level_id = level.Id.Value,
                 start_mm = PointDto(start), end_mm = PointDto(end), diameter_mm = Millimeters(actual) };
+        }
+
+        private sealed class BasicCreatedExpectation { internal ElementId Id; }
+
+        private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
+        {
+            Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "pin_element" || operation == "unpin_element")
+            {
+                Fields(args, "expected_document", "mode", "element_id");
+                Element element = RequiredElement(doc, ElementIdValue(Required(args, "element_id"), "element_id"));
+                if (element is ElementType) throw new InvalidOperationException("Element types cannot be pinned.");
+                bool before = element.Pinned, desired = operation == "pin_element";
+                if (before != desired) element.Pinned = desired;
+                doc.Regenerate();
+                VerifyPinned(doc, args, desired);
+                return new { element_id = DescribedId(element.Id), before_pinned = before, pinned = desired, changed = before != desired };
+            }
+            if (operation == "create_level")
+            {
+                Fields(args, "expected_document", "mode", "name", "elevation_mm");
+                string name = OptionalString(args, "name", "");
+                if (String.IsNullOrWhiteSpace(name)) throw new InvalidOperationException("name is required.");
+                double elevation = Feet(FiniteNumber(Required(args, "elevation_mm"), "elevation_mm"));
+                Level level = Level.Create(doc, elevation);
+                level.Name = name;
+                created.Id = level.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
+            Fields(args, "expected_document", "mode", "name", "start_mm", "end_mm");
+            string gridName = OptionalString(args, "name", "");
+            if (String.IsNullOrWhiteSpace(gridName)) throw new InvalidOperationException("name is required.");
+            XYZ start = MillimeterPoint(Required(args, "start_mm"), "start_mm");
+            XYZ end = MillimeterPoint(Required(args, "end_mm"), "end_mm");
+            if (Math.Abs(start.Z - end.Z) > Feet(0.001)) throw new InvalidOperationException("Grid line must be horizontal.");
+            CheckCurveLength(uiapp, start, end);
+            Grid grid = Grid.Create(doc, Line.CreateBound(start, end));
+            grid.Name = gridName;
+            created.Id = grid.Id;
+            doc.Regenerate();
+            return ReadBasicCreated(doc, operation, args, created.Id);
+        }
+
+        private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
+        {
+            Element element = doc.GetElement(id);
+            if (element == null || element.Name != OptionalString(args, "name", "")) throw new InvalidOperationException("Created element name or identity changed.");
+            if (operation == "create_level")
+            {
+                Level level = element as Level;
+                if (level == null || Math.Abs(level.ProjectElevation - Feet(FiniteNumber(Required(args, "elevation_mm"), "elevation_mm"))) > Feet(0.001)) throw new InvalidOperationException("Created level project elevation changed.");
+                return new { element_id = DescribedId(level.Id), name = level.Name, elevation_mm = Millimeters(level.ProjectElevation) };
+            }
+            else
+            {
+                Grid grid = element as Grid;
+                Line line = grid == null ? null : grid.Curve as Line;
+                XYZ start = MillimeterPoint(Required(args, "start_mm"), "start_mm"), end = MillimeterPoint(Required(args, "end_mm"), "end_mm");
+                if (line == null) throw new InvalidOperationException("Created grid is not a straight line.");
+                XYZ actualStart = line.GetEndPoint(0), actualEnd = line.GetEndPoint(1);
+                bool forward = actualStart.DistanceTo(start) <= Feet(0.001) && actualEnd.DistanceTo(end) <= Feet(0.001);
+                bool reverse = actualEnd.DistanceTo(start) <= Feet(0.001) && actualStart.DistanceTo(end) <= Feet(0.001);
+                if (!forward && !reverse) throw new InvalidOperationException("Created grid endpoints changed.");
+                return new { element_id = DescribedId(grid.Id), name = grid.Name,
+                    start_mm = PointDto(forward ? actualStart : actualEnd), end_mm = PointDto(forward ? actualEnd : actualStart) };
+            }
+        }
+
+        private static void VerifyPinned(Document doc, Dictionary<string, object> args, bool desired)
+        {
+            Element element = RequiredElement(doc, ElementIdValue(Required(args, "element_id"), "element_id"));
+            if (element.Pinned != desired) throw new InvalidOperationException("Pinned state did not match the requested state.");
         }
 
         private static object DescribedId(ElementId id)

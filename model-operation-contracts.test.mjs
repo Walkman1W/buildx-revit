@@ -77,15 +77,21 @@ test('on-demand contracts preserve the registered schema without granting model 
 });
 
 test('domain discovery is bounded and exact read contracts retain their schemas',()=>{
-  const seen=[];
+  const seen=[],byDomain=new Map();
   for(const domain of ['document','elements','parameters','families','mep','views','commands']){
     let offset=0,more=true;
-    while(more){const result=describeModelOperationSchema({domain,offset,limit:3});assert.equal(result.ok,true);assert.ok(result.value.tools.length<=3);seen.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+    const names=[];
+    while(more){const result=describeModelOperationSchema({domain,offset,limit:3});assert.equal(result.ok,true);assert.ok(result.value.tools.length<=3);names.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+    byDomain.set(domain,names);
+    seen.push(...names);
   }
   assert.deepEqual(new Set(seen),new Set([...MODEL_AI_READ_TOOLS.map(t=>t.name),...modelOperationContracts(true).map(t=>t.name)]));
   for(const tool of MODEL_AI_READ_TOOLS){const result=describeModelOperationSchema({tool:tool.name}).value;assert.deepEqual(result.inputSchema,tool.inputSchema);assert.deepEqual(result.outputSchema,tool.outputSchema);}
   const views=describeModelOperationSchema({domain:'views',limit:20}).value.tools.map(tool=>tool.name);
   for(const name of MODEL_AI_READ_TOOLS.filter(tool=>/schedule|revision/.test(tool.name)).map(tool=>tool.name))assert.ok(views.includes(name),name);
+  for(const name of ['revit_check_clashes','revit_calculate_material_quantities','revit_create_level','revit_create_grid','revit_pin_element','revit_unpin_element']){
+    assert.ok(byDomain.get('elements').includes(name),name);
+  }
   for(const input of [{domain:'bad'},{domain:'mep',limit:21},{domain:'mep',offset:-1},{domain:'mep',tool:'revit_execute_csharp'}])assert.equal(describeModelOperationSchema(input).ok,false);
 });
 

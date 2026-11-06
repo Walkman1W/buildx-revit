@@ -129,7 +129,7 @@ namespace RevitLocalCodex
         private static readonly string[] Queries = {
             "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets",
             "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters",
-            "get_warnings", "get_rvt_links", "get_link_instances", "get_group_members"
+            "get_warnings", "get_rvt_links", "get_link_instances", "get_group_members", "calculate_material_quantities", "check_clashes"
         };
 
         private static Document Fixture()
@@ -138,6 +138,15 @@ namespace RevitLocalCodex
             var walls = new Category { Id = new ElementId((long)BuiltInCategory.OST_Walls), Name = "墙", CategoryType = CategoryType.Model, CanAddSubcategory = true };
             var titleblocks = new Category { Id = new ElementId((long)BuiltInCategory.OST_TitleBlocks), Name = "图框", CategoryType = CategoryType.Annotation };
             doc.Settings.Categories.AddRange(new[] { walls, titleblocks });
+            doc.Add(new Material { Id = new ElementId(700), Name = "同名" });
+            doc.Add(new Material { Id = new ElementId(9007199254740999L), Name = "同名" });
+            var wall1 = new Element { Id = new ElementId(701), Name = "wall1", Category = walls };
+            wall1.Box = new BoundingBoxXYZ { Min = new XYZ(0, 0, 0), Max = new XYZ(1, 1, 1) };
+            wall1.MaterialVolumes.Add(700, 2); wall1.MaterialVolumes.Add(9007199254740999L, 3); doc.Add(wall1);
+            var wall2 = new Element { Id = new ElementId(702), Name = "wall2", Category = walls };
+            wall2.MaterialVolumes.Add(700, 4); doc.Add(wall2);
+            var doors = new Category { Id = new ElementId((long)BuiltInCategory.OST_Doors), Name = "门" };
+            doc.Add(new Element { Id = new ElementId(703), Name = "door", Category = doors, Box = new BoundingBoxXYZ { Min = new XYZ(1.005, 0, 0), Max = new XYZ(2, 1, 1) } });
             for (int index = 249; index >= 0; index--)
                 doc.Add(new ViewSheet { Id = new ElementId(index + 100), SheetNumber = "A" + index.ToString("000"), Name = "普通图纸" });
             var group = new Group { Id = new ElementId(9007199254740993L), Category = new Category { Id = new ElementId((long)BuiltInCategory.OST_IOSModelGroups) } };
@@ -197,7 +206,7 @@ namespace RevitLocalCodex
 
         private static Dictionary<string, object> Arguments(string query)
         {
-            return query == "get_group_members" ? new Dictionary<string, object> { { "group_id", GroupId } } : query == "get_sheet_info"
+            return query == "check_clashes" ? new Dictionary<string, object> { { "category1", "Walls" }, { "category2", "Doors" } } : query == "calculate_material_quantities" ? new Dictionary<string, object> { { "category", "Walls" } } : query == "get_group_members" ? new Dictionary<string, object> { { "group_id", GroupId } } : query == "get_sheet_info"
                 ? new Dictionary<string, object> { { "sheet_id", SheetId } }
                 : new Dictionary<string, object>();
         }
@@ -270,6 +279,44 @@ namespace RevitLocalCodex
         {
             var doc = Fixture();
             var results = Queries.ToDictionary(operation => operation, operation => Read(doc, operation, Arguments(operation)));
+            var clashes = results["check_clashes"];
+            Check((int)clashes["total"] == 1 && (int)clashes["missing_box_count1"] == 1 && Convert.ToInt32(clashes["pairs_checked"]) == 1 &&
+                (string)Rows(clashes, "items").Single()["element1_id"] == "701" && (string)Rows(clashes, "items").Single()["element2_id"] == "703" && !(bool)clashes["solid_intersection_tested"], "expanded AABB and missing boxes");
+            var zeroTolerance = Read(doc, "check_clashes", new Dictionary<string, object> { { "category1", "Walls" }, { "category2", "Doors" }, { "tolerance_feet", 0 } });
+            Check((int)zeroTolerance["total"] == 0, "tolerance changes candidates");
+            var wall2Box = doc.Elements.First(element => element.Id.Value == 702);
+            wall2Box.Box = new BoundingBoxXYZ { Min = new XYZ(0, 0, 0), Max = new XYZ(1, 1, 1) };
+            var sameClash = Read(doc, "check_clashes", new Dictionary<string, object> { { "category1", "Walls" }, { "category2", "Walls" }, { "limit", 1 } });
+            Check((int)sameClash["total"] == 1 && Convert.ToInt32(sameClash["pairs_checked"]) == 1 && (string)Rows(sameClash, "items").Single()["element1_id"] == "701" && (string)Rows(sameClash, "items").Single()["element2_id"] == "702", "same category unordered unique pair");
+            wall2Box.Box = null;
+            Reject(doc, "check_clashes", new Dictionary<string, object> { { "category1", "Walls" } });
+            Reject(doc, "check_clashes", new Dictionary<string, object> { { "category1", "Walls" }, { "category2", "Doors" }, { "tolerance_feet", -1 } });
+            var many = new Document();
+            var manyCat = new Category { Id = new ElementId((long)BuiltInCategory.OST_Walls) };
+            for (int i = 1; i <= 318; i++) many.Add(new Element { Id = new ElementId(i), Category = manyCat, Box = new BoundingBoxXYZ { Min = new XYZ(0, 0, 0), Max = new XYZ(1, 1, 1) } });
+            Reject(many, "check_clashes", new Dictionary<string, object> { { "category1", "Walls" }, { "category2", "Walls" } });
+            var paged = Read(many, "check_clashes", new Dictionary<string, object> { { "category1", "Walls" }, { "category2", "Doors" }, { "offset", 1 }, { "limit", 1 } });
+            Check((int)paged["total"] == 0 && Rows(paged, "items").Length == 0, "empty page after total");
+            var door = doc.Elements.First(element => element.Id.Value == 703);
+            door.Box.Min = new XYZ(Double.NaN, 0, 0);
+            Reject(doc, "check_clashes", Arguments("check_clashes"));
+            door.Box.Min = new XYZ(1.005, 0, 0);
+            var material = results["calculate_material_quantities"];
+            var materialRows = Rows(material, "items");
+            Check((int)material["element_count"] == 2 && !(bool)material["includes_paint"] && materialRows.Length == 2 &&
+                (string)materialRows[0]["material_id"] == "700" && Convert.ToDouble(materialRows[0]["volume_cubic_feet"]) == 6 &&
+                (string)materialRows[1]["material_id"] == "9007199254740999" && materialRows.All(row => row.Count == 2), "material aggregation and exact distinct IDs");
+            var materialPage = Read(doc, "calculate_material_quantities", new Dictionary<string, object> { { "category", "Walls" }, { "offset", 1 }, { "limit", 1 }, { "fields", new[] { "name", "element_count" } } });
+            Check((string)Rows(materialPage, "items").Single()["name"] == "同名" && (int)Rows(materialPage, "items").Single()["element_count"] == 1 && !(bool)materialPage["has_more"], "material pagination and requested fields");
+            Reject(doc, "calculate_material_quantities", new Dictionary<string, object>());
+            Reject(doc, "calculate_material_quantities", new Dictionary<string, object> { { "category", "Walls" }, { "fields", new[] { "name", "name" } } });
+            var badWall = doc.Elements.First(element => element.Id.Value == 701);
+            badWall.MaterialVolumes[700] = Double.NaN;
+            Reject(doc, "calculate_material_quantities", Arguments("calculate_material_quantities"));
+            badWall.MaterialVolumes[700] = 2;
+            badWall.MaterialVolumes.Add(99999, 1);
+            Reject(doc, "calculate_material_quantities", Arguments("calculate_material_quantities"));
+            badWall.MaterialVolumes.Remove(99999);
             var sheets = results["list_sheets"];
             Check((int)sheets["total"] == 251 && Rows(sheets, "items").Length == 100 && (bool)sheets["has_more"], "sheet pagination");
             var last = Read(doc, "list_sheets", new Dictionary<string, object> { { "offset", 250 }, { "limit", 10 } });
@@ -338,7 +385,7 @@ namespace RevitLocalCodex
                 byTool.Add(operation, times);
             }
             var allTimes = byTool.Values.SelectMany(times => times).OrderBy(time => time).ToArray();
-            Check(!doc.IsModified && doc.Elements.Count == 266, "fixture model changed");
+            Check(!doc.IsModified && doc.Elements.Count == 271, "fixture model changed");
             Console.WriteLine(Json.Serialize(new {
                 tool_count = Queries.Length, repeated_calls = allTimes.Length, failures = 0,
                 p50_ms = Percentile(allTimes, 0.50), p95_ms = Percentile(allTimes, 0.95), max_ms = allTimes.Last(),

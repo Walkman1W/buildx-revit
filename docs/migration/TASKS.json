@@ -103,6 +103,26 @@
       "revit2024ApiCompilationInputs": 36,
       "revit2024ApiCompileVerified": true,
       "realRevitCommandBarVerified": false
+    },
+    {
+      "id": "BX-015",
+      "title": "AEC 材料、碰撞候选、基础建模与字母快搜",
+      "status": "in_progress",
+      "acceptance": "两项原子只读查询、四项具名事务写入、完整 @ 目录及命令栏简称搜索，按层验证权限与回执",
+      "evidence": "AEC-WORKSPACE-WAVE.zh-CN.md; artifacts/aec-workspace-20261107",
+      "unmigratedFromOriginal50": 41,
+      "candidateWorkspaceTools": 71,
+      "candidateReadOnlyTools": 43,
+      "controlledHostChecks": 105,
+      "controlledCSharpReadChecks": 800,
+      "nodeRegressionChecks": 212,
+      "catalogAndSearchRecheckCount": 13,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "browserWithSyntheticReceiptsVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     }
   ]
 }

@@ -141,6 +141,10 @@ namespace RevitLocalCodex {
         internal static object DescribeForPeer(Element element) { return DescribeElement(element); }
         private static object TransformElements(Document doc,string operation,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope transform peer."); }
         private static object CreateWall(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope wall peer."); }
+        private sealed class BasicCreatedExpectation { internal ElementId Id; }
+        private static object BasicWrite(UIApplication app,string operation,Dictionary<string,object> args,BasicCreatedExpectation created) { throw new InvalidOperationException("Out of scope basic-write peer."); }
+        private static void VerifyPinned(Document doc,Dictionary<string,object> args,bool desired) { throw new InvalidOperationException("Out of scope basic-write peer."); }
+        private static object ReadBasicCreated(Document doc,string operation,Dictionary<string,object> args,ElementId id) { throw new InvalidOperationException("Out of scope basic-write peer."); }
         private static object CreatePipe(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope pipe peer."); }
     }
     internal static class ScriptRunner { internal static object Execute(UIApplication app,string code,string id,IDictionary<string,object> parameters) { throw new InvalidOperationException("Out of scope script peer."); } }

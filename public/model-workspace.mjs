@@ -191,11 +191,10 @@ export function modelToolCatalog(catalog) {
     description:typeof tool.description === 'string' ? tool.description.slice(0,240) : '', readOnly:tool.readOnly === true}));
 }
 
-// Rank the current registered catalog; names are never hard-coded here.
-export function modelMentionMatches(catalog, query) {
-  const needle = String(query ?? '').toLocaleLowerCase();
-  return catalog.map((tool,index) => {
-    const name = tool.name.toLocaleLowerCase(), label = tool.label.toLocaleLowerCase();
+// One matcher for the registered tool name, operation initials and label.
+export function modelToolMatchScore(tool, query) {
+    const needle = String(query ?? '').toLocaleLowerCase();
+    const name = String(tool.name ?? '').toLocaleLowerCase(), label = String(tool.label ?? '').toLocaleLowerCase();
     const operation = name.replace(/^revit_/, '');
     const tokens = operation.split(/[^a-z0-9]+/).filter(Boolean);
     const initials = tokens.map(token => token[0]).join('');
@@ -206,8 +205,14 @@ export function modelMentionMatches(catalog, query) {
     else if (initials.startsWith(needle)) score = 2;
     else if (tokens.some(token => token.startsWith(needle))) score = 3;
     else if (name.includes(needle) || label.includes(needle)) score = 4;
+    return score;
+}
+// Rank the current registered catalog; names are never hard-coded here.
+export function modelMentionMatches(catalog, query) {
+  return catalog.map((tool,index) => {
+    const score = modelToolMatchScore(tool, query);
     return {tool,index,score};
-  }).filter(item => Number.isFinite(item.score)).sort((a,b) => a.score-b.score || a.index-b.index).slice(0,8).map(item => item.tool);
+  }).filter(item => Number.isFinite(item.score)).sort((a,b) => a.score-b.score || a.index-b.index).map(item => item.tool);
 }
 export function modelMentionQuery(text, caret) {
   if (typeof text !== 'string' || !Number.isInteger(caret) || caret < 0 || caret > text.length) return null;
@@ -452,7 +457,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     const caret = start + insert.length; prompt.setSelectionRange(caret,caret);
     closePicker(); prompt.dispatchEvent(new Event('input',{bubbles:true})); prompt.focus();
   }
-  function renderPicker() {
+  function renderPicker(scrollSelected = false) {
     if (!picker || !active || composing || currentView !== 'chat' || snapshot?.readOnly) return closePicker();
     mention = modelMentionQuery(prompt.value,prompt.selectionStart);
     if (!mention) return closePicker();
@@ -473,6 +478,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       option.addEventListener('click',() => chooseMention(index)); picker.append(option);
     });
     prompt.setAttribute('aria-activedescendant','model-tool-option-' + selected);
+    if (scrollSelected) picker.querySelectorAll('.model-tool-option')[selected]?.scrollIntoView?.({block:'nearest'});
   }
   function commandNeedsConfirmation(command,inputs){
     if(command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview===true)return false;
@@ -524,7 +530,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const group = command.group || '常用命令';
       if (!groups.has(group)) { const section=el('section','model-command-group'); section.append(el('h3','model-command-group-title',group)); groups.set(group,section); commandItems.append(section); }
       const item = el('section','model-command-item'), row = el('div','model-command-row');
-      item.dataset.commandId = command.id;item.dataset.baseSearch=[command.name,command.tool,command.description,group,'系统'].filter(Boolean).join(' ').toLocaleLowerCase();item.dataset.search=item.dataset.baseSearch;
+      item.dataset.commandId = command.id;item.dataset.toolName=command.tool || '';item.dataset.toolLabel=command.name || '';item.dataset.baseSearch=[command.name,command.tool,command.description,group,'系统'].filter(Boolean).join(' ').toLocaleLowerCase();item.dataset.search=item.dataset.baseSearch;
       const copy = el('span','model-command-copy'); copy.append(commandName(command.name,'system'),el('small','',command.description));
       if (command.readOnly === false) copy.append(el('small','model-command-effect','涉及模型或文件操作'));
       if (command.enabled === false) copy.append(el('small','model-command-unavailable',command.unavailableReason || '当前环境尚未就绪'));
@@ -608,7 +614,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const detail=['revit_save_command','revit_get_command','revit_run_command'].includes(item.dataset.commandId);
       const selected=rows.find(row=>row.id===item.dataset.commandId);
       const relevant=!detail||!selected?.parameters.hidden||snapshot?.commands?.some(command=>command.commandId===item.dataset.commandId);
-      item.hidden=!query&&!relevant || query !== '' && !item.dataset.search.includes(query);
+      item.hidden=!query&&!relevant || query !== '' && !item.dataset.search.includes(query) && !Number.isFinite(modelToolMatchScore({name:item.dataset.toolName,label:item.dataset.toolLabel},query));
     }
     for(const item of commandItems?.querySelectorAll('.model-command-stored-version') || [])item.hidden=query!==''&&!item.dataset.search.includes(query);
     for(const group of commandItems?.querySelectorAll('.model-command-group') || []) group.hidden=[...group.querySelectorAll('.model-command-item')].every(item=>item.hidden);
@@ -1015,7 +1021,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); closePicker(); return; }
       if (matches.length && ['ArrowDown','ArrowUp','Enter','Tab'].includes(event.key)) {
         event.preventDefault(); event.stopImmediatePropagation();
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { selected = (selected + (event.key === 'ArrowDown' ? 1 : matches.length-1)) % matches.length; renderPicker(); }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { selected = (selected + (event.key === 'ArrowDown' ? 1 : matches.length-1)) % matches.length; renderPicker(true); }
         else chooseMention(selected);
       }
     },true);

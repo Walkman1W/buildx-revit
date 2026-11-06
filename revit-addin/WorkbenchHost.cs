@@ -17,7 +17,8 @@ namespace RevitLocalCodex
     // This local queue is an application integration boundary, not a security sandbox.
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
-        private const string HostVersion = "0.8.8";
+        private const string HostVersion = "0.8.9";
+        private static readonly string[] NativeBasicWriteOperations = { "create_level", "create_grid", "pin_element", "unpin_element" };
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");
@@ -51,7 +52,7 @@ namespace RevitLocalCodex
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
-        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members" };
+        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
 
         internal string SessionId { get { return session; } }
 
@@ -318,6 +319,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
+                    nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
@@ -739,6 +741,10 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("Pipe network query requires an atomic read snapshot.");
                 if (operation == "get_group_members")
                     throw new InvalidOperationException("Group members query requires an atomic read snapshot.");
+                if (operation == "calculate_material_quantities")
+                    throw new InvalidOperationException("Material quantities require an atomic read snapshot.");
+                if (operation == "check_clashes")
+                    throw new InvalidOperationException("Clash candidates require an atomic read snapshot.");
                 return false;
             }
             if (!AtomicReadOperations.Contains(operation))
@@ -946,6 +952,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
+                    nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }

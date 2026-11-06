@@ -93,6 +93,10 @@ namespace RevitLocalCodex {
  internal static partial class WorkbenchActions {
   internal static bool IsRead(string op){return NativeParameterQueries.IsRead(op)||NativeModelQueries.IsRead(op);}
   internal static object Read(UIApplication app,string op,Dictionary<string,object> args){return NativeParameterQueries.IsRead(op)?NativeParameterQueries.Read(app,op,args):NativeModelQueries.Read(app,op,args);}
+  private sealed class BasicCreatedExpectation { internal ElementId Id; }
+  private static object BasicWrite(UIApplication app,string op,Dictionary<string,object> args,BasicCreatedExpectation created){throw new InvalidOperationException("Out of scope basic-write peer.");}
+  private static void VerifyPinned(Document doc,Dictionary<string,object> args,bool desired){throw new InvalidOperationException("Out of scope basic-write peer.");}
+  private static object ReadBasicCreated(Document doc,string op,Dictionary<string,object> args,ElementId id){throw new InvalidOperationException("Out of scope basic-write peer.");}
   private static object TransformElements(Document d,string op,Dictionary<string,object> a){throw new InvalidOperationException("Out of scope transform peer.");}private static object CreateWall(UIApplication app,Dictionary<string,object> a){throw new InvalidOperationException("Out of scope wall peer.");}private static object CreatePipe(UIApplication app,Dictionary<string,object> a){throw new InvalidOperationException("Out of scope pipe peer.");}
  }
  internal static class ScriptRunner {internal static object Execute(UIApplication app,string code,string id,IDictionary<string,object> p){throw new InvalidOperationException("Out of scope script peer.");}}

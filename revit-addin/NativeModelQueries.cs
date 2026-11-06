@@ -215,7 +215,7 @@ namespace RevitLocalCodex
             if (selected == null) throw new InvalidOperationException("Level name was not found; no fallback name search was performed.");
             return selected;
         }
-        private static BuiltInCategory? Category(Dictionary<string, object> args)
+        internal static BuiltInCategory? Category(Dictionary<string, object> args)
         {
             if (!args.ContainsKey("category") || Text(args, "category").Length == 0) return null;
             string name = Text(args, "category"), alias;

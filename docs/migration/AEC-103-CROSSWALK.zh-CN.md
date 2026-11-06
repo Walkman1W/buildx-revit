@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区源码注册 **65 项**，包括 41 项只读查询和 24 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **71 项**，包括 43 项只读查询和 28 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、6 项已接入候选、14 项有关联工具、47 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、12 项已接入候选、14 项有关联工具、41 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-六项候选包括模型警告、RVT 链接定义、链接实例、明细表正文、修订实例和模型组成员查询。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。后续可按用途补风管、电气导管、图纸和标注的具名操作。
+本批增加材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[本批验收](AEC-WORKSPACE-WAVE.zh-CN.md)
 
 ## 模型查询与检查
 
@@ -27,8 +27,8 @@ AEC 侧有 **27 项已有同名工具、6 项已接入候选、14 项有关联�
 | `revit_get_group_members` | 读取模型组成员 | 候选 · 原序分页，按需读取成员字段。[验收](AEC-GROUP-MEMBERS.zh-CN.md) |
 | `revit_get_rvt_links` | 列出 RVT 链接类型 | 本批候选 |
 | `revit_get_link_instances` | 读取链接放置与坐标变换 | 本批候选 |
-| `revit_check_clashes` | 检查类别之间的碰撞 | 未接入 |
-| `revit_calculate_material_quantities` | 汇总类别的材料用量 | 未接入 |
+| `revit_check_clashes` | 检查类别之间的碰撞 | 候选 · 扩张轴对齐包围盒，最多比较 50,000 对，同类去重，分页返回候选并列出缺框数。实体相交待专门实现。 |
+| `revit_calculate_material_quantities` | 汇总类别的材料用量 | 候选 · 按材料 ID 汇总非涂料体积，单位为立方英尺，分页返回材料总量。 |
 | `revit_get_warnings` | 读取 Revit 项目警告 | 本批候选 |
 | `revit_get_elements_by_type` | 按类型、类别及标高读取构件 | 已有同名 |
 | `revit_get_element_geometry` | 读取构件几何摘要 | 已有同名 |
@@ -56,8 +56,8 @@ AEC 侧有 **27 项已有同名工具、6 项已接入候选、14 项有关联�
 | `revit_create_wall` | 创建墙 | 已有同名 |
 | `revit_create_floor` | 创建楼板 | 已有同名 |
 | `revit_create_roof` | 创建屋面 | 未接入 |
-| `revit_create_level` | 创建标高 | 未接入 |
-| `revit_create_grid` | 创建轴网 | 未接入 |
+| `revit_create_level` | 创建标高 | 候选 · 明确名称与项目高程，单位为 mm。 |
+| `revit_create_grid` | 创建轴网 | 候选 · 明确名称与两个等高端点，单位为 mm，当前支持直线。 |
 | `revit_create_room` | 创建房间 | 未接入 |
 | `revit_delete_element` | 删除构件 | 未接入 |
 | `revit_create_column` | 创建结构柱 | 未接入 |
@@ -69,8 +69,8 @@ AEC 侧有 **27 项已有同名工具、6 项已接入候选、14 项有关联�
 | `revit_copy_element` | 复制构件 | 关联能力 · `revit_copy_elements`。批量接口可接收单一构件。 |
 | `revit_rotate_element` | 旋转构件 | 关联能力 · `revit_rotate_elements`。批量接口可接收单一构件。 |
 | `revit_mirror_element` | 镜像构件 | 未接入 |
-| `revit_pin_element` | 固定构件 | 未接入 |
-| `revit_unpin_element` | 取消固定 | 未接入 |
+| `revit_pin_element` | 固定构件 | 候选 · 明确单个实例 ID，回读固定状态。 |
+| `revit_unpin_element` | 取消固定 | 候选 · 明确单个实例 ID，回读固定状态。 |
 | `revit_create_group` | 创建模型组 | 未接入 |
 | `revit_ungroup` | 解散模型组 | 未接入 |
 | `revit_create_conduit` | 创建电气导管 | 未接入 |

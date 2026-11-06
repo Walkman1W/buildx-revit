@@ -43,7 +43,7 @@ const [resultPath, contractPath] = process.argv.slice(1);
 const {AEC_PILOT_QUERY_NAMES, assertNativeModelQueryResult} = await import(pathToFileURL(contractPath));
 const {fixture_results, ...metrics} = JSON.parse(fs.readFileSync(resultPath, 'utf8').replace(/^\uFEFF/, ''));
 for (const name of AEC_PILOT_QUERY_NAMES) {
-  assertNativeModelQueryResult(name, fixture_results[name.slice(6)], name === 'revit_get_sheet_info' ? {sheet_id:'9007199254740994'} : name === 'revit_get_group_members' ? {group_id:'9007199254740993'} : {});
+  assertNativeModelQueryResult(name, fixture_results[name.slice(6)], name === 'revit_check_clashes' ? {category1:'Walls',category2:'Doors'} : name === 'revit_get_sheet_info' ? {sheet_id:'9007199254740994'} : name === 'revit_get_group_members' ? {group_id:'9007199254740993'} : {});
 }
 console.log(JSON.stringify({...metrics, node_contract_checks:AEC_PILOT_QUERY_NAMES.length}));
 '@

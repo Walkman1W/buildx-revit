@@ -13,7 +13,7 @@ namespace RevitLocalCodex
         internal static readonly string[] Operations = {
             "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets",
             "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters",
-            "get_warnings", "get_rvt_links", "get_link_instances", "get_group_members"
+            "get_warnings", "get_rvt_links", "get_link_instances", "get_group_members", "calculate_material_quantities", "check_clashes"
         };
         private const int MaximumWarningElementIds = 200;
         private const int MaximumWarningDescriptionLength = 8192;
@@ -24,6 +24,8 @@ namespace RevitLocalCodex
         {
             var budget = new NativeModelQueries.ReadBudget();
             if (operation == "get_group_members") return GroupMembers(doc, args, budget);
+            if (operation == "calculate_material_quantities") return MaterialQuantities(doc, args, budget);
+            if (operation == "check_clashes") return CheckClashes(doc, args, budget);
             if (operation == "get_sheet_info")
             {
                 NativeModelQueries.Fields(args, "expected_document", "sheet_id");
@@ -76,6 +78,146 @@ namespace RevitLocalCodex
                     return Elements<RevitLinkInstance>(doc, link => LinkInstanceRow(doc, link), offset, limit, budget);
                 default: throw new InvalidOperationException("Unknown AEC pilot query.");
             }
+        }
+
+        private sealed class ClashElement
+        {
+            internal long Id;
+            internal BoundingBoxXYZ Box;
+        }
+
+        private static List<ClashElement> ClashElements(Document doc, BuiltInCategory category, NativeModelQueries.ReadBudget budget, out int missing)
+        {
+            var rows = new List<ClashElement>();
+            missing = 0;
+            using (var collector = new FilteredElementCollector(doc).OfCategory(category).WhereElementIsNotElementType())
+            foreach (Element element in collector)
+            {
+                budget.Scan();
+                long id = PositiveIdValue(element.Id);
+                BoundingBoxXYZ box = element.get_BoundingBox(null);
+                if (box == null) { missing++; continue; }
+                if (box.Min == null || box.Max == null || !ValidCoordinate(box.Min.X) || !ValidCoordinate(box.Min.Y) || !ValidCoordinate(box.Min.Z) ||
+                    !ValidCoordinate(box.Max.X) || !ValidCoordinate(box.Max.Y) || !ValidCoordinate(box.Max.Z) ||
+                    box.Min.X > box.Max.X || box.Min.Y > box.Max.Y || box.Min.Z > box.Max.Z)
+                    throw new InvalidOperationException("Invalid bounding box; no partial clash candidates published.");
+                rows.Add(new ClashElement { Id = id, Box = box });
+            }
+            rows.Sort((a, b) => a.Id.CompareTo(b.Id));
+            for (int i = 1; i < rows.Count; i++) if (rows[i-1].Id == rows[i].Id) throw new InvalidOperationException("Duplicate element ID.");
+            return rows;
+        }
+
+        private static bool ValidCoordinate(double x) { return !Double.IsNaN(x) && !Double.IsInfinity(x); }
+
+        private static object CheckClashes(Document doc, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
+        {
+            NativeModelQueries.Fields(args, "expected_document", "category1", "category2", "tolerance_feet", "offset", "limit");
+            object c1, c2;
+            if (!args.TryGetValue("category1", out c1) || !args.TryGetValue("category2", out c2)) throw new InvalidOperationException("Both categories are required.");
+            BuiltInCategory? cat1 = NativeModelQueries.Category(new Dictionary<string, object> { { "category", c1 } });
+            BuiltInCategory? cat2 = NativeModelQueries.Category(new Dictionary<string, object> { { "category", c2 } });
+            if (!cat1.HasValue || !cat2.HasValue) throw new InvalidOperationException("Both categories are required.");
+            double tolerance = 0.01;
+            object raw;
+            if (args.TryGetValue("tolerance_feet", out raw))
+            {
+                if (!(raw is int || raw is long || raw is double || raw is float || raw is decimal)) throw new InvalidOperationException("Invalid tolerance.");
+                tolerance = Convert.ToDouble(raw, CultureInfo.InvariantCulture);
+            }
+            if (!ValidCoordinate(tolerance) || tolerance < 0 || tolerance > 10) throw new InvalidOperationException("Tolerance must be between 0 and 10 feet.");
+            int offset = NativeModelQueries.Page(args, "offset", 0, 0, int.MaxValue);
+            int limit = NativeModelQueries.Page(args, "limit", 100, 1, 200);
+            int missing1, missing2 = 0;
+            var first = ClashElements(doc, cat1.Value, budget, out missing1);
+            bool same = cat1.Value == cat2.Value;
+            var second = same ? first : ClashElements(doc, cat2.Value, budget, out missing2);
+            if (same) missing2 = missing1;
+            long pairCount = same ? (long)first.Count * (first.Count - 1) / 2 : (long)first.Count * second.Count;
+            if (pairCount > 50000) throw new InvalidOperationException("Clash pair budget exceeded; no partial candidates published.");
+            var matches = new List<object>();
+            for (int i = 0; i < first.Count; i++)
+            for (int j = same ? i + 1 : 0; j < second.Count; j++)
+            {
+                var a = first[i]; var b = second[j];
+                if (a.Id == b.Id) continue;
+                budget.Scan();
+                if (!ValidCoordinate(a.Box.Max.X + tolerance) || !ValidCoordinate(a.Box.Max.Y + tolerance) || !ValidCoordinate(a.Box.Max.Z + tolerance) ||
+                    !ValidCoordinate(a.Box.Min.X - tolerance) || !ValidCoordinate(a.Box.Min.Y - tolerance) || !ValidCoordinate(a.Box.Min.Z - tolerance))
+                    throw new InvalidOperationException("Expanded bounding box is invalid.");
+                if (!(a.Box.Max.X + tolerance < b.Box.Min.X || a.Box.Min.X - tolerance > b.Box.Max.X ||
+                      a.Box.Max.Y + tolerance < b.Box.Min.Y || a.Box.Min.Y - tolerance > b.Box.Max.Y ||
+                      a.Box.Max.Z + tolerance < b.Box.Min.Z || a.Box.Min.Z - tolerance > b.Box.Max.Z))
+                    matches.Add(new { element1_id = ExactIdText(a.Id), element2_id = ExactIdText(b.Id) });
+            }
+            var result = (Dictionary<string, object>)PageResult(matches, row => row, matches.Count, offset, limit, budget);
+            result.Add("category1", cat1.Value.ToString()); result.Add("category2", cat2.Value.ToString());
+            result.Add("tolerance_feet", tolerance); result.Add("method", "expanded_axis_aligned_bounding_box");
+            result.Add("solid_intersection_tested", false);
+            result.Add("element_count1", first.Count + missing1); result.Add("element_count2", second.Count + missing2);
+            result.Add("missing_box_count1", missing1); result.Add("missing_box_count2", missing2);
+            result.Add("pairs_checked", pairCount);
+            return result;
+        }
+
+        private sealed class MaterialTotal
+        {
+            internal Material Material;
+            internal double Volume;
+            internal int Count;
+        }
+
+        private static object MaterialQuantities(Document doc, Dictionary<string, object> args, NativeModelQueries.ReadBudget budget)
+        {
+            NativeModelQueries.Fields(args, "expected_document", "category", "offset", "limit", "fields");
+            var fields = new HashSet<string>(StringComparer.Ordinal);
+            object raw;
+            if (args.TryGetValue("fields", out raw))
+            {
+                var values = raw as System.Collections.IEnumerable;
+                if (values == null || raw is string || raw is System.Collections.IDictionary) throw new InvalidOperationException("fields must be an array.");
+                foreach (object value in values)
+                {
+                    string field = value as string;
+                    if (field == null || !new[] { "name", "element_count" }.Contains(field, StringComparer.Ordinal) || !fields.Add(field)) throw new InvalidOperationException("Invalid or duplicate field.");
+                }
+            }
+            BuiltInCategory? category = NativeModelQueries.Category(args);
+            if (!category.HasValue) throw new InvalidOperationException("A category is required.");
+            int offset = NativeModelQueries.Page(args, "offset", 0, 0, int.MaxValue);
+            int limit = NativeModelQueries.Page(args, "limit", 100, 1, 200);
+            var totals = new SortedDictionary<long, MaterialTotal>();
+            int elementCount = 0;
+            using (var collector = new FilteredElementCollector(doc).OfCategory(category.Value).WhereElementIsNotElementType())
+            foreach (Element element in collector)
+            {
+                budget.Scan();
+                elementCount++;
+                foreach (ElementId materialId in element.GetMaterialIds(false))
+                {
+                    budget.Scan();
+                    long id = PositiveIdValue(materialId);
+                    Material material = doc.GetElement(materialId) as Material;
+                    if (material == null) throw new InvalidOperationException("A material could not be resolved; no partial quantities published.");
+                    double volume = element.GetMaterialVolume(materialId);
+                    if (Double.IsNaN(volume) || Double.IsInfinity(volume) || volume < 0) throw new InvalidOperationException("Invalid material volume; no partial quantities published.");
+                    MaterialTotal total;
+                    if (!totals.TryGetValue(id, out total)) totals.Add(id, total = new MaterialTotal { Material = material });
+                    total.Volume += volume;
+                    if (Double.IsInfinity(total.Volume)) throw new InvalidOperationException("Material volume overflow.");
+                    total.Count++;
+                }
+            }
+            var result = (Dictionary<string, object>)PageResult(totals, pair => {
+                var row = new Dictionary<string, object> { { "material_id", ExactIdText(pair.Key) }, { "volume_cubic_feet", pair.Value.Volume } };
+                if (fields.Contains("name")) row.Add("name", pair.Value.Material.Name);
+                if (fields.Contains("element_count")) row.Add("element_count", pair.Value.Count);
+                return row;
+            }, totals.Count, offset, limit, budget);
+            result.Add("category", category.Value.ToString());
+            result.Add("element_count", elementCount);
+            result.Add("includes_paint", false);
+            return result;
         }
 
         private static string Id(ElementId value) { return NativeModelQueries.SignedId(value); }

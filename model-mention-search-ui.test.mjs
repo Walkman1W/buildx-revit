@@ -28,6 +28,17 @@ test('dynamic AEC catalog supports keyboard navigation and click insertion witho
  ui.input('@明细表数据');picker.querySelectorAll('.model-tool-option')[0].click();assert.equal(prompt.value,'@revit_get_schedule_data ');assert.equal(ui.requests.length,0);
 });
 
+test('empty and broad searches expose the full registered catalog and keyboard reaches its end',async t=>{
+ const tools=Array.from({length:130},(_,i)=>({name:`revit_fixture_${i}`,label:`示例${i}`,readOnly:true}));
+ const ui=await setup(t,tools); const picker=ui.get('model-tool-picker'), prompt=ui.get('prompt');
+ ui.input('@'); assert.equal(picker.querySelectorAll('.model-tool-option').length,130);
+ prompt.dispatchEvent(new UiEvent('keydown',{key:'ArrowUp'}));
+ assert.equal(prompt.getAttribute('aria-activedescendant'),'model-tool-option-129');
+ prompt.dispatchEvent(new UiEvent('keydown',{key:'Enter'}));
+ assert.equal(prompt.value,'@revit_fixture_129 '); assert.equal(ui.requests.length,0);
+ ui.input('@fixture'); assert.equal(picker.querySelectorAll('.model-tool-option').length,130);
+});
+
 test('command bar click dispatches the new AEC revision read through the existing request path',async t=>{
  const ui=await setup(t);ui.document.body.querySelectorAll('.model-tab')[1].click();
  ui.emit('state',{...state,toolCatalog:catalog,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
@@ -49,6 +60,9 @@ test('group members can be found by English name, initials and label and manuall
  ui.document.body.querySelectorAll('.model-tab')[1].click();
  ui.emit('state',{...state,toolCatalog:[tool],commandCatalog:MODEL_COMMAND_CATALOG});await flush();
  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===tool.name);
+ const search=ui.get('model-command-list').querySelectorAll('.model-command-filter')[0];
+ for(const query of ['ggm','group_members','模型组成员']) {search.value=query;search.dispatchEvent(new UiEvent('input'));assert.equal(row.hidden,false,query);}
+ search.value='';search.dispatchEvent(new UiEvent('input'));
  assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
  ui.get('model-command-revit_get_group_members-group_id').value='9007199254740993';
  row.querySelectorAll('.model-command-run')[0].click();await flush();
