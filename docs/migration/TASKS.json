@@ -125,6 +125,24 @@
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     },
     {
+      "id": "BX-017",
+      "title": "AEC 直线电气导管",
+      "status": "in_progress",
+      "acceptance": "精确导管类型与标高、毫米端点及公称直径，回读中心线与规格，保留事务、权限和原回执",
+      "evidence": "AEC-CONDUIT-WRITE.zh-CN.md",
+      "unmigratedFromOriginal50": 38,
+      "candidateWorkspaceTools": 74,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpConduitChecks": 5,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 100,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
       "id": "BX-016",
       "title": "AEC 楼层平面图与等轴测三维视图",
       "status": "in_progress",

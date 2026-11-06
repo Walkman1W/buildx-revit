@@ -93,3 +93,23 @@ test('view creation appears in mentions and requires manual confirmation',async 
   await ui.respond(ui.requests[0],{ok:true,executionId:'view-write'});
  }
 });
+
+test('conduit is searchable across the full catalog and its manual form requires confirmation',async t=>{
+ const name='revit_create_conduit',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+ assert.equal(tool?.label,'创建电气导管');assert.equal(tool.readOnly,false);
+ for(const query of [name,'create_conduit','cc','创建电气导管'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@create_conduit');const picker=ui.get('model-tool-picker');
+ const option=picker.querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();
+ assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);
+ row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [key,value] of Object.entries({conduit_type_id:'9007199254740993',level_id:'9007199254740994',diameter_mm:'25'}))ui.get('model-command-'+name+'-'+key).value=value;
+ for(const [key,point] of Object.entries({start_mm:{x:0,y:2,z:3000},end_mm:{x:1000,y:2,z:3000}}))for(const [axis,value] of Object.entries(point))ui.get('model-command-'+name+'-'+key+'-'+axis).value=String(value);
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+ assert.equal(ui.requests[0].body.parameters.conduit_type_id,'9007199254740993');assert.equal(ui.requests[0].body.parameters.level_id,'9007199254740994');
+ assert.deepEqual(ui.requests[0].body.parameters.start_mm,{x:0,y:2,z:3000});assert.deepEqual(ui.requests[0].body.parameters.end_mm,{x:1000,y:2,z:3000});assert.equal(ui.requests[0].body.parameters.diameter_mm,25);
+ await ui.respond(ui.requests[0],{ok:true,executionId:'conduit-write'});
+});

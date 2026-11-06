@@ -8,7 +8,7 @@ import Ajv from 'ajv';
 import {fileURLToPath} from 'node:url';
 import {MODEL_COMMAND_CATALOG,MODEL_WORKSPACE_TOOL_NAMES,modelCommandById} from './lib/model-command-catalog.mjs';
 import {PANEL_WORKBENCH_TOOLS,PANEL_CONFIRMED_ONLY_TOOLS,READ_TOOLS,MODEL_WORKSPACE_TOOLS,MODEL_AI_READ_TOOLS,MODEL_AI_EFFECT_TOOLS} from './lib/panel-tools.mjs';
-import {supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
+import {modelOperationEffect,supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
 import {describeModelOperationSchema} from './lib/model-operation-contracts.mjs';
 import {NATIVE_MODEL_QUERY_TOOLS,MODEL_PREPARATION_QUERY_NAME} from './lib/native-model-queries.mjs';
 import {NATIVE_PARAMETER_QUERY_TOOLS} from './lib/native-parameter-queries.mjs';
@@ -258,4 +258,14 @@ test('a real queue timeout retains the producing read receipt owner through the 
   assert.equal(result.ok,false);assert.equal(result.error.outcome,'unconfirmed');
   assert.equal(result.evidence.requestIds.length,1);assert.ok(result.receiptOwner);
   assert.equal((await result.receiptOwner.close()).ok,true);
+});
+
+test('conduit schema is discoverable in mep and guarded as a rollback model transaction',()=>{
+ const name='revit_create_conduit',found=[];let offset=0,more=true;
+ while(more){const result=describeModelOperationSchema({domain:'mep',offset,limit:3});assert.equal(result.ok,true);found.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+ assert.equal(found.filter(item=>item===name).length,1);assert.equal(supportsModelPermissionTool(name),true);
+ const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);assert.ok(registered);assert.equal(registered.inputSchema.properties.mode.default,'rollback');
+ assert.deepEqual(describeModelOperationSchema({tool:name}).value.inputSchema,registered.inputSchema);
+ assert.equal(modelOperationEffect(name).kind,'model_transaction');
+ assert.equal(modelCommandById(name).readOnly,false);
 });

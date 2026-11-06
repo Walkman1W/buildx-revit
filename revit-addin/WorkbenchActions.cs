@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
+using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.UI;
 
 namespace RevitLocalCodex
@@ -13,7 +14,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -96,7 +97,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -394,6 +395,32 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "create_conduit")
+            {
+                Fields(args, "expected_document", "mode", "conduit_type_id", "level_id", "start_mm", "end_mm", "diameter_mm");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Conduit can only be created in a project document.");
+                ConduitType type = RequiredElement(doc, NativeModelQueries.ExactId(args, "conduit_type_id")) as ConduitType;
+                Level level = RequiredElement(doc, NativeModelQueries.ExactId(args, "level_id")) as Level;
+                if (type == null) throw new InvalidOperationException("conduit_type_id must identify a ConduitType.");
+                if (level == null) throw new InvalidOperationException("level_id must identify a Level.");
+                XYZ conduitStart = MillimeterPoint(Required(args, "start_mm"), "start_mm");
+                XYZ conduitEnd = MillimeterPoint(Required(args, "end_mm"), "end_mm");
+                double diameter = PositiveLength(Required(args, "diameter_mm"), "diameter_mm");
+                CheckCurveLength(uiapp, conduitStart, conduitEnd);
+                if (conduitStart.DistanceTo(conduitEnd) < Feet(2.54)) throw new InvalidOperationException("Conduit length must be at least 2.54 mm.");
+                Conduit conduit = Conduit.Create(doc, type.Id, conduitStart, conduitEnd, level.Id);
+                Parameter parameter = conduit.get_Parameter(BuiltInParameter.RBS_CONDUIT_DIAMETER_PARAM);
+                if (parameter == null || parameter.StorageType != StorageType.Double || !parameter.HasValue)
+                    throw new InvalidOperationException("Created conduit does not have a numeric nominal diameter.");
+                double initialDiameter = parameter.AsDouble();
+                if (!(initialDiameter > 0 && Math.Abs(initialDiameter - diameter) <= Feet(0.001)))
+                {
+                    if (parameter.IsReadOnly || !parameter.Set(diameter)) throw new InvalidOperationException("Revit refused the requested conduit diameter.");
+                }
+                created.Id = conduit.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "pin_element" || operation == "unpin_element")
             {
                 Fields(args, "expected_document", "mode", "element_id");
@@ -460,6 +487,29 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "create_conduit")
+            {
+                Conduit conduit = element as Conduit;
+                long typeId = NativeModelQueries.ExactId(args, "conduit_type_id"), levelId = NativeModelQueries.ExactId(args, "level_id");
+                if (conduit == null || !conduit.IsValidObject || conduit.GetTypeId().Value != typeId || conduit.ReferenceLevel == null || conduit.ReferenceLevel.Id.Value != levelId)
+                    throw new InvalidOperationException("Created conduit identity, type or reference level changed.");
+                LocationCurve location = conduit.Location as LocationCurve;
+                Line line = location == null ? null : location.Curve as Line;
+                if (line == null || !line.IsBound) throw new InvalidOperationException("Created conduit is not a straight bounded line.");
+                XYZ start = MillimeterPoint(Required(args, "start_mm"), "start_mm"), end = MillimeterPoint(Required(args, "end_mm"), "end_mm");
+                XYZ actualStart = line.GetEndPoint(0), actualEnd = line.GetEndPoint(1);
+                bool forward = actualStart.DistanceTo(start) <= Feet(0.001) && actualEnd.DistanceTo(end) <= Feet(0.001);
+                bool reverse = actualEnd.DistanceTo(start) <= Feet(0.001) && actualStart.DistanceTo(end) <= Feet(0.001);
+                if (!forward && !reverse) throw new InvalidOperationException("Created conduit endpoints changed.");
+                Parameter parameter = conduit.get_Parameter(BuiltInParameter.RBS_CONDUIT_DIAMETER_PARAM);
+                if (parameter == null || parameter.StorageType != StorageType.Double || !parameter.HasValue)
+                    throw new InvalidOperationException("Created conduit does not have a numeric nominal diameter.");
+                double actualDiameter = parameter.AsDouble();
+                if (!(actualDiameter > 0 && Math.Abs(actualDiameter - PositiveLength(Required(args, "diameter_mm"), "diameter_mm")) <= Feet(0.001)))
+                    throw new InvalidOperationException("Created conduit nominal diameter changed.");
+                return new { element_id = DescribedId(conduit.Id), conduit_type_id = DescribedId(conduit.GetTypeId()), level_id = DescribedId(conduit.ReferenceLevel.Id),
+                    start_mm = PointDto(forward ? actualStart : actualEnd), end_mm = PointDto(forward ? actualEnd : actualStart), diameter_mm = Millimeters(actualDiameter) };
+            }
             if (element == null || element.Name != OptionalString(args, "name", "")) throw new InvalidOperationException("Created element name or identity changed.");
             if (operation == "create_floor_plan_view" || operation == "create_3d_view")
             {

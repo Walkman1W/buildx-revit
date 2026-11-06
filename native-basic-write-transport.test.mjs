@@ -64,3 +64,28 @@ test('level and grid values must match the submitted request',async t=>{
     const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');
   }
 });
+
+test('conduit requires capability, validates before queue, and preserves exact rollback receipt',async t=>{
+ const operation='create_conduit', tool='revit_create_conduit', all=[...operations,operation], patch={...hostPatch,nativeBasicWriteOperations:all};
+ const parameters={conduit_type_id:'9007199254740993',level_id:'9007199254740994',start_mm:{x:0,y:2,z:3000},end_mm:{x:1000,y:2,z:3000},diameter_mm:25};
+ for(const host of [{...patch,nativeBasicWritesVersion:0},{...patch,nativeBasicWriteOperations:operations}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(f.requests.length,0);
+ }
+ const invalid=[{conduit_type_id:'0'},{conduit_type_id:'9223372036854775808'},{conduit_type_id:9007199254740992},{level_id:'-1'},{level_id:'1.5'},{diameter_mm:0},{diameter_mm:Infinity},{start_mm:{x:0,y:0,z:NaN}},{end_mm:parameters.start_mm},{mode:'invalid'}];
+ const f=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,{element_id:'9007199254740995',...parameters})});
+ for(const change of invalid)await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);
+ const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].operation,operation);assert.equal(f.requests[0].args.mode,'rollback');
+ assert.deepEqual(result.value,{element_id:'9007199254740995',...parameters});assert.equal(result.receiptOwner.inspect().value.status,'received');
+});
+
+test('conduit mismatched result stays unconfirmed with one original request and no replay',async t=>{
+ const operation='create_conduit', all=[...operations,operation], parameters={conduit_type_id:'9007199254740993',level_id:'9007199254740994',start_mm:{x:0,y:0,z:3000},end_mm:{x:1000,y:0,z:3000},diameter_mm:25};
+ for(const change of [{element_id:'0'},{conduit_type_id:'9007199254740992'},{level_id:'4'},{start_mm:{x:1,y:0,z:3000}},{end_mm:{x:1001,y:0,z:3000}},{diameter_mm:26}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{element_id:'5',...parameters,...change})});let owner;
+  await assert.rejects(invokeWorkbench('revit_create_conduit',args(parameters),f.options()),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+  assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
+ }
+});
