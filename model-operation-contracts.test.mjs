@@ -22,7 +22,16 @@ function schemaSample(rule,key=''){
     throw new Error('No controlled schema sample for '+key);
   }
   if(rule.type==='object')return Object.fromEntries((rule.required??[]).map(name=>[name,schemaSample(rule.properties[name],name)]));
-  if(rule.type==='array')return Array.from({length:rule.minItems??0},()=>schemaSample(rule.items,key+'[]'));
+  if(rule.type==='array'){
+    const values=[],validate=strictAjv().compile(rule.items);
+    for(let i=0;i<(rule.minItems??0);i++){
+      const base=schemaSample(rule.items,key+'[]'),candidates=[base,...(rule.items.enum??[]),typeof base==='number'?base+i:undefined,typeof base==='string'?base+i:undefined,String(i+1),i+1];
+      const value=candidates.find(candidate=>candidate!==undefined&&validate(candidate)&&(!rule.uniqueItems||!values.some(existing=>JSON.stringify(existing)===JSON.stringify(candidate))));
+      if(value===undefined)throw new Error('No distinct controlled array sample for '+key);
+      values.push(value);
+    }
+    return values;
+  }
   if(rule.type==='boolean')return true;
   if(rule.type==='null')return null;
   if(rule.type==='number'||rule.type==='integer'){

@@ -312,3 +312,12 @@ test('automatic final cleanup retains the write gate until completion and is dra
   let closed=false;const stopped=f.app.close().then(value=>{closed=true;return value;});await tick();assert.equal(closed,false);
   releaseClose({ok:true,value:{closed:true}});assert.deepEqual(await stopped,{closed:true});assert.equal(closes,1);
 });
+
+test('UI selection requires explicit confirmation in automatic mode for HTTP and Codex',async t=>{
+  const f=await fixture(t);await choose(f,'automatic');const id=f.session;
+  for(const [commandId,parameters] of [['revit_set_selection',{element_ids:[1]}],['revit_select_by_unique_ids',{element_uids:['uid-a']}]]){
+    const rejected=await f.post('command',{conversationId:id,commandId,parameters});assert.equal(rejected.status,403);assert.equal(f.direct.length,0);
+  }
+  const accepted=await f.post('command',{conversationId:id,commandId:'revit_set_selection',parameters:{element_ids:[1]},confirmed:true});assert.equal(accepted.status,202);await wait(()=>f.direct.length===1);assert.equal(f.direct[0][1].mode,undefined);await wait(()=>!f.app.snapshot('browser').busy);
+  await f.post('turn',{message:'选择测试'});f.codex.request(1,'revit_select_by_unique_ids',{element_uids:['uid-a']});const approval=f.app.snapshot('browser').dynamicApproval;assert.ok(approval);assert.equal(f.calls.length,0);assert.equal((await approve(f,approval,'decline')).status,200);await wait(()=>f.codex.answers.length===1);assert.equal(f.calls.length,0);
+});
