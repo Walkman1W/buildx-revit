@@ -30,7 +30,7 @@ function schemaSample(rule,key=''){
     if(rule.maximum!==undefined)value=Math.min(value,rule.maximum);if(rule.exclusiveMaximum!==undefined)value=Math.min(value,rule.exclusiveMaximum-1);return value;
   }
   if(rule.type==='string'){
-    const candidates=['expected_document','documentPath'].includes(key)?[documentPath]:['fixture','catalog-budget','a'.repeat(64),'a'.repeat(32),'1','100'];
+    const candidates=['expected_document','documentPath'].includes(key)?[documentPath]:['fixture','OST_Walls','catalog-budget','a'.repeat(64),'a'.repeat(32),'1','100'];
     const validate=strictAjv().compile(rule);
     for(const candidate of [...candidates,'a'.repeat(Math.max(1,rule.minLength??0))])if(validate(candidate))return candidate;
     throw new Error('No bounded string sample for '+key);
