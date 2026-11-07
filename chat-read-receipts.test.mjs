@@ -155,6 +155,33 @@ test('a late snapshot start receipt is reconciled through the original MCP reque
   assert.equal(f.codex.turns,1);
 });
 
+test('a late batch parameter preview receipt is attached to the original MCP request',async t=>{
+  const name='revit_preview_batch_parameter_filter',operation='preview_batch_parameter_filter';
+  const f=await fixture(t),queue=path.join(f.directory,'workbench','queue');
+  await Promise.all(['inbox','processing','outbox'].map(folder=>fs.mkdir(path.join(queue,folder),{recursive:true})));
+  const capabilities={atomicReadSnapshot:true,nativeBatchFilterPreviewVersion:1,nativeBatchFilterPreviewOperations:[operation]};
+  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId:hostSession,pid:process.pid,version:'0.8.9',...capabilities}));
+  assert.equal((await f.post('/api/turn',{client:'test',message:'Preview fixture parameters'})).status,202);
+  const mcp=await openWorkspaceMcp(f),result=await mcp.callTool({name,arguments:{category:'OST_Walls',parameter_id:'-100'}},{timeout:5000});
+  assert.equal(result.structuredContent.buildxToolOutcome.outcome,'unconfirmed');
+  const proof=result._meta?.[CHAT_READ_RECEIPT_META];assert.ok(proof);assert.equal(proof.tool,name);
+  const filename=proof.requestId+'.json';assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[filename]);
+  const request=JSON.parse(await fs.readFile(path.join(queue,'inbox',filename),'utf8'));assert.equal(request.operation,operation);assert.equal(request.atomicRead,true);
+  const {isError:_mcpError,...appServerResult}=result;
+  f.codex.notify('item/completed',{item:{type:'mcpToolCall',id:'original',server:'revit_workbench',tool:name,status:'failed',result:appServerResult}});
+  f.codex.notify('turn/completed',{turn:{id:'turn',status:'completed'}});
+  const original=f.app.snapshot('test').session,assistant=original.messages.find(message=>message.role==='assistant');
+  assert.equal(assistant.tools.find(item=>item.id==='original').status,'unknown');
+  await fs.rename(path.join(queue,'inbox',filename),path.join(queue,'processing',filename));
+  const document={title:'Controlled fixture model',path:'D:\\fixture\\model.rvt',activeViewId:12,activeViewType:'ThreeD',modified:false};
+  const value={schema_version:1,scope:'exact_category_type_level_instances',category:'OST_Walls',type_id:null,level_id:null,parameter_id:'-100',scanned:1,complete:true,total:1,items:[{element_id:'101',unique_id:'uid-101',parameter_id:'-100',storage_type:'String',has_value:true,value_internal:'old',data_type:'text'}],write_authorization:'not_granted'};
+  const payload={id:proof.requestId,hostSession,completedUtc:new Date().toISOString(),ok:true,result:{operation,hostSession,atomicReadSnapshot:true,snapshot:{hostSession,hostVersion:'0.8.9',document,capabilities},value:{operation,hostSession,document:{title:document.title,path:document.path},modifiedByOperation:false,value}}};
+  const outbox=path.join(queue,'outbox',filename);await fs.writeFile(outbox+'.tmp',JSON.stringify(payload));await fs.rename(outbox+'.tmp',outbox);
+  let current;for(let i=0;i<160;i++){current=f.app.snapshot('test').session;if(current.toolReceipts?.length&&current.conversation.persistence?.status==='saved')break;await wait(20);}
+  assert.equal(current.conversation.persistence.status,'saved');assert.deepEqual(current.toolReceipts,[{messageId:assistant.id,itemId:'original',requestId:proof.requestId,status:'received',checkedAt:current.toolReceipts?.[0]?.checkedAt}]);
+  assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[]);assert.deepEqual(await fs.readdir(path.join(queue,'processing')),[filename]);assert.equal(f.codex.turns,1);
+});
+
 test('library refresh waits for the existing optional status request to reach a verified terminal state',async t=>{
   const requestId=randomUUID(),timeout=new Error('Controlled timeout');let terminal=false,calls=0,checks=0,closes=0;
   const owner=Object.freeze({

@@ -147,6 +147,17 @@ export function modelCommandPresentation(command) {
     view.columns = ['名称','类别','ID'];
     view.rows = (Array.isArray(data.items) ? data.items : []).slice(0,200).map(item => [text(item.name),text(item.category),text(item.element_id)]);
     if (Number.isSafeInteger(data.returned) && Number.isSafeInteger(data.total)) view.summary = '显示 ' + data.returned + ' / ' + data.total + ' 项' + (data.has_more || data.truncated ? ' · 仅展示本次返回' : '');
+  } else if (command.commandId === 'revit_preview_batch_parameter_filter') {
+    const payload=Object.hasOwn(data,'value')?data.value:data;
+    if(payload?.schema_version!==1||payload.scope!=='exact_category_type_level_instances'||payload.complete!==true||payload.write_authorization!=='not_granted'||
+      !Array.isArray(payload.items)||payload.items.length>50||!Number.isSafeInteger(payload.total)||payload.total!==payload.items.length||
+      payload.items.some(item=>!item||typeof item.element_id!=='string'||typeof item.unique_id!=='string'||typeof item.parameter_id!=='string'||typeof item.has_value!=='boolean'||!Object.hasOwn(item,'value_internal'))){
+      view.status='结果待核对';view.error='参数筛选预览不完整，请核对原回执。';return view;
+    }
+    const raw=value=>value===null?'null':value===undefined?'未知':value===''?'空字符串（""）':String(value);
+    view.columns=['构件 ID','UniqueId','参数 ID','原始内部值','存储类型','数据类型'];
+    view.rows=payload.items.map(item=>[item.element_id,item.unique_id,item.parameter_id,item.has_value?raw(item.value_internal):'无值',raw(item.storage_type),raw(item.data_type)]);
+    view.summary='完整匹配 '+payload.total+' 个实例；本次只读，不授予写入权限。';
   } else if (command.commandId === 'revit_get_type_parameter_impact') {
     const payload=Object.hasOwn(data,'value')?data.value:data,parameter=payload?.parameter,coverage=payload?.coverage;
     if(payload?.schema_version!==1||!parameter||typeof parameter.has_value!=='boolean'||!Object.hasOwn(parameter,'value_internal')||
@@ -175,7 +186,7 @@ export function modelCommandPresentation(command) {
       view.rows = Object.entries(payload).slice(0,40).map(([key,value]) => [key,typeof value === 'object' && value !== null ? JSON.stringify(value) : text(value)]);
     } else view.rows = [['返回值',typeof payload === 'object' ? JSON.stringify(payload) : text(payload)]];
   }
-  if (!view.rows.length) view.summary = command.commandId === 'selection' ? '当前没有选择构件' : command.commandId === 'levels' ? '没有标高' : '没有匹配的构件';
+  if (!view.rows.length && command.commandId !== 'revit_preview_batch_parameter_filter') view.summary = command.commandId === 'selection' ? '当前没有选择构件' : command.commandId === 'levels' ? '没有标高' : '没有匹配的构件';
   return view;
 }
 

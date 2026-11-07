@@ -50,7 +50,8 @@ test('mention suggestions accept only bounded real catalog names and preserve so
   const before = structuredClone(catalog);
   assert.deepEqual(modelToolCatalog(catalog).map(item=>item.name),['revit_get_selection','mcp__revit_local__tool']);
   assert.deepEqual(catalog,before); assert.deepEqual(modelToolCatalog(null),[]);
-  assert.equal(modelToolCatalog(Array.from({length:300},(_,index)=>({name:'tool_'+index}))).length,128);
+  assert.equal(modelToolCatalog(Array.from({length:300},(_,index)=>({name:'tool_'+index}))).length,300);
+  assert.equal(modelToolCatalog(Array.from({length:1200},(_,index)=>({name:'tool_'+index}))).length,1024);
 });
 test('mention query supports caret-local matching without treating email or earlier text as a token',() => {
   assert.deepEqual(modelMentionQuery('@',1),{start:0,end:1,query:''});

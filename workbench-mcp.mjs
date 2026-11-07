@@ -6,10 +6,11 @@ import {sanitizePanelAudit} from './lib/panel-audit.mjs';
 import {isNativeModelQuery} from './lib/native-model-queries.mjs';
 import {isNativeParameterQuery} from './lib/native-parameter-queries.mjs';
 import {SNAPSHOT_DELTA_NAME} from './lib/native-snapshot-delta.mjs';
+import {BATCH_PREVIEW_NAME} from './lib/batch-filter-preview.mjs';
 
 // Keep the producing receipt owner for every named native read that the chat
 // inbox accepts, including the explicitly started snapshot baseline.
-const recoverableNativeRead=name=>name===SNAPSHOT_DELTA_NAME||isNativeModelQuery(name)||isNativeParameterQuery(name);
+const recoverableNativeRead=name=>name===SNAPSHOT_DELTA_NAME||name===BATCH_PREVIEW_NAME||isNativeModelQuery(name)||isNativeParameterQuery(name);
 
 const flags=process.argv.slice(2);
 if(flags.length!==0&&(flags.length!==1||!['--read-only','--workspace'].includes(flags[0]))){
