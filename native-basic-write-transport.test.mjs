@@ -353,3 +353,16 @@ test('group checks exact members and original receipt without replay',async t=>{
  assert.equal(fixture.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),fixture.options());fixture.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(fixture.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
  for(const change of [{element_ids:['9007199254740993','5']},{element_ids:['9007199254740993','9007199254740993']},{name:'other'}]){const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>{const x=workbenchFailureEvidence(e);owner=f.remember(x.receiptOwner);return x.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);}
 });
+
+test('column native capability, exact rollback receipt and mismatch remain guarded',async t=>{
+ const operation='create_column',all=[...operations,operation],input={symbol_id:'3',base_level_id:'1',top_level_id:'2',point_mm:{x:304.8,y:609.6,z:0}};
+ const value={element_id:'20',...input,column_kind:'vertical',base_elevation_mm:0,top_elevation_mm:3048,height_mm:3048};
+ const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});await assert.rejects(invokeWorkbench('revit_create_column',args(input),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
+ const good=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+ await assert.rejects(invokeWorkbench('revit_create_column',args({...input,top_level_id:'1'}),good.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ const result=await invokeWorkbench('revit_create_column',args(input),good.options());good.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(good.requests[0].args.mode,'rollback');assert.equal(good.requests.length,1);
+ for(const delta of [{top_level_id:'9'},{height_mm:3000},{point_mm:{x:304.8,y:609.6,z:1}},{column_kind:'slanted'}]){
+  const bad=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...delta})});let owner;
+  await assert.rejects(invokeWorkbench('revit_create_column',args(input),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
+ }
+});

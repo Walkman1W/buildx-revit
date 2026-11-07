@@ -302,3 +302,13 @@ test('group is searchable and manual exact member input requires confirmation',a
  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();ui.get('model-command-'+name+'-name').value='模型组 A';ui.get('model-command-'+name+'-element_ids-list').value='9007199254740993, 9007199254740994';
  const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'模型组 A',element_ids:['9007199254740993','9007199254740994']});await ui.respond(ui.requests[0],{ok:true,executionId:'group-write'});
 });
+
+test('column mention and manual form require confirmation',async t=>{
+ const name='revit_create_column';for(const q of [name,'创建结构柱'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,q).some(x=>x.name===name&&x.readOnly===false));
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@create_column');const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(x=>x.textContent.includes(name));assert.ok(option);option.click();
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(x=>x.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [k,v] of Object.entries({symbol_id:'3',base_level_id:'1',top_level_id:'2','point_mm-x':'304.8','point_mm-y':'609.6','point_mm-z':'0'}))ui.get('model-command-'+name+'-'+k).value=v;
+ const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',symbol_id:3,base_level_id:1,top_level_id:2,point_mm:{x:304.8,y:609.6,z:0}});await ui.respond(ui.requests[0],{ok:true,executionId:'column-fixture'});
+});

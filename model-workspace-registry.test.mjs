@@ -377,3 +377,7 @@ test('room appears in elements discovery with a guarded exact schema',()=>{
  assert.equal(found.filter(x=>x==='revit_create_room').length,1);
 });
 test('group contract is discoverable and requires guarded model permission',async()=>{const name='revit_create_group',schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(schema.value.inputSchema.properties.mode.default,'rollback');assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{name:'G',element_ids:['1','2']},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);});
+test('column exact schema is discoverable in the elements domain',()=>{
+ const name='revit_create_column',exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);assert.deepEqual(exact.value.inputSchema.required,['expected_document','symbol_id','base_level_id','top_level_id','point_mm']);
+ let offset=0,found=[];for(;;){const p=describeModelOperationSchema({domain:'elements',offset,limit:20});found.push(...p.value.tools.map(x=>x.name));if(!p.value.hasMore)break;offset+=20;}assert.equal(found.filter(x=>x===name).length,1);
+});

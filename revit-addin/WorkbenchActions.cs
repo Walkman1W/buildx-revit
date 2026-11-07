@@ -16,7 +16,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "create_material", "create_group", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "create_material", "create_group", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -104,6 +104,7 @@ namespace RevitLocalCodex
                     else if (parameterWrites != null) result = SetParameters(doc, args, parameterWrites, guardedParameter);
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
+                    else if (operation == "create_column") result = CreateColumn(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
                     else if (operation == "create_material" || operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_room" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
@@ -128,7 +129,7 @@ namespace RevitLocalCodex
                     if (typeChange != null) result = VerifyTypeChange(doc, typeChange);
                     if (groupCreation != null) result = VerifyModelGroup(doc, groupCreation);
                     if (operation == "pin_element" || operation == "unpin_element") VerifyPinned(doc, args, operation == "pin_element");
-                    if (basicCreated.Id != null) result = operation == "place_window" ? ReadWindow(doc, args, basicCreated.Id) : ReadBasicCreated(doc, operation, args, basicCreated.Id);
+                    if (basicCreated.Id != null) result = operation == "place_window" ? ReadWindow(doc, args, basicCreated.Id) : operation == "create_column" ? ReadColumn(doc, args, basicCreated.Id) : ReadBasicCreated(doc, operation, args, basicCreated.Id);
                     return result;
                 }
                 catch { if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack(); throw; }
@@ -476,6 +477,80 @@ namespace RevitLocalCodex
             XYZ facing = actual.FacingOrientation.Normalize();
             if (requestedFacing != null && facing.DotProduct(requestedFacing) < 0.999999) throw new InvalidOperationException("Window facing readback did not match.");
             return new { element_id = DescribedId(actual.Id), wall_id = DescribedId(actual.Host.Id), wall_type_id = DescribedId(actual.Host.GetTypeId()), symbol_id = DescribedId(actual.GetTypeId()), level_id = DescribedId(actual.LevelId), point_mm = PointDto(location.Point), offset_mm = Millimeters(location.Point.Z - level.ProjectElevation), facing_direction = new { x = facing.X, y = facing.Y, z = facing.Z }, facing_flipped = actual.FacingFlipped, dimensions_mm = new { width = WindowDimension(actual, BuiltInParameter.WINDOW_WIDTH), height = WindowDimension(actual, BuiltInParameter.WINDOW_HEIGHT) } };
+        }
+
+        private static void SetColumnParameter(FamilyInstance instance, BuiltInParameter id, StorageType storage, object expected)
+        {
+            Parameter p = instance.get_Parameter(id);
+            if (p == null || !p.HasValue || p.StorageType != storage) throw new InvalidOperationException("Column constraint parameter unavailable: " + id);
+            bool match = storage == StorageType.ElementId ? p.AsElementId() != null && p.AsElementId().Value == ((ElementId)expected).Value : Math.Abs(p.AsDouble() - (double)expected) <= 1e-9;
+            if (!match)
+            {
+                if (p.IsReadOnly) throw new InvalidOperationException("Column constraint parameter is read-only: " + id);
+                bool changed = storage == StorageType.ElementId ? p.Set((ElementId)expected) : p.Set((double)expected);
+                if (!changed) throw new InvalidOperationException("Revit rejected column constraint: " + id);
+            }
+        }
+
+        private static object CreateColumn(Document doc, Dictionary<string, object> args, BasicCreatedExpectation created)
+        {
+            Fields(args, "expected_document", "mode", "symbol_id", "base_level_id", "top_level_id", "point_mm");
+            if (doc.IsFamilyDocument) throw new InvalidOperationException("Structural columns require a project document.");
+            FamilySymbol symbol = RequiredElement(doc, NativeModelQueries.ExactId(args, "symbol_id")) as FamilySymbol;
+            Level bottom = RequiredElement(doc, NativeModelQueries.ExactId(args, "base_level_id")) as Level;
+            Level top = RequiredElement(doc, NativeModelQueries.ExactId(args, "top_level_id")) as Level;
+            XYZ point = MillimeterPoint(Required(args, "point_mm"), "point_mm");
+            if (symbol == null || !symbol.IsValidObject || symbol.Family == null || symbol.Category == null || symbol.Category.Id.Value != (long)BuiltInCategory.OST_StructuralColumns || symbol.Family.FamilyPlacementType != FamilyPlacementType.TwoLevelsBased)
+                throw new InvalidOperationException("symbol_id must identify a non-hosted TwoLevelsBased structural column type.");
+            if (bottom == null || !bottom.IsValidObject || top == null || !top.IsValidObject || bottom.Id.Value == top.Id.Value || !(top.ProjectElevation - bottom.ProjectElevation > Feet(2.54)))
+                throw new InvalidOperationException("Column top level must be above a valid distinct base level.");
+            if (Math.Abs(point.Z-bottom.ProjectElevation)>Feet(0.001)) throw new InvalidOperationException("Column point Z must equal the base project elevation.");
+            if (!symbol.IsActive) { symbol.Activate(); doc.Regenerate(); }
+            FamilyInstance column = doc.Create.NewFamilyInstance(point, symbol, bottom, Autodesk.Revit.DB.Structure.StructuralType.Column);
+            if (column == null || !column.IsValidObject) throw new InvalidOperationException("Revit did not create a valid structural column.");
+            created.Id = column.Id;
+            SetColumnParameter(column, BuiltInParameter.FAMILY_BASE_LEVEL_PARAM, StorageType.ElementId, bottom.Id);
+            SetColumnParameter(column, BuiltInParameter.FAMILY_TOP_LEVEL_PARAM, StorageType.ElementId, top.Id);
+            SetColumnParameter(column, BuiltInParameter.FAMILY_BASE_LEVEL_OFFSET_PARAM, StorageType.Double, 0.0);
+            SetColumnParameter(column, BuiltInParameter.FAMILY_TOP_LEVEL_OFFSET_PARAM, StorageType.Double, 0.0);
+            doc.Regenerate();
+            return ReadColumn(doc, args, created.Id);
+        }
+
+        private static object ReadColumn(Document doc, Dictionary<string, object> args, ElementId id)
+        {
+            FamilyInstance column = doc.GetElement(id) as FamilyInstance;
+            long symbolId = NativeModelQueries.ExactId(args, "symbol_id"), baseId = NativeModelQueries.ExactId(args, "base_level_id"), topId = NativeModelQueries.ExactId(args, "top_level_id");
+            Level bottom = doc.GetElement(new ElementId(baseId)) as Level, top = doc.GetElement(new ElementId(topId)) as Level;
+            FamilySymbol symbol = doc.GetElement(new ElementId(symbolId)) as FamilySymbol;
+            XYZ requested = MillimeterPoint(Required(args, "point_mm"), "point_mm");
+            LocationPoint loc = column == null ? null : column.Location as LocationPoint;
+            if (column == null || !column.IsValidObject || column.Host != null || column.IsSlantedColumn || column.StructuralType != Autodesk.Revit.DB.Structure.StructuralType.Column ||
+                column.Symbol == null || column.GetTypeId().Value != symbolId || column.LevelId.Value != baseId || bottom == null || top == null || !bottom.IsValidObject || !top.IsValidObject ||
+                symbol == null || !symbol.IsValidObject || symbol.Family == null || symbol.Category == null || symbol.Category.Id.Value != (long)BuiltInCategory.OST_StructuralColumns || symbol.Family.FamilyPlacementType != FamilyPlacementType.TwoLevelsBased ||
+                loc == null || !ColumnFinitePoint(loc.Point) || loc.Point.DistanceTo(requested) > Feet(0.001) || Math.Abs(requested.Z-bottom.ProjectElevation)>Feet(0.001) || !(top.ProjectElevation-bottom.ProjectElevation>Feet(2.54)))
+                throw new InvalidOperationException("Created column type, level, vertical orientation or position differs from request.");
+            VerifyColumnParameter(column, BuiltInParameter.FAMILY_BASE_LEVEL_PARAM, StorageType.ElementId, bottom.Id);
+            VerifyColumnParameter(column, BuiltInParameter.FAMILY_TOP_LEVEL_PARAM, StorageType.ElementId, top.Id);
+            VerifyColumnParameter(column, BuiltInParameter.FAMILY_BASE_LEVEL_OFFSET_PARAM, StorageType.Double, 0.0);
+            VerifyColumnParameter(column, BuiltInParameter.FAMILY_TOP_LEVEL_OFFSET_PARAM, StorageType.Double, 0.0);
+            BoundingBoxXYZ box = column.get_BoundingBox(null);
+            if (box == null || !ColumnFinitePoint(box.Min) || !ColumnFinitePoint(box.Max) || !(box.Max.X > box.Min.X && box.Max.Y > box.Min.Y) ||
+                Math.Abs(box.Min.Z-bottom.ProjectElevation)>Feet(1) || Math.Abs(box.Max.Z-top.ProjectElevation)>Feet(1))
+                throw new InvalidOperationException("Created column geometry does not span the requested levels within 1 mm.");
+            return new { element_id = DescribedId(column.Id), symbol_id = DescribedId(column.GetTypeId()), base_level_id = DescribedId(bottom.Id), top_level_id = DescribedId(top.Id), point_mm = PointDto(loc.Point), column_kind = "vertical", base_elevation_mm = Millimeters(bottom.ProjectElevation), top_elevation_mm = Millimeters(top.ProjectElevation), height_mm = Millimeters(top.ProjectElevation-bottom.ProjectElevation) };
+        }
+
+        private static bool ColumnFinitePoint(XYZ p)
+        {
+            return p != null && !Double.IsNaN(p.X) && !Double.IsInfinity(p.X) && !Double.IsNaN(p.Y) && !Double.IsInfinity(p.Y) && !Double.IsNaN(p.Z) && !Double.IsInfinity(p.Z);
+        }
+
+        private static void VerifyColumnParameter(FamilyInstance instance, BuiltInParameter id, StorageType storage, object expected)
+        {
+            Parameter p = instance.get_Parameter(id);
+            if (p == null || !p.HasValue || p.StorageType != storage || (storage == StorageType.ElementId ? p.AsElementId() == null || p.AsElementId().Value != ((ElementId)expected).Value : Double.IsNaN(p.AsDouble()) || Double.IsInfinity(p.AsDouble()) || Math.Abs(p.AsDouble()-(double)expected)>1e-9))
+                throw new InvalidOperationException("Column constraint readback differs: " + id);
         }
 
         private sealed class BasicCreatedExpectation { internal ElementId Id; }

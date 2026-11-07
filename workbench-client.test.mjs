@@ -30,7 +30,7 @@ test('legacy MCP lists its complete tool catalog and connection status derives i
   const tools=JSON.parse(probe.stdout.trim()).result.tools;
   assert.equal(new Set(tools.map(tool=>tool.name)).size,tools.length);
   assert.equal(new Set(ALL_PANEL_TOOLS).size,ALL_PANEL_TOOLS.length);
-  const scopedNativeWrites=['revit_create_material','revit_create_room','revit_create_group','revit_create_level','revit_create_grid','revit_pin_element','revit_unpin_element','revit_create_floor_plan_view','revit_create_3d_view','revit_create_section_view','revit_create_schedule','revit_change_element_type','revit_create_conduit','revit_create_duct','revit_create_sheet','revit_place_viewport_on_sheet','revit_apply_view_template','revit_create_text_note','revit_place_window'];
+  const scopedNativeWrites=['revit_create_material','revit_create_room','revit_create_group','revit_create_column','revit_create_level','revit_create_grid','revit_pin_element','revit_unpin_element','revit_create_floor_plan_view','revit_create_3d_view','revit_create_section_view','revit_create_schedule','revit_change_element_type','revit_create_conduit','revit_create_duct','revit_create_sheet','revit_place_viewport_on_sheet','revit_apply_view_template','revit_create_text_note','revit_place_window'];
   for(const tool of WORKBENCH_TOOLS){
     const advertised=tools.find(value=>value.name===tool.name);
     const excluded=FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name)||
