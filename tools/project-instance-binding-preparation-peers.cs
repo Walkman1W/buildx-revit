@@ -6,18 +6,25 @@ using Autodesk.Revit.DB;
 namespace Autodesk.Revit.DB {
  public class ElementId { public long Value;public ElementId(long x){Value=x;} }
  public class Category { public ElementId Id;public string Name;public bool AllowsBoundParameters; }
- public class CategorySet:List<Category> {}
+ public class CategorySet:List<Category> {public void Insert(Category c){Add(c);} }
  public class Settings { public CategorySet Categories=new CategorySet(); }
  public class ForgeTypeId { public string TypeId; }
  public class InternalDefinition { public ElementId Id;public string Name,DataType;public ForgeTypeId GetDataType(){return new ForgeTypeId{TypeId=DataType};} }
- public class BindingMap { public bool Bound;public int InsertCalls;public InstanceBinding Binding;public bool Contains(InternalDefinition d){return Bound;}public object get_Item(InternalDefinition d){return Binding;} }
+ public class BindingMap { public bool Bound;public int InsertCalls;public Document Document;public InstanceBinding Binding;public bool Contains(InternalDefinition d){return Bound;}public object get_Item(InternalDefinition d){return Binding;}public bool Insert(InternalDefinition d,InstanceBinding binding){InsertCalls++;if(Control.InsertFails)return false;Bound=true;Binding=binding;foreach(var x in Document.Elements)x.HasParameter=true;return true;} }
  public class InstanceBinding { public CategorySet Categories; }
  public class Element { public ElementId Id;public Category Category;public Document Document;public bool IsValidObject=true,HasParameter;public string UniqueId;public object get_Parameter(Guid g){return HasParameter?new object():null;} }
  public class ElementType:Element {}
- public class Document { public bool IsFamilyDocument;public string Title="controlled",PathName="D:\\controlled.rvt";public Settings Settings=new Settings();public BindingMap ParameterBindings=new BindingMap();public SharedParameterElement Shared;public List<Element> Elements=new List<Element>(); }
+ public static class Control { public static bool InsertFails,AfterCommitDrift,RollbackFails; }
+ public class Application { public Creator Create=new Creator(); }
+ public class Creator { public CategorySet NewCategorySet(){return new CategorySet();}public InstanceBinding NewInstanceBinding(CategorySet c){return new InstanceBinding{Categories=c};} }
+ public enum TransactionStatus { Started,Committed,RolledBack }
+ public class Transaction:IDisposable {public Transaction(Document d,string n){}public TransactionStatus Start(){return TransactionStatus.Started;}public TransactionStatus Commit(){return TransactionStatus.Committed;}public void Dispose(){} }
+ public class TransactionGroup:IDisposable {Document d;TransactionStatus status;public TransactionGroup(Document x,string n){d=x;}public TransactionStatus Start(){return status=TransactionStatus.Started;}public TransactionStatus GetStatus(){return status;}public TransactionStatus RollBack(){if(Control.RollbackFails)return status;d.ParameterBindings.Bound=false;foreach(var x in d.Elements)x.HasParameter=false;return status=TransactionStatus.RolledBack;}public TransactionStatus Assimilate(){status=TransactionStatus.Committed;if(Control.AfterCommitDrift)d.ParameterBindings.Binding.Categories.Clear();return status;}public void Dispose(){} }
+ public class Document { public Application Application=new Application();public void Regenerate(){} public bool IsFamilyDocument;public string Title="controlled",PathName="D:\\controlled.rvt";public Settings Settings=new Settings();public BindingMap ParameterBindings=new BindingMap();public SharedParameterElement Shared;public List<Element> Elements=new List<Element>(); }
  public class SharedParameterElement { public bool IsValidObject=true;public Document Document;public Guid GuidValue;public ElementId Id;public InternalDefinition Definition;public InternalDefinition GetDefinition(){return Definition;}public static SharedParameterElement Lookup(Document d,Guid g){return d.Shared!=null&&d.Shared.GuidValue==g?d.Shared:null;} }
  public class FilteredElementCollector:IDisposable,IEnumerable<Element> { public static bool Slow; readonly Document doc;long category;public FilteredElementCollector(Document d){doc=d;}public FilteredElementCollector OfCategoryId(ElementId id){category=id.Value;return this;}public FilteredElementCollector WhereElementIsNotElementType(){return this;}public IEnumerator<Element> GetEnumerator(){if(Slow)System.Threading.Thread.Sleep(5100);return doc.Elements.Where(e=>e.Category!=null&&e.Category.Id.Value==category&&!(e is ElementType)).GetEnumerator();}IEnumerator IEnumerable.GetEnumerator(){return GetEnumerator();}public void Dispose(){} }
 }
+namespace Autodesk.Revit.UI { public enum TaskDialogCommonButtons { Yes=1,No=2 } public enum TaskDialogResult { Yes,No } public class TaskDialog:IDisposable { public string MainInstruction,MainContent;public TaskDialogCommonButtons CommonButtons;public TaskDialogResult DefaultButton;public TaskDialog(string title){}public TaskDialogResult Show(){throw new Exception("Test must inject human decision");}public void Dispose(){} } }
 namespace RevitLocalCodex {
  static class NativeModelQueries {
   public static int Page(Dictionary<string,object> args,string key,int fallback,int min,int max){object value;if(!args.TryGetValue(key,out value))return fallback;if(!(value is int)||(int)value<min||(int)value>max)throw new InvalidOperationException();return (int)value;}
@@ -29,7 +36,7 @@ namespace RevitLocalCodex {
   static void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);}
   static void Fail(Action a,string message){try{a();}catch(InvalidOperationException){Console.WriteLine("PASS "+message);return;}throw new Exception(message);}
   static object Prop(object x,string name){return x.GetType().GetProperty(name).GetValue(x,null);}
-  static void Main(){var guid=Guid.Parse("f173029f-a81a-48c3-a5af-7c7b9a857b4a");var d=new Document();var walls=new Category{Id=new ElementId(-2000011),Name="Walls",AllowsBoundParameters=true};var floors=new Category{Id=new ElementId(-2000032),Name="Floors",AllowsBoundParameters=true};d.Settings.Categories.Add(walls);d.Settings.Categories.Add(floors);
+  static void Main(){var guid=Guid.Parse("f173029f-a81a-48c3-a5af-7c7b9a857b4a");var d=new Document();d.ParameterBindings.Document=d;var walls=new Category{Id=new ElementId(-2000011),Name="Walls",AllowsBoundParameters=true};var floors=new Category{Id=new ElementId(-2000032),Name="Floors",AllowsBoundParameters=true};d.Settings.Categories.Add(walls);d.Settings.Categories.Add(floors);
    d.Shared=new SharedParameterElement{Document=d,GuidValue=guid,Id=new ElementId(100),Definition=new InternalDefinition{Id=new ElementId(100),Name="P",DataType="text"}};
    d.Elements.Add(new Element{Id=new ElementId(5),Document=d,Category=walls,UniqueId="element-5"});d.Elements.Add(new Element{Id=new ElementId(2),Document=d,Category=floors,UniqueId="element-2"});
    var wire=new Dictionary<string,object>{{"expected_document",d.PathName},{"definition_guid",guid.ToString("D")},{"definition_id","100"},{"data_type","text"},{"category_ids",new string[]{"-2000011","-2000032"}}};
@@ -64,6 +71,23 @@ namespace RevitLocalCodex {
    FilteredElementCollector.Slow=true;Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"blocking collector over time budget refuses complete result");FilteredElementCollector.Slow=false;
    for(int i=0;i<500;i++)d.Elements.Add(new Element{Id=new ElementId(1000+i),Document=d,Category=walls,UniqueId="bulk-"+i});Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"over-budget impact refused");
    Check(d.ParameterBindings.InsertCalls==0,"no binding write or external owner invoked");
+   d.Elements.RemoveRange(2,500);
+   var candidate=ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,floors.Id.Value});
+   string req="d2a0c668-0d82-4c27-b2b9-0c83b7bc8ffb";int decisions=0,guards=0;Action guard=()=>{guards++;};Func<string,bool> accept=message=>{decisions++;Check(message.Contains("element-5")&&message.Contains("element-2")&&message.Contains("未来"),"native decision contains complete impact");return true;};
+   var declined=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",guard,message=>false);Check((string)Prop(declined,"outcome")=="not_started"&&d.ParameterBindings.InsertCalls==0,"declined native decision never inserts");
+   var rolled=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"rollback",guard,accept);Check((string)Prop(rolled,"outcome")=="rolled_back_verified"&&d.ParameterBindings.InsertCalls==1&&!d.ParameterBindings.Bound,"rollback candidate inserted exactly once and verified unbound");
+   Control.InsertFails=true;var failed=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",guard,accept);Control.InsertFails=false;Check((string)Prop(failed,"outcome")=="failed_rolled_back_verified"&&d.ParameterBindings.InsertCalls==2,"failed insertion rolled back and was not replayed");
+   Control.AfterCommitDrift=true;var unknown=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",guard,accept);Control.AfterCommitDrift=false;Check((string)Prop(unknown,"outcome")=="unknown"&&d.ParameterBindings.InsertCalls==3&&d.ParameterBindings.Bound,"post-group readback failure remains unknown without replay");
+   d.ParameterBindings.Bound=false;foreach(var item in d.Elements)item.HasParameter=false;
+   var done=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",guard,accept);Check((string)Prop(done,"outcome")=="committed_verified"&&d.ParameterBindings.InsertCalls==4&&d.ParameterBindings.Bound,"commit candidate verified after group commit");
+   d.ParameterBindings.Bound=false;foreach(var item in d.Elements)item.HasParameter=false;
+   int revokeBeforeCount=0;Action revokeBefore=()=>{if(++revokeBeforeCount==4)throw new InvalidOperationException("controlled revocation before group commit");};
+   var deniedBeforeCommit=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",revokeBefore,accept);Check((string)Prop(deniedBeforeCommit,"outcome")=="failed_rolled_back_verified"&&d.ParameterBindings.InsertCalls==5&&!d.ParameterBindings.Bound,"revocation before group commit rolls back without replay");
+   Control.RollbackFails=true;var unknownRollback=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"rollback",guard,accept);Control.RollbackFails=false;Check((string)Prop(unknownRollback,"outcome")=="unknown"&&d.ParameterBindings.InsertCalls==6,"uncertain rollback remains unknown and no replay");
+   d.ParameterBindings.Bound=false;foreach(var item in d.Elements)item.HasParameter=false;
+   int guardCalls=0;Action revoked=()=>{if(++guardCalls==5)throw new InvalidOperationException("controlled revocation");};
+   var revokedAfterCommit=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",revoked,accept);Check((string)Prop(revokedAfterCommit,"outcome")=="unknown"&&d.ParameterBindings.InsertCalls==7,"guard failure after commit remains unknown");
+   Check(decisions==7&&guards>0,"decision and guard counts bounded");
   }
  }
 }
