@@ -25,3 +25,9 @@
 ## 当前验证
 
 离线测试只编译 `ProtectedOwnerServiceCandidate.cs` 并运行四种参数，均退出 6。没有 SCM 集成、管道、真实身份、目录 ACL、服务构建、安装、启动或 Revit 交互；该骨架不能作为产品服务交付。依赖真实 Windows 服务身份与客户机的安全测试仍未执行。
+
+## 2026-11-07 离线服务骨架
+
+`ProtectedOwnerService.cs` 可独立编译为引用 `ServiceBase` 的 Windows 可执行文件，包含命名管道名称与返回 `NamedPipeServerStream` 的关闭工厂。`OnStart` 和管道工厂均直接拒绝；没有创建管道或监听，不能作为服务安装使用。内存协议识别版本 1 的 status（unavailable）、reserve/settle/inspect（denied），限制 UTF-8、长度、字段和操作；不接收或声称识别任何模拟身份。`ServiceProtocolFixture.cs` 在内存验证正常及非法报文，`service-protocol.test.mjs` 在临时目录分别编译服务入口和测试入口，1/1 通过；不启动服务或管道。
+
+部署前仍需完成并验证：系统服务身份和 SCM 生命周期、专属数据根与跨重启身份锚点、父链和文件 ACL、受限命名管道创建和远程拒绝、操作系统客户端身份鉴别及授权、规范化协议与重复 JSON 字段拒绝、持久批准与原请求发布、固定项目/批量回执解释器、锁和恢复事务、日志和隐私、升级回退、崩溃/断电及跨身份对抗测试。当前协议只是离线分发草图，JSON 解析器的重复字段行为尚未收口，不能接入 IPC。没有安装/启动服务或改系统权限。
