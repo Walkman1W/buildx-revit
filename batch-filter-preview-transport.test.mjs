@@ -17,3 +17,32 @@ import {modelCommandByTool} from './lib/model-command-catalog.mjs';
 import {modelOperationEffect} from './lib/model-operation-effects.mjs';
 test('preview is discoverable as read only without advertising batch writes',()=>{const c=describeModelOperationSchema({tool:name});assert.equal(c.ok,true);assert.equal(modelCommandByTool(name).readOnly,true);assert.equal(modelOperationEffect(name).kind,'read');assert.equal(modelCommandByTool('revit_batch_set_parameters_by_filter'),null);});
 test('omitted document binds atomically and original receipt remains inspectable',async t=>{const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:[operation],respondEnvelope:envelope});const {expected_document,...bound}=args;const result=await invokeWorkbench(name,bound,f.options());f.remember(result.receiptOwner);assert.equal(f.requests[0].args.expected_document,undefined);assert.equal(result.receiptOwner.inspect().value.status,'received');});
+
+test('batch native preparation retains original read receipt and binds the returned capability',async t=>{
+ const proposal={...args,mode:'rollback',storage_type:'String',value:'new'};
+ const respondEnvelope=r=>{const e=envelope(r);e.result.snapshot.capabilities.nativeBatchFilterPreparationVersion=1;e.result.batch_write_preparation={schema_version:1,token:'c'.repeat(32),expires_utc:new Date(Date.now()+60000).toISOString()};return e;};
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...host,nativeBatchFilterPreparationVersion:1},operations:[operation],respondEnvelope});
+ const result=await invokeWorkbench(name,args,f.options({atomicRead:true,batchWriteProposal:proposal}));f.remember(result.receiptOwner);
+ assert.ok(result.batchWritePreparation);assert.equal(Object.keys(result).includes('batchWritePreparation'),false);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(f.requests.length,1);assert.equal(f.requests[0].args.batch_write_proposal.mode,'rollback');
+ const {preparedBatchWriteReview}=await import('./lib/batch-filter-write-approval.mjs');assert.equal(preparedBatchWriteReview(result.batchWritePreparation,{args:proposal,sourceDocument:SOURCE_DOCUMENT}).review.total,1);
+});
+test('batch preparation cannot queue against old host or mismatched filter',async t=>{
+ const proposal={...args,mode:'rollback',storage_type:'String',value:'new'};
+ const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:[operation]});
+ await assert.rejects(invokeWorkbench(name,args,f.options({atomicRead:true,batchWriteProposal:proposal})),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ await assert.rejects(invokeWorkbench(name,args,f.options({atomicRead:true,batchWriteProposal:{...proposal,category:'OST_Floors'}})),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(f.requests.length,0);
+});
+
+test('batch preparation timeout preserves only the original read receipt and never replays',async t=>{
+ const proposal={...args,mode:'rollback',storage_type:'String',value:'new'};
+ const respondEnvelope=r=>{const e=envelope(r);e.result.snapshot.capabilities.nativeBatchFilterPreparationVersion=1;e.result.batch_write_preparation={schema_version:1,token:'c'.repeat(32),expires_utc:new Date(Date.now()+60000).toISOString()};return e;};
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...host,nativeBatchFilterPreparationVersion:1},operations:[operation],respond:false,respondEnvelope});let owner;
+ await assert.rejects(invokeWorkbench(name,args,f.options({atomicRead:true,batchWriteProposal:proposal,timeout:350})),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+ assert.equal(f.requests.length,1);assert.equal(owner.inspect().value.status,'pending');await f.publish(f.requests[0]);assert.equal(owner.inspect().value.status,'received');assert.equal(f.requests.length,1);
+});
+test('malformed preparation token leaves original receipt owned and cannot be approved',async t=>{
+ const proposal={...args,mode:'rollback',storage_type:'String',value:'new'};
+ const respondEnvelope=r=>{const e=envelope(r);e.result.snapshot.capabilities.nativeBatchFilterPreparationVersion=1;e.result.batch_write_preparation={schema_version:1,token:'invalid',expires_utc:new Date(Date.now()+60000).toISOString()};return e;};
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...host,nativeBatchFilterPreparationVersion:1},operations:[operation],respondEnvelope});
+ await assert.rejects(invokeWorkbench(name,args,f.options({atomicRead:true,batchWriteProposal:proposal})),e=>{const facts=workbenchFailureEvidence(e);f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(f.requests.length,1);
+});

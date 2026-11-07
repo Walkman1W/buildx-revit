@@ -296,7 +296,10 @@
   "test-support/parameter-write-instance-policy-fixtures.mjs",
   "lib/native-type-parameter-writes.mjs",
   "lib/type-parameter-write-approval.mjs",
+  "lib/batch-filter-write-approval.mjs",
+  "lib/batch-filter-write-review.mjs",
   "public/type-parameter-write-review.mjs",
+  "public/batch-filter-write-review.mjs",
   "revit-addin/TypeParameterWriteApproval.cs",
   "native-type-parameter-write-contract.test.mjs",
   "native-type-parameter-write-approval.test.mjs",
@@ -315,3 +318,4 @@
   "test-support/native-type-parameter-write-manual-transport-fixtures.mjs",
   "test-support/native-type-parameter-write-manual-http-fixtures.mjs"
 ]
+

@@ -325,7 +325,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
-                    nativeBatchFilterPreviewVersion = 1, nativeBatchFilterPreviewOperations = new[] { "preview_batch_parameter_filter" },
+                    nativeBatchFilterPreparationVersion = 1, nativeBatchFilterPreviewVersion = 1, nativeBatchFilterPreviewOperations = new[] { "preview_batch_parameter_filter" },
                     nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
@@ -1055,7 +1055,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
-                    nativeBatchFilterPreviewVersion = 1, nativeBatchFilterPreviewOperations = new[] { "preview_batch_parameter_filter" },
+                    nativeBatchFilterPreparationVersion = 1, nativeBatchFilterPreviewVersion = 1, nativeBatchFilterPreviewOperations = new[] { "preview_batch_parameter_filter" },
                     nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
@@ -1174,6 +1174,7 @@ namespace RevitLocalCodex
         }
     }
 }
+
 
 
 
