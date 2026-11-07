@@ -116,6 +116,10 @@ namespace RevitLocalCodex {
         private sealed class MirrorExpectation {}
         private static MirrorExpectation MirrorOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope mirror peer.");}
         private static object VerifyMirror(Document d, Dictionary<string,object> a, MirrorExpectation e){throw new InvalidOperationException("Out of scope mirror peer.");}
+        private sealed class TitleblockWriteExpectation {}
+        private static TitleblockWriteExpectation PrepareTitleblockWrite(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope titleblock peer.");}
+        private static object WriteTitleblockParameters(Document d, Dictionary<string,object> a, TitleblockWriteExpectation e, List<ParameterWriteExpectation> w){throw new InvalidOperationException("Out of scope titleblock peer.");}
+        private static void VerifyTitleblockOwner(Document d, TitleblockWriteExpectation e){throw new InvalidOperationException("Out of scope titleblock peer.");}
         private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}

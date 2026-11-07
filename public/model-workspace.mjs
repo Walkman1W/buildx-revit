@@ -580,6 +580,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         const id=command.id === 'search' && ['keyword','category'].includes(key) ? 'model-command-'+key : 'model-command-'+command.id+'-'+key;
         let label=COMMAND_PARAMETER_LABELS[key] || key;
         if(key==='parameters'&&command.tool==='revit_run_command')label='参数值';
+        if(key==='titleblock_id'&&command.tool==='revit_create_sheet')label='图框类型 ID';
         if(key==='template_id'&&command.tool==='revit_apply_view_template')label='视图样板 ID';
         if(command.tool==='revit_create_section_view'){
           if(key==='origin_mm')label='切面底边中心（mm）';
@@ -587,7 +588,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
           if(key==='depth_mm')label='远裁剪距离（mm）';
         }
         const options={document,Event,id,key,rule,label,required:required.has(key),value:draft?.values[key],multiline:command.tool==='revit_create_text_note'&&key==='text',onChange:invalidate,onCommand};
-        const field=command.tool==='revit_renumber_sheets' && key==='sheets'?createSheetRenumberField(options):command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
+        const field=command.tool==='revit_populate_titleblock' && key==='changes'?createParameterChangeField({...options,maxChanges:5,exactIds:true}):command.tool==='revit_renumber_sheets' && key==='sheets'?createSheetRenumberField(options):command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
           command.tool!=='revit_set_selection'&&(rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);
         const input=field.input;inputs[key]=input;formFields.push(field);
         for(const control of field.controls){control.dataset.commandEnabled=String(command.enabled !== false);parameterInputs.push(control);}

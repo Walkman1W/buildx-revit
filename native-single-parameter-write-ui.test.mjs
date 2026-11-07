@@ -22,10 +22,10 @@ class Node {
   get textContent(){return this._text+this.children.map(node=>node.textContent).join('');}
   set textContent(value){this.children=[];this._text=String(value);}
 }
-function fixture({legacy=false}={}){
+function fixture({legacy=false,changeRule=rule,maxChanges=1}={}){
   let state={accountEpoch:1,contextEpoch:1,commandIdentityKey:'owner-a',commandConversationId:'chat-a',commands:[]},sequence=0;
   const calls=[],editor=createParameterChangeField({document:{createElement:tag=>new Node(tag)},Event:UiEvent,id:'guarded',onCommand:detail=>calls.push(detail),
-    ...legacy?{}:{rule,maxChanges:1,exactIds:true}});
+    ...legacy?{}:{rule:changeRule,maxChanges,exactIds:true}});
   editor.update(state);
   const find=(node,id)=>node.id===id?node:node.children.map(child=>find(child,id)).find(Boolean),get=suffix=>find(editor.element,'guarded-'+suffix);
   const update=patch=>{state={...state,...patch};editor.update(state);};
@@ -137,4 +137,8 @@ test('the actual workspace mounts the guarded widget and preserves source and co
   assert.deepEqual(request.body.parameters.changes[0].expected_state,parameterExpectedState(parameter()));
   assert.doesNotThrow(()=>assertNativeParameterWriteArguments(name,{...request.body.parameters,expected_document:source.document.path}));
   await ui.respond(request,{ok:true,executionId:'guarded-write-1'});
+});
+
+test('titleblock manual field accumulates bounded guarded inputs without JSON',()=>{
+ const tool=MODEL_COMMAND_CATALOG.find(item=>item.tool==='revit_populate_titleblock');assert.ok(tool);const ui=fixture({changeRule:tool.inputSchema.properties.changes,maxChanges:5});ui.selection();ui.describe([parameter(),parameter({parameter_id:'2',name:'另一参数'})]);ui.choose(parameterId,'新值');ui.choose('2','第二值');const changes=JSON.parse(ui.editor.input.value);assert.equal(changes.length,2);assert.equal(changes[0].expected_state.value_internal,' 原始文本 ');assert.equal(ui.editor.element.textContent.includes('JSON'),false);assert.equal(ui.editor.validate().ok,true);
 });
