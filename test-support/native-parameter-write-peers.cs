@@ -143,6 +143,20 @@ namespace RevitLocalCodex {
         private static object TransformElements(Document doc,string operation,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope transform peer."); }
         private static object CreateWall(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope wall peer."); }
         private sealed class BasicCreatedExpectation { internal ElementId Id; }
+        // The parameter producer extracts the shared dispatcher; unrelated
+        // operations fail closed here and are covered by dedicated fixtures.
+        private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {} private sealed class RoofCreationExpectation {}
+        private static BeamCreationExpectation CreateBeam(UIApplication u, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope beam peer.");}
+        private static object VerifyBeam(Document d, Dictionary<string,object> a, BeamCreationExpectation e){throw new InvalidOperationException("Out of scope beam peer.");}
+        private static TypeChangeExpectation ChangeElementType(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope type peer.");}
+        private static object VerifyTypeChange(Document d, TypeChangeExpectation e){throw new InvalidOperationException("Out of scope type peer.");}
+        private static GroupCreationExpectation CreateModelGroup(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope group peer.");}
+        private static object VerifyModelGroup(Document d, GroupCreationExpectation e){throw new InvalidOperationException("Out of scope group peer.");}
+        private static RoofCreationExpectation CreateFlatRoof(UIApplication u, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope roof peer.");}
+        private static object VerifyFlatRoof(Document d, Dictionary<string,object> a, RoofCreationExpectation e){throw new InvalidOperationException("Out of scope roof peer.");}
+        private static object CreateColumn(Document d, Dictionary<string,object> a, BasicCreatedExpectation e){throw new InvalidOperationException("Out of scope column peer.");}
+        private static object ReadColumn(Document d, Dictionary<string,object> a, ElementId id){throw new InvalidOperationException("Out of scope column peer.");}
+
         // View-template writes are outside this parameter-write fixture.
         private static object ApplyViewTemplate(Document doc, Dictionary<string, object> args, out ElementId before) { before = null; throw new InvalidOperationException("Out of scope view-template peer."); }
         private static object VerifyViewTemplate(Document doc, Dictionary<string, object> args, ElementId before = null) { throw new InvalidOperationException("Out of scope view-template peer."); }
