@@ -869,6 +869,33 @@ namespace RevitLocalCodex
             return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true });
         }
 
+        // Closed candidate: deliberately not reachable from Dispatch or the tool
+        // catalog. Panel decision and durable request/receipt ownership are not
+        // established, so this method must not be published as a write route.
+        private object DispatchClosedBatchWriteCandidate(Document doc, Dictionary<string, object> args, AccessPolicy.Binding access)
+        {
+            NativeModelQueries.Fields(args, "expected_document", "category", "type_id", "level_id", "parameter_id", "mode", "storage_type", "value_unit", "value", "batch_write_preparation");
+            object document, category, mode, storage, target, wire, rawUnit;
+            if (!args.TryGetValue("expected_document", out document) || !(document is string) ||
+                !args.TryGetValue("category", out category) || !(category is string) ||
+                !args.TryGetValue("mode", out mode) || !(mode is string) ||
+                !args.TryGetValue("storage_type", out storage) || !(storage is string) ||
+                !args.TryGetValue("value", out target) || !args.TryGetValue("batch_write_preparation", out wire))
+                throw new InvalidOperationException("Complete batch write scope required.");
+            string unit = args.TryGetValue("value_unit", out rawUnit) ? rawUnit as string : null;
+            if (args.ContainsKey("value_unit") && unit == null) throw new InvalidOperationException("Invalid value unit.");
+            var approval = wire as Dictionary<string, object>; object schema, token;
+            if (approval == null || approval.Count != 2 || !approval.TryGetValue("schema_version", out schema) || !(schema is int) || (int)schema != 1 ||
+                !approval.TryGetValue("token", out token) || !(token is string)) throw new InvalidOperationException("Native batch preparation required.");
+            RequireProjectEdit(doc, (string)document, access);
+            long? typeId = args.ContainsKey("type_id") ? (long?)NativeModelQueries.ExactId(args, "type_id") : null;
+            long? levelId = args.ContainsKey("level_id") ? (long?)NativeModelQueries.ExactId(args, "level_id") : null;
+            long parameterId = NativeModelQueries.ExactSignedId(args, "parameter_id");
+            object current = WorkbenchActions.PreviewBatchParameterFilter(doc, (string)category, typeId, levelId, parameterId);
+            if (batchFilterPreparations == null) throw new InvalidOperationException("Native batch preparation missing.");
+            batchFilterPreparations.Consume((string)token, doc, current, (string)storage, unit, target, (string)mode);
+            return WorkbenchActions.ExecuteBatchFilterCandidate(doc, (string)category, typeId, levelId, parameterId, (string)storage, unit, target, (string)mode, current);
+        }
         private TypeParameterWriteApproval TypeParameterApprovals()
         {
             if (typeParameterApprovals == null)
@@ -1143,5 +1170,6 @@ namespace RevitLocalCodex
         }
     }
 }
+
 
 

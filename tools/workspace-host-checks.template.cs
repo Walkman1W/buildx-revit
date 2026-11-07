@@ -80,6 +80,8 @@ namespace RevitLocalCodex {
         // ORIGINAL_OPERATION_CLASSIFICATION
         internal static int BatchPreviewCalls;
         internal static object PreviewBatchParameterFilter(Document doc,string category,long? typeId,long? levelId,long parameterId){BatchPreviewCalls++;if(doc==null||category!="OST_Walls"||parameterId!=-100)throw new InvalidOperationException("Invalid batch preview facts");return new { schema_version=1, scope="exact_category_type_level_instances", category=category, type_id=(string)null, level_id=(string)null, parameter_id="-100", complete=true,total=1,items=new[]{new { element_id="101",unique_id="u101",parameter_id="-100",storage_type="String",has_value=true,value_internal="old",data_type="text" }},write_authorization="not_granted" };}
+        internal static int BatchWriteCalls;
+        internal static object ExecuteBatchFilterCandidate(Document doc,string category,long? typeId,long? levelId,long parameterId,string storage,string unit,object target,string mode,object snapshot){BatchWriteCalls++;return new { simulated=true };}
         // Type-write business behavior is tested by the separate actual
         // book/writer producer. Scheduler checks must never approve it here.
         internal sealed class TypeWritePlan { internal long TypeId,ParameterId; internal string ExpectedDocument; }
@@ -423,9 +425,22 @@ namespace RevitLocalCodex {
             File.WriteAllText(Path.Combine(queue,"workbench-config.json"),"{\"allowedDocuments\":[\"D:\\\\fixture.rvt\"]}");
             var proposal=new Dictionary<string,object>{{"expected_document","D:\\fixture.rvt"},{"mode","rollback"},{"storage_type","String"},{"value","new"}};
             var prepareArgs=new Dictionary<string,object>{{"category","OST_Walls"},{"parameter_id","-100"},{"expected_document","D:\\fixture.rvt"},{"batch_write_proposal",proposal}};
-            var prepared=(Dictionary<string,object>)DispatchAtomicRead(new UIApplication(),"preview_batch_parameter_filter",prepareArgs,"fixture",null);
+            var prepareUi=new UIApplication();
+            var prepared=(Dictionary<string,object>)DispatchAtomicRead(prepareUi,"preview_batch_parameter_filter",prepareArgs,"fixture",null);
             var ticket=(Dictionary<string,object>)prepared["batch_write_preparation"];
             if ((int)ticket["schema_version"]!=1 || ((string)ticket["token"]).Length!=32)throw new Exception("Native batch preparation missing");
+            var writeArgs=new Dictionary<string,object>{{"expected_document","D:\\fixture.rvt"},{"category","OST_Walls"},{"parameter_id","-100"},{"mode","rollback"},{"storage_type","String"},{"value","new"},{"batch_write_preparation",ticket}};
+            // Keep the same native document object as the preparation.
+            // A new wrapper/document must not reuse the permit.
+            WorkbenchActions.BatchWriteCalls=0;
+            DispatchClosedBatchWriteCandidate(prepareUi.ActiveUIDocument.Document,writeArgs,null);
+            if(WorkbenchActions.BatchWriteCalls!=1)throw new Exception("Valid prepared ticket did not reach writer peer");
+            bool replay=false;try{DispatchClosedBatchWriteCandidate(prepareUi.ActiveUIDocument.Document,writeArgs,null);}catch(InvalidOperationException){replay=true;}
+            if(!replay||WorkbenchActions.BatchWriteCalls!=1)throw new Exception("Replayed native ticket reached writer peer");
+            prepared=(Dictionary<string,object>)DispatchAtomicRead(prepareUi,"preview_batch_parameter_filter",prepareArgs,"fixture",null);
+            writeArgs["batch_write_preparation"]=prepared["batch_write_preparation"];
+            bool foreign=false;try{DispatchClosedBatchWriteCandidate(new Document(),writeArgs,null);}catch(InvalidOperationException){foreign=true;}
+            if(!foreign||WorkbenchActions.BatchWriteCalls!=1)throw new Exception("Foreign document accepted native ticket");
             proposal["storage_type"]="Integer";bool bad=false;try{DispatchAtomicRead(new UIApplication(),"preview_batch_parameter_filter",prepareArgs,"fixture",null);}catch(InvalidOperationException){bad=true;}
             if(!bad)throw new Exception("Mismatched storage accepted");
             proposal["storage_type"]="String";proposal["expected_document"]="D:\\other.rvt";bad=false;try{DispatchAtomicRead(new UIApplication(),"preview_batch_parameter_filter",prepareArgs,"fixture",null);}catch(InvalidOperationException){bad=true;}
@@ -710,6 +725,8 @@ namespace RevitLocalCodex {
         }
     }
 }
+
+
 
 
 
