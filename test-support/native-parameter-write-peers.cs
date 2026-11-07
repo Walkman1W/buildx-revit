@@ -146,11 +146,6 @@ namespace RevitLocalCodex {
         internal static object DescribeForPeer(Element element) { return DescribeElement(element); }
         private static object TransformElements(Document doc,string operation,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope transform peer."); }
         private static object CreateWall(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope wall peer."); }
-        private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {}
-        private static BeamCreationExpectation CreateBeam(UIApplication a,Dictionary<string,object> x){throw new Exception("unused");} private static object VerifyBeam(Document d,Dictionary<string,object> a,BeamCreationExpectation x){throw new Exception("unused");}
-        private static TypeChangeExpectation ChangeElementType(Document d,Dictionary<string,object> a){throw new Exception("unused");} private static object VerifyTypeChange(Document d,TypeChangeExpectation x){throw new Exception("unused");}
-        private static GroupCreationExpectation CreateModelGroup(Document d,Dictionary<string,object> a){throw new Exception("unused");} private static object VerifyModelGroup(Document d,GroupCreationExpectation x){throw new Exception("unused");}
-        private static object CreateColumn(Document d,Dictionary<string,object> a,BasicCreatedExpectation x){throw new Exception("unused");} private static object ReadColumn(Document d,Dictionary<string,object> a,ElementId x){throw new Exception("unused");}
         private sealed class BasicCreatedExpectation { internal ElementId Id; }
         // The parameter producer extracts the shared dispatcher; unrelated
         // operations fail closed here and are covered by dedicated fixtures.
