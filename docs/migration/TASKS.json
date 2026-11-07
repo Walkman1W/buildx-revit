@@ -73,6 +73,12 @@
         "realRevitLoadVerified": false,
         "realModelExecutionVerified": false,
         "realWebViewVerified": false
+      },
+      "projectBindingSafety20261107": {
+        "status": "closed_native_preparation_candidate",
+        "validation": "controlled C# peers 28/28; Node 11/11",
+        "remaining": "atomic dispatcher, original receipt, trusted human decision, transaction verification, persistent replay prevention and real Revit",
+        "writeRegistered": false
       }
     },
     {
