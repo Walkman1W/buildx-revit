@@ -10,12 +10,36 @@ namespace RevitLocalCodex
     {
         internal static bool IsRead(string operation)
         {
-            return operation == "get_revision_sequences" || operation == "get_schedule_data";
+            return operation == "get_revision_sequences" || operation == "get_schedule_data" || operation == "preview_dwg_export";
         }
 
         internal static object Read(Document doc, string operation, Dictionary<string, object> args)
         {
             if (doc == null) throw new InvalidOperationException("Open a Revit document before this query.");
+            if (operation == "preview_dwg_export")
+            {
+                NativeModelQueries.Fields(args, "expected_document", "view_id", "setup_name");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("DWG preview requires a project document.");
+                long id = NativeModelQueries.ExactId(args, "view_id");
+                string setupName = null;
+                bool? setupFound = null;
+                if (args.ContainsKey("setup_name"))
+                {
+                    setupName = args["setup_name"] as string;
+                    if (setupName == null || setupName.Length < 1 || setupName.Length > 255 ||
+                        setupName.Trim() != setupName || String.IsNullOrWhiteSpace(setupName) ||
+                        setupName[0] == '\ufeff' || setupName[setupName.Length - 1] == '\ufeff' ||
+                        setupName.Any(c => c < 0x20 || (c >= 0x7f && c <= 0x9f)))
+                        throw new InvalidOperationException("setup_name must be a valid exact setup name.");
+                    setupFound = BaseExportOptions.GetPredefinedSetupNames(doc).Any(name => String.Equals(name, setupName, StringComparison.Ordinal));
+                }
+                var view = doc.GetElement(new ElementId(id)) as View;
+                string status = view == null ? "missing_or_not_view" : view.IsTemplate ? "template" :
+                    ((view is ViewSheet && ((ViewSheet)view).IsPlaceholder) || !view.CanBePrinted) ? "not_printable" : "printable";
+                return new { schema_version = 1, view_id = id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    view_status = status, exporter_available = OptionalFunctionalityUtils.IsDWGExportAvailable(),
+                    setup_name = setupName, setup_found = setupFound };
+            }
             var budget = new NativeModelQueries.ReadBudget();
             if (operation == "get_revision_sequences")
             {

@@ -49,6 +49,30 @@ test('command bar click dispatches the new AEC revision read through the existin
  await ui.respond(ui.requests[0],{ok:true,executionId:'fixture-read'});
 });
 
+test('DWG preflight is searchable and its command reads the exact view without write confirmation',async t=>{
+  const name='revit_preview_dwg_export',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+  assert.equal(tool?.readOnly,true);
+  for(const query of [name,'preview_dwg_export','pde','核查 DWG 导出条件']){
+    assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+  }
+  const ui=await setup(t,PANEL_TOOL_CATALOG);
+  ui.input('@pde');
+  const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));
+  assert.ok(option);option.click();assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+  ui.document.body.querySelectorAll('.model-tab')[1].click();
+  ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);
+  assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+  ui.get('model-command-'+name+'-view_id').value='9007199254740993';
+  ui.get('model-command-'+name+'-setup_name').value='公司出图设置';
+  assert.equal(row.querySelectorAll('.model-command-confirm').length,0);
+  row.querySelectorAll('.model-command-run')[0].click();await flush();
+  assert.equal(ui.requests.length,1);
+  assert.equal(ui.requests[0].body.commandId,name);
+  assert.deepEqual(ui.requests[0].body.parameters,{view_id:'9007199254740993',setup_name:'公司出图设置'});
+  await ui.respond(ui.requests[0],{ok:true,executionId:'dwg-preflight-read'});
+});
+
 test('group members can be found by English name, initials and label and manually read once',async t=>{
  const tool=PANEL_TOOL_CATALOG.find(item=>item.name==='revit_get_group_members');
  assert.equal(tool?.label,'模型组成员');assert.equal(tool.readOnly,true);

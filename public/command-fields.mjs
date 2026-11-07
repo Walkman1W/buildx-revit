@@ -13,6 +13,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',elevation_mm:'高程（mm）',tolerance_feet:'包围盒容差（英尺）',fields:'返回字段',template_id:'族模板',changes:'参数修改',
   reference_a:'第一稳定参照',reference_b:'第二稳定参照',source_sheet_id:'源图纸 ID',copy_option:'复制选项',view_id:'视图 ID',view_family_type_id:'视图类型 ID',sheet_id:'图纸 ID',number:'图纸编号',titleblock_id:'图框 ID',group_id:'模型组 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
   x_mm:'图纸 X（mm）',y_mm:'图纸 Y（mm）',
+  setup_name:'DWG 导出设置名称',
   material_id:'目标材质 ID',expected_has_value:'原参数有值',expected_value_internal:'原材质参数值（ElementId）',
   red:'图形颜色红（0–255）',green:'图形颜色绿（0–255）',blue:'图形颜色蓝（0–255）',transparency:'图形透明度（0–100）',shininess:'光泽度（0–128）',smoothness:'光滑度（0–100）',
   text:'文字内容',text_type_id:'文字类型 ID',

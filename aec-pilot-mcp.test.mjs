@@ -236,6 +236,32 @@ test('drawing reads retain exact capability and return only the requested page o
   assert.equal(invalid.isError,true);assert.equal(f.requests.size,2);
 });
 
+test('DWG preflight checks one exact view and setup through the atomic read queue',async t=>{
+  const operation='preview_dwg_export',name='revit_preview_dwg_export';
+  const args={view_id:sheetId,setup_name:'公司出图设置'};
+  const descriptor={name,operation,args,value:{schema_version:1,view_id:sheetId,view_status:'printable',
+    exporter_available:true,setup_name:args.setup_name,setup_found:true}};
+  const f=await fixture(t,{extraCalls:[descriptor]});
+  assert.ok((await f.client.listTools()).tools.some(tool=>tool.name===name&&tool.outputSchema&&tool.annotations.readOnlyHint));
+  for(const input of [{view_id:'9223372036854775808'},{view_id:sheetId,setup_name:' padded'},{view_id:sheetId,path:'should-not-accept'}]){
+    const invalid=await toolCall(f.client,{name,args:input});
+    assert.equal(invalid.isError,true);
+  }
+  assert.equal(f.requests.size,0);
+  await measuredCall(f,descriptor);
+  assert.equal(f.requests.size,1);
+
+  const old=await fixture(t,{extraCalls:[descriptor],missingOperations:new Set([operation])});
+  const blocked=await toolCall(old.client,descriptor);
+  assert.equal(blocked.structuredContent.buildxToolOutcome.outcome,'not_started');
+  assert.equal(old.requests.size,0);
+
+  const corrupt=await fixture(t,{extraCalls:[descriptor],corrupt:result=>{result.value.value.setup_name='Other';}});
+  const mismatch=await toolCall(corrupt.client,descriptor);
+  assert.equal(mismatch.structuredContent.buildxToolOutcome.outcome,'unconfirmed');
+  assert.equal(corrupt.requests.size,1);
+});
+
 test('an installed first-wave host can still read phases and refuses all three new operations before enqueueing',async t=>{
   const f=await fixture(t,{missingOperations:wave2Operations});
   await measuredCall(f,byOperation.get('get_phases'));
