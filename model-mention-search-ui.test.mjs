@@ -386,6 +386,8 @@ test('batch sheet creation mention and structured rows require confirmation',asy
  const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',sheets:[{name:'Plan',number:'A101',titleblock_id:7},{name:'Index',number:'A102'}]});await ui.respond(ui.requests[0],{ok:true,executionId:'sheet-batch-fixture'});
 
+});
+
 test('convert group alias appears in mentions and manual bounded form',async t=>{
  const name='revit_convert_to_group';for(const q of [name,'将构件转为模型组'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,q).some(x=>x.name===name&&x.readOnly===false));
  const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@convert_to_group');const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(x=>x.textContent.includes(name));assert.ok(option);option.click();

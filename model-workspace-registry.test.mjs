@@ -426,6 +426,8 @@ test('batch sheet creation schema is discoverable in views',()=>{
  const name='revit_batch_create_sheets_from_csv',exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);assert.deepEqual(exact.value.inputSchema.required,['expected_document','sheets']);let offset=0,found=[];
  for(;;){const p=describeModelOperationSchema({domain:'views',offset,limit:20});found.push(...p.value.tools.map(x=>x.name));if(!p.value.hasMore)break;offset+=20;}assert.equal(found.filter(x=>x===name).length,1);
 
+});
+
 test('convert group alias retains the same bounded schema and guarded model effect',()=>{
  const a=describeModelOperationSchema({tool:'revit_convert_to_group'}),b=describeModelOperationSchema({tool:'revit_create_group'});assert.equal(a.ok,true);assert.deepEqual(a.value.inputSchema,b.value.inputSchema);assert.equal(modelOperationEffect('revit_convert_to_group').kind,'model_transaction');assert.equal(supportsModelPermissionTool('revit_convert_to_group'),true);
  let offset=0,found=[];for(;;){const p=describeModelOperationSchema({domain:'elements',offset,limit:20});found.push(...p.value.tools.map(x=>x.name));if(!p.value.hasMore)break;offset+=20;}assert.equal(found.filter(x=>x==='revit_convert_to_group').length,1);
