@@ -79,6 +79,9 @@ namespace RevitLocalCodex {
         private sealed class SheetBatchExpectation {}
         private static List<SheetBatchExpectation> CreateSheetBatch(UIApplication u, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope sheet batch peer.");}
         private static object VerifySheetBatch(Document d, List<SheetBatchExpectation> e){throw new InvalidOperationException("Out of scope sheet batch peer.");}
+        private sealed class DimensionCreationExpectation {}
+        private static DimensionCreationExpectation CreateLinearDimension(UIApplication u, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope dimension peer.");}
+        private static object VerifyLinearDimension(Document d, Dictionary<string,object> a, DimensionCreationExpectation e){throw new InvalidOperationException("Out of scope dimension peer.");}
         private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
