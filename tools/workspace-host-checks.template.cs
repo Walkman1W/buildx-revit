@@ -100,6 +100,19 @@ namespace RevitLocalCodex {
         internal object Issue(Document doc,WorkbenchActions.TypeWritePlan plan){throw new NotSupportedException("Type writing is outside scheduler checks.");}
         internal Permit Consume(Document doc,WorkbenchActions.TypeWritePlan plan,object provided){throw new NotSupportedException("Type writing is outside scheduler checks.");}
     }
+    internal static class ProjectInstanceBindingPreparation {
+        internal sealed class Snapshot { }
+        internal static object Describe(Snapshot s,int offset,int limit,string expected,string session){throw new NotSupportedException();}
+    }
+    internal static class ProjectBindingCandidate {
+        internal sealed class Plan { internal string Document,Scope; }
+        internal static Plan Parse(Dictionary<string,object> args){throw new NotSupportedException();}
+        internal static ProjectInstanceBindingPreparation.Snapshot Capture(Document d,Plan p){throw new NotSupportedException();}
+    }
+    internal sealed class ProjectBindingNativePreparation {
+        internal ProjectBindingNativePreparation(string session,Func<object,object,bool?> identity){}
+        internal object Issue(Document d,ProjectInstanceBindingPreparation.Snapshot s,string scope,string id){throw new NotSupportedException();}
+    }
     internal sealed class ExternalEvent {
         public ExternalEventRequest Result = ExternalEventRequest.Accepted;
         public int Raises;
@@ -160,6 +173,8 @@ namespace RevitLocalCodex {
         private SnapshotRevitBridge snapshotBridge;
         private FamilyApprovalPeer familyWorkflow;
         private TypeParameterWriteApproval typeParameterApprovals;
+        private ProjectBindingNativePreparation projectBindingApprovals;
+        private static readonly bool ProjectBindingCandidateEnabled = false;
         private ExternalEvent externalEvent = new ExternalEvent();
         private SchedulerObservation pendingObservation;
         private DateTime nextRaise = DateTime.MinValue;

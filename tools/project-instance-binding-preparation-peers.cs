@@ -6,14 +6,19 @@ using Autodesk.Revit.DB;
 namespace Autodesk.Revit.DB {
  public class ElementId { public long Value;public ElementId(long x){Value=x;} }
  public class Category { public ElementId Id;public string Name;public bool AllowsBoundParameters; }
- public class CategorySet:List<Category> {}
+ public class CategorySet:List<Category> { public bool Insert(Category c){Add(c);return true;} }
+ public class InstanceBinding { public CategorySet Categories; }
+ public class Creator { public CategorySet NewCategorySet(){return new CategorySet();}public InstanceBinding NewInstanceBinding(CategorySet c){return new InstanceBinding{Categories=c};} }
+ public class Application { public Creator Create=new Creator(); }
+ public enum TransactionStatus { Started,Committed,RolledBack }
+ public class Transaction:IDisposable { TransactionStatus status;public Transaction(Document d,string name){}public TransactionStatus Start(){return status=TransactionStatus.Started;}public TransactionStatus Commit(){return status=TransactionStatus.Committed;}public TransactionStatus RollBack(){return status=TransactionStatus.RolledBack;}public TransactionStatus GetStatus(){return status;}public void Dispose(){} }
  public class Settings { public CategorySet Categories=new CategorySet(); }
  public class ForgeTypeId { public string TypeId; }
  public class InternalDefinition { public ElementId Id;public string Name,DataType;public ForgeTypeId GetDataType(){return new ForgeTypeId{TypeId=DataType};} }
- public class BindingMap { public bool Bound;public int InsertCalls;public bool Contains(InternalDefinition d){return Bound;} }
+ public class BindingMap { public bool Bound;public int InsertCalls;public InstanceBinding binding;public bool Contains(InternalDefinition d){return Bound;} public bool Insert(InternalDefinition d,InstanceBinding b){InsertCalls++;Bound=true;binding=b;return true;}public object get_Item(InternalDefinition d){return binding;} }
  public class Element { public ElementId Id;public Category Category;public Document Document;public bool IsValidObject=true,HasParameter;public string UniqueId;public object get_Parameter(Guid g){return HasParameter?new object():null;} }
  public class ElementType:Element {}
- public class Document { public bool IsFamilyDocument,IsLinked,IsReadOnly;public string Title="controlled",PathName="D:\\controlled.rvt";public Settings Settings=new Settings();public BindingMap ParameterBindings=new BindingMap();public SharedParameterElement Shared;public List<Element> Elements=new List<Element>(); }
+ public class Document { public Application Application=new Application();public void Regenerate(){} public bool IsFamilyDocument,IsLinked,IsReadOnly;public string Title="controlled",PathName="D:\\controlled.rvt";public Settings Settings=new Settings();public BindingMap ParameterBindings=new BindingMap();public SharedParameterElement Shared;public List<Element> Elements=new List<Element>(); }
  public class SharedParameterElement { public bool IsValidObject=true;public Document Document;public Guid GuidValue;public ElementId Id;public InternalDefinition Definition;public InternalDefinition GetDefinition(){return Definition;}public static SharedParameterElement Lookup(Document d,Guid g){return d.Shared!=null&&d.Shared.GuidValue==g?d.Shared:null;} }
  public class FilteredElementCollector:IDisposable,IEnumerable<Element> { public static bool Slow; readonly Document doc;long category;public FilteredElementCollector(Document d){doc=d;}public FilteredElementCollector OfCategoryId(ElementId id){category=id.Value;return this;}public FilteredElementCollector WhereElementIsNotElementType(){return this;}public IEnumerator<Element> GetEnumerator(){if(Slow)System.Threading.Thread.Sleep(5100);return doc.Elements.Where(e=>e.Category!=null&&e.Category.Id.Value==category&&!(e is ElementType)).GetEnumerator();}IEnumerator IEnumerable.GetEnumerator(){return GetEnumerator();}public void Dispose(){} }
 }
@@ -49,6 +54,11 @@ namespace RevitLocalCodex {
    issued=native.Issue(d,snapshot,scope,request);token=(string)Prop(issued,"token");Fail(()=>native.Consume(d,"other",request,token),"scope mismatch refused");Fail(()=>native.Consume(d,scope,request,token),"scope mismatch burns token");
    issued=native.Issue(d,snapshot,scope,request);token=(string)Prop(issued,"token");permit=native.Consume(d,scope,request,token);d.Elements[0].UniqueId="changed";Fail(()=>permit.ClaimAndRevalidate(d,scope,request),"impact drift refused at claim");d.Elements[0].UniqueId="element-5";Fail(()=>permit.ClaimAndRevalidate(d,scope,request),"drift failure burns permit");
    issued=native.Issue(d,snapshot,scope,request);token=(string)Prop(issued,"token");tick=120000;Fail(()=>native.Consume(d,scope,request,token),"monotonic expiration refused");tick=0;
+   var proposal=new Dictionary<string,object>{{"expected_document",d.PathName},{"mode","rollback"},{"definition_guid",guid.ToString("D")},{"definition_id","100"},{"data_type","text"},{"category_ids",new string[]{"-2000011","-2000032"}}};
+   var plan=ProjectBindingCandidate.Parse(proposal);var captured=ProjectBindingCandidate.Capture(d,plan);issued=native.Issue(d,captured,plan.Scope,request);token=(string)Prop(issued,"token");permit=native.Consume(d,plan.Scope,request,token);
+   d.Elements[0].UniqueId="drift";Fail(()=>ProjectBindingCandidate.Execute(d,plan,permit,request),"transaction recheck blocks drift before insert");Check(d.ParameterBindings.InsertCalls==0,"drift produced no insertion");d.Elements[0].UniqueId="element-5";
+   issued=native.Issue(d,captured,plan.Scope,request);token=(string)Prop(issued,"token");permit=native.Consume(d,plan.Scope,request,token);var written=ProjectBindingCandidate.Execute(d,plan,permit,request);Check(d.ParameterBindings.InsertCalls==1&&(string)Prop(written,"original_preparation_request_id")==request,"transaction verifies binding and preserves original request");d.ParameterBindings.Bound=false;d.ParameterBindings.binding=null;d.ParameterBindings.InsertCalls=0;
+
    d.Elements.Add(new Element{Id=new ElementId(7),Document=d,Category=walls,UniqueId="element-7"});var changed=ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,floors.Id.Value});Fail(()=>ProjectInstanceBindingPreparation.Describe(changed,1,1,fingerprint,"synthetic-session"),"recaptured impact drift refuses later page");Fail(()=>ProjectInstanceBindingPreparation.Revalidate(d,snapshot),"added instance drift refused");d.Elements.RemoveAt(2);
    d.Elements[0].UniqueId="replaced";Fail(()=>ProjectInstanceBindingPreparation.Revalidate(d,snapshot),"instance identity drift refused");d.Elements[0].UniqueId="element-5";
    d.Elements[0].HasParameter=true;Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"existing instance GUID conflict refused");d.Elements[0].HasParameter=false;

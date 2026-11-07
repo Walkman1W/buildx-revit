@@ -75,9 +75,9 @@
         "realWebViewVerified": false
       },
       "projectBindingSafety20261107": {
-        "status": "closed_native_preparation_candidate",
-        "validation": "controlled C# peers 28/28; Node 11/11",
-        "remaining": "atomic dispatcher, original receipt, trusted human decision, transaction verification, persistent replay prevention and real Revit",
+        "status": "closed_dispatcher_and_transaction_candidate",
+        "validation": "controlled C# peers 31/31; scheduler fixture 109/109; Node 13/13; three candidate C# files compiled against actual Revit API",
+        "remaining": "full host compilation and source manifest, original receipt, trusted human decision and complete review, persistent replay prevention, real Revit",
         "writeRegistered": false
       }
     },

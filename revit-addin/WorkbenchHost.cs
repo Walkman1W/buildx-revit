@@ -50,6 +50,9 @@ namespace RevitLocalCodex
         // One owner per host session; family documents never enter the project script group.
         private BuildX.FamilyRevit.RevitFamilyWorkflow familyWorkflow;
         private TypeParameterWriteApproval typeParameterApprovals;
+        private ProjectBindingNativePreparation projectBindingApprovals;
+        // Keep inaccessible until trusted human decision, retained receipts and durable replay guard are integrated.
+        private static readonly bool ProjectBindingCandidateEnabled = false;
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
@@ -781,6 +784,10 @@ namespace RevitLocalCodex
             long? viewId = doc == null || doc.ActiveView == null ? (long?)null : doc.ActiveView.Id.Value;
             var boundArgs = new Dictionary<string, object>(args);
             object proposalWire;
+            object projectProposalWire;
+            bool preparesProjectBinding = boundArgs.TryGetValue("project_binding_proposal", out projectProposalWire);
+            if (preparesProjectBinding) boundArgs.Remove("project_binding_proposal");
+            if (preparesProjectBinding && !ProjectBindingCandidateEnabled) throw new InvalidOperationException("Project binding candidate is closed.");
             bool preparesTypeWrite = boundArgs.TryGetValue("type_write_proposal", out proposalWire);
             if (preparesTypeWrite) boundArgs.Remove("type_write_proposal");
             // Omission is resolved once, inside the same Revit callback that
@@ -791,7 +798,17 @@ namespace RevitLocalCodex
                 RequireDocument(doc, ExpectedDocument(boundArgs));
             object value;
             WorkbenchActions.TypeWritePreparation preparation = null;
-            if (preparesTypeWrite)
+            ProjectBindingCandidate.Plan projectPlan = null;
+            ProjectInstanceBindingPreparation.Snapshot projectSnapshot = null;
+            if (preparesProjectBinding)
+            {
+                if (preparesTypeWrite || operation != "preview_project_parameter_binding") throw new InvalidOperationException("Project preparation requires its atomic preview.");
+                projectPlan = ProjectBindingCandidate.Parse(projectProposalWire as Dictionary<string, object>);
+                RequireProjectEdit(doc, projectPlan.Document, access);
+                projectSnapshot = ProjectBindingCandidate.Capture(doc, projectPlan);
+                value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = ProjectInstanceBindingPreparation.Describe(projectSnapshot, 0, 50, null, session), modifiedByOperation = false };
+            }
+            else if (preparesTypeWrite)
             {
                 if (operation != "get_type_parameter_impact") throw new InvalidOperationException("Type-write preparation requires the atomic type-impact operation.");
                 foreach (string field in boundArgs.Keys)
@@ -833,10 +850,23 @@ namespace RevitLocalCodex
             long? afterViewId = after == null || after.ActiveView == null ? (long?)null : after.ActiveView.Id.Value;
             if (viewId != afterViewId)
                 throw new InvalidOperationException("Active view changed during the read; snapshot was not published.");
+            if (projectSnapshot != null)
+                return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true,
+                    project_binding_preparation = ProjectBindingApprovals().Issue(doc, projectSnapshot, projectPlan.Scope, id) });
             if (preparation != null)
                 return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true,
                     type_write_preparation = TypeParameterApprovals().Issue(doc, preparation.Plan) });
             return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true });
+        }
+
+        private ProjectBindingNativePreparation ProjectBindingApprovals()
+        {
+            if (projectBindingApprovals == null)
+            {
+                var nativeDocuments = new BuildX.FamilyRevit.RevitProjectDocumentSource(Thread.CurrentThread.ManagedThreadId);
+                projectBindingApprovals = new ProjectBindingNativePreparation(session, nativeDocuments.SameOpenDocument);
+            }
+            return projectBindingApprovals;
         }
 
         private TypeParameterWriteApproval TypeParameterApprovals()
@@ -929,12 +959,25 @@ namespace RevitLocalCodex
                 object selected = FreezeResult(operation == "set_selection" ? WorkbenchActions.SetSelection(uiapp, args) : WorkbenchActions.SelectByUniqueIds(uiapp, args));
                 return new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = selected, effect = "ui_selection" };
             }
+            ProjectBindingCandidate.Plan projectWritePlan = null;
+            ProjectBindingNativePreparation.Permit projectWritePermit = null;
+            string projectOriginalRequest = null;
+            if (operation == "bind_existing_project_parameter")
+            {
+                if (!ProjectBindingCandidateEnabled) throw new InvalidOperationException("Project binding candidate is closed.");
+                RequireProjectEdit(doc, ExpectedDocument(args), access);
+                var clean = new Dictionary<string, object>(args, StringComparer.Ordinal); object token, original;
+                if (!clean.TryGetValue("native_preparation_token", out token) || !(token is string) || !clean.TryGetValue("original_preparation_request_id", out original) || !(original is string)) throw new InvalidOperationException("Original preparation required.");
+                clean.Remove("native_preparation_token"); clean.Remove("original_preparation_request_id");
+                projectOriginalRequest = (string)original; projectWritePlan = ProjectBindingCandidate.Parse(clean);
+                projectWritePermit = ProjectBindingApprovals().Consume(doc, projectWritePlan.Scope, projectOriginalRequest, (string)token); args = clean;
+            }
             if (operation == "set_type_parameter")
             {
                 RequireProjectEdit(doc, ExpectedDocument(args), access);
                 args = BindTypeWritePermit(doc, args);
             }
-            if (operation != "execute_csharp" && operation != "smart_annotate" && operation != "build_schematic" && operation != "export_schematic" && !WorkbenchActions.IsWrite(operation))
+            if (operation != "execute_csharp" && operation != "smart_annotate" && operation != "build_schematic" && operation != "export_schematic" && !WorkbenchActions.IsWrite(operation) && operation != "bind_existing_project_parameter")
                 throw new InvalidOperationException("Unknown workbench operation.");
             RequireProjectEdit(doc, ExpectedDocument(args), access);
             string mode = Text(args, "mode", "rollback");
@@ -946,7 +989,8 @@ namespace RevitLocalCodex
                 group.Start();
                 try
                 {
-                    if (operation == "execute_csharp") value = ScriptRunner.Execute(uiapp, Text(args, "code"), id, ScriptParameters(args));
+                    if (operation == "bind_existing_project_parameter") value = ProjectBindingCandidate.Execute(doc, projectWritePlan, projectWritePermit, projectOriginalRequest);
+                    else if (operation == "execute_csharp") value = ScriptRunner.Execute(uiapp, Text(args, "code"), id, ScriptParameters(args));
                     else if (operation == "smart_annotate") value = ArgusTools.Annotate(uiapp, args);
                     else if (operation == "build_schematic") value = ArgusTools.Schematic(uiapp, args);
                     else if (operation == "export_schematic") value = SchematicRevitService.Export(uiapp, args);

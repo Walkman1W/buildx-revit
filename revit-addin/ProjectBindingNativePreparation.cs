@@ -35,6 +35,7 @@ namespace RevitLocalCodex
         private readonly long frequency;
         private readonly Func<DateTime> utcNow;
         private readonly Dictionary<string,Entry> entries=new Dictionary<string,Entry>(StringComparer.Ordinal);
+        internal ProjectBindingNativePreparation(string session,Func<object,object,bool?> sameDocument) : this(session,sameDocument,Stopwatch.GetTimestamp,Stopwatch.Frequency,()=>DateTime.UtcNow) { }
         internal ProjectBindingNativePreparation(string session,Func<object,object,bool?> sameDocument,Func<long> clock,long frequency,Func<DateTime> utcNow)
         {
             if(String.IsNullOrEmpty(session)||sameDocument==null||clock==null||frequency<=0||utcNow==null) throw new ArgumentException("Native preparation requires session, document identity and clocks.");
