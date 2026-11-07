@@ -21,3 +21,5 @@
 `UnregisteredDwgStagePrototype` 只作为宿主 API 形状的原型，接收不可由模型参数提供的内部 lease，并为单个可打印视图使用固定 R2018 选项调用 Revit `Document.Export`；无论返回 true、false 或异常，模拟 lease 尝试记录观察到的文件。额外文件不会删除。由于当前没有生产的隔离 lease、句柄锚定的完整枚举或抗并发替换证明，原型对每次结果固定标记 `ManifestComplete=false` 和 `PublicationAuthorized=false`，不能发布。测试 lease 只在本工程测试目录随机建文件夹、使用合成 Revit peer，不能证明真实 Revit staging 安全。
 
 `dwg-destination-selection-prototype.mjs` 使用注入的选择器和目录身份检查器，只返回绑定原请求的短期、单次选择事实；它不接受请求携带的目标路径，不把选择动作当用户发布批准。测试使用假选择器和检查器，生产选择器、目录文件 ID 重查和逐次人类批准尚未接线。只有这些证据、完整实际输出清单、原请求持久回执和安全发布 owner 一起闭合后，才可评估注册导出工具。
+
+进一步的 `UnregisteredDwgHostLease` 只供内部实验，使用 Windows 独占新建随机 stage 目录，记录目录链身份；观察时核对目录链，对单个预期文件核对身份和摘要，限制最多 128 项并报告额外项。隔离 NTFS peer 五项通过；既有导出替身六项、跨 Node/native 日志测试一项通过，Revit 2024 API 引用构建通过。该租约尚未接宿主、原请求或持久日志，也没有实际用户原生选择器和审批。目录校验、枚举、文件观察之间仍有并发替换窗口，不能证明完整输出清单或抗同用户进程篡改；观察异常不能证明没有输出。仍固定禁止发布，保留 unknown，不能重导或把文件效果称为事务回滚。没有真实 Revit、真实输出或用户目录验证。
