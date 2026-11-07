@@ -5,6 +5,11 @@ import {isCommandTool,invokeCommand} from './lib/command-store.mjs';
 import {sanitizePanelAudit} from './lib/panel-audit.mjs';
 import {isNativeModelQuery} from './lib/native-model-queries.mjs';
 import {isNativeParameterQuery} from './lib/native-parameter-queries.mjs';
+import {SNAPSHOT_DELTA_NAME} from './lib/native-snapshot-delta.mjs';
+
+// Keep the producing receipt owner for every named native read that the chat
+// inbox accepts, including the explicitly started snapshot baseline.
+const recoverableNativeRead=name=>name===SNAPSHOT_DELTA_NAME||isNativeModelQuery(name)||isNativeParameterQuery(name);
 
 const flags=process.argv.slice(2);
 if(flags.length!==0&&(flags.length!==1||!['--read-only','--workspace'].includes(flags[0]))){
@@ -42,10 +47,10 @@ input.on('line',async line=>{
         const name=request.params.name,args=request.params.arguments||{};
         if(!exposedNames.has(name)||readOnly&&!readOnlyNames.has(name))throw new Error('此会话不提供该工具。');
         const onTiming=value=>{const data=sanitizePanelAudit('phase-timing.jsonl',value);if(data&&events.length<8)events.push(data);};
-        retainReceiptOwner=Boolean(receiptProducer&&(isNativeModelQuery(name)||isNativeParameterQuery(name)));
+        retainReceiptOwner=Boolean(receiptProducer&&recoverableNativeRead(name));
         const value=workspace?await workspaceDispatch(name,args,{onTiming,...retainReceiptOwner?{retainReceiptOwner:true}:{}}):isCommandTool(name)?await invokeCommand(name,args,{execute:invokeWorkbench}):await invokeWorkbench(name,args,readOnly?{onTiming}:{});
         if(retainReceiptOwner)await value?.receiptOwner?.close();
-        result={content:[{type:'text',text:JSON.stringify(value)}],...(isNativeModelQuery(name)||isNativeParameterQuery(name)?{structuredContent:value}:{}),isError:false};
+        result={content:[{type:'text',text:JSON.stringify(value)}],...(recoverableNativeRead(name)?{structuredContent:value}:{}),isError:false};
       }
       catch(error){
         // MCP's isError describes a failed tool call, not necessarily a failed

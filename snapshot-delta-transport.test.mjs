@@ -10,6 +10,13 @@ test('atomic snapshot candidate binds capability and explicit status/start/page 
  for(const input of [{action:'status'},{action:'start'},{action:'page',baseline_token:token,expected_version:1,offset:0,limit:1}]){const result=await invokeWorkbench(name,args(input),f.options());f.remember(result.receiptOwner);assert.equal(result.value.state,input.action==='status'?'none':'active');assert.equal(result.receiptOwner.inspect().value.status,'received');}
  assert.equal(f.requests.length,3);assert.ok(f.requests.every(x=>x.atomicRead===true&&x.operation===operation));
 });
+test('the production workspace MCP returns structured snapshot status from one atomic request',async t=>{
+ const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:[operation],respondEnvelope:envelope});
+ const {client}=await f.connect(['--workspace']);
+ const result=await client.callTool({name,arguments:args({action:'status'})},{timeout:5000});
+ assert.equal(result.isError,false);assert.equal(result.structuredContent.value.state,'none');
+ assert.equal(result.structuredContent.operation,operation);assert.equal(f.requests.length,1);assert.equal(f.requests[0].atomicRead,true);
+});
 test('snapshot query fails closed before publication for absent capability and invalid pages',async t=>{
  const absent=await singleParameterWriteFixture(t,{hostPatch:{version:'0.8.9',atomicReadSnapshot:true},operations:[operation]});await assert.rejects(invokeWorkbench(name,args({action:'status'}),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
  const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:[operation],respondEnvelope:envelope});for(const bad of [{action:'page'},{action:'start',offset:0},{action:'page',baseline_token:token,expected_version:1,offset:0,limit:101}])await assert.rejects(invokeWorkbench(name,args(bad),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(f.requests.length,0);
