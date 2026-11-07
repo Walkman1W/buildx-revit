@@ -10,7 +10,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   diameter_mm:'管径（mm）',start_mm:'起点（mm）',end_mm:'终点（mm）',delta_mm:'位移（mm）',
   wall_id:'墙 ID',facing_direction:'朝向（水平单位向量）',point_mm:'位置（mm）',point_xy_mm:'位置 XY（mm）',origin_mm:'起点（mm）',axis_origin_mm:'旋转中心（mm）',
   angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',elevation_mm:'高程（mm）',tolerance_feet:'包围盒容差（英尺）',fields:'返回字段',template_id:'族模板',changes:'参数修改',
-  view_id:'视图 ID',view_family_type_id:'视图类型 ID',sheet_id:'图纸 ID',number:'图纸编号',titleblock_id:'图框类型 ID',group_id:'模型组 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
+  source_sheet_id:'源图纸 ID',copy_option:'复制选项',view_id:'视图 ID',view_family_type_id:'视图类型 ID',sheet_id:'图纸 ID',number:'图纸编号',titleblock_id:'图框类型 ID',group_id:'模型组 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
   x_mm:'图纸 X（mm）',y_mm:'图纸 Y（mm）',
   material_id:'目标材质 ID',expected_has_value:'原参数有值',expected_value_internal:'原材质参数值（ElementId）',
   red:'图形颜色红（0–255）',green:'图形颜色绿（0–255）',blue:'图形颜色蓝（0–255）',transparency:'图形透明度（0–100）',shininess:'光泽度（0–128）',smoothness:'光滑度（0–100）',
@@ -21,6 +21,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
 export function commandChoiceLabel(value, key) {
   if (value === false) return '否';
   if (value === true) return '是';
+  if (key === 'copy_option' && value === 'empty') return '空白图纸（仅图框）';
   if (key === 'mode' && value === 'rollback') return '预览（不保留修改）';
   if (key === 'mode' && value === 'commit') return '应用修改（不保存模型）';
   if (key === 'category') return ({all:'全部类别',walls:'墙',pipes:'管道',equipment:'机械设备'})[value] ?? String(value);

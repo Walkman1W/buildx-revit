@@ -16,7 +16,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_element_material", "create_material", "create_roof", "create_group", "ungroup", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_foundation", "create_beam", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "set_element_material", "create_material", "create_roof", "create_group", "ungroup", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_foundation", "create_beam", "create_schedule", "change_element_type", "create_sheet", "duplicate_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -100,9 +100,11 @@ namespace RevitLocalCodex
                     RoofCreationExpectation roofCreation = null;
                     MaterialAssignmentExpectation materialAssignment = null;
                     UngroupExpectation ungroup = null;
+                    SheetDuplicationExpectation sheetDuplication = null;
                     bool guardedParameter = operation == "set_parameter_value";
                     var parameterWrites = operation == "set_parameters" || guardedParameter ? new List<ParameterWriteExpectation>() : null;
-                    if (operation == "ungroup") { ungroup = UngroupOne(doc, args); result = null; }
+                    if (operation == "duplicate_sheet") { sheetDuplication = DuplicateEmptySheet(doc, args); result = null; }
+                    else if (operation == "ungroup") { ungroup = UngroupOne(doc, args); result = null; }
                     else if (operation == "set_element_material") result = SetElementMaterial(doc, args, out materialAssignment);
                     else if (operation == "create_beam") { beamCreation = CreateBeam(uiapp, args); result = null; }
                     else if (operation == "create_roof") { roofCreation = CreateFlatRoof(uiapp, args); result = null; }
@@ -132,6 +134,7 @@ namespace RevitLocalCodex
                     if (roofCreation != null) { doc.Regenerate(); VerifyFlatRoof(doc, args, roofCreation); }
                     if (materialAssignment != null) { doc.Regenerate(); VerifyElementMaterial(doc, materialAssignment); }
                     if (ungroup != null) { doc.Regenerate(); VerifyUngroup(doc, ungroup); }
+                    if (sheetDuplication != null) { doc.Regenerate(); VerifyDuplicatedSheet(doc, args, sheetDuplication); }
                     TransactionStatus completion = transaction.Commit();
                     if (completion != TransactionStatus.Committed) throw new InvalidOperationException("Revit did not commit the operation; transaction status: " + completion + ".");
                     // Commit regenerates again and can run updaters. The host's
@@ -145,6 +148,7 @@ namespace RevitLocalCodex
                     if (roofCreation != null) result = VerifyFlatRoof(doc, args, roofCreation);
                     if (materialAssignment != null) VerifyElementMaterial(doc, materialAssignment);
                     if (ungroup != null) result = VerifyUngroup(doc, ungroup);
+                    if (sheetDuplication != null) result = VerifyDuplicatedSheet(doc, args, sheetDuplication);
                     if (operation == "pin_element" || operation == "unpin_element") VerifyPinned(doc, args, operation == "pin_element");
                     if (basicCreated.Id != null) result = operation == "place_window" ? ReadWindow(doc, args, basicCreated.Id) : operation == "create_column" ? ReadColumn(doc, args, basicCreated.Id) : operation == "create_foundation" ? ReadFoundation(doc, args, basicCreated.Id) : ReadBasicCreated(doc, operation, args, basicCreated.Id);
                     return result;

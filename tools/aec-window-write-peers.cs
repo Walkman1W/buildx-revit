@@ -61,7 +61,10 @@ namespace RevitLocalCodex {
   // Only window and the shared transaction dispatcher are under test here.
   // Other operations are deliberately fail-closed, and have dedicated peers.
   private sealed class BasicCreatedExpectation { internal ElementId Id; }
-  private sealed class UngroupExpectation {}
+  private sealed class SheetDuplicationExpectation {}
+        private static SheetDuplicationExpectation DuplicateEmptySheet(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope sheet duplicate peer.");}
+        private static object VerifyDuplicatedSheet(Document d, Dictionary<string,object> a, SheetDuplicationExpectation e){throw new InvalidOperationException("Out of scope sheet duplicate peer.");}
+        private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {} private sealed class RoofCreationExpectation {}
