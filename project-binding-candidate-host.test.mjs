@@ -15,3 +15,7 @@ test('atomic result binds host-generated token to original request and full snap
  assert.match(host,/ProjectBindingApprovals\(\)\.Issue\(doc, projectSnapshot, projectPlan\.Scope, id\)/);
  assert.match(host,/ProjectBindingApprovals\(\)\.Consume\(doc, projectWritePlan\.Scope, projectOriginalRequest/);
 });
+
+test('project binding success result carries the executing host session',()=>{
+ assert.match(host,/if \(operation == "bind_existing_project_parameter"\)\s*return new \{ operation, hostSession = session, mode, committed/);
+});

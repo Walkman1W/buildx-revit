@@ -1017,6 +1017,8 @@ namespace RevitLocalCodex
                     throw new ScriptExecutionFailure(error, mode, sourcePath, sourceTitle, rolledBack);
                 }
             }
+            if (operation == "bind_existing_project_parameter")
+                return new { operation, hostSession = session, mode, committed = mode == "commit", document = doc.Title, value, note = mode == "rollback" ? "Model changes rolled back; returned temporary ids may no longer exist." : "Changes are in memory; model has not been saved." };
             return new { operation, mode, committed = mode == "commit", document = doc.Title, value, note = mode == "rollback" ? "Model changes rolled back; returned temporary ids may no longer exist." : "Changes are in memory; model has not been saved." };
         }
 
