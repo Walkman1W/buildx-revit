@@ -488,4 +488,13 @@ test('batch sheet creation requires capability, exact row receipts and no replay
  const result=await invokeWorkbench('revit_batch_create_sheets_from_csv',args({sheets}),good.options());good.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(good.requests[0].args.mode,'rollback');assert.equal(good.requests.length,1);
  const bad=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,sheets:[{...value.sheets[0],titleblock_id:'8'},value.sheets[1]]})});let owner;
  await assert.rejects(invokeWorkbench('revit_batch_create_sheets_from_csv',args({sheets}),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
+
+test('convert group alias uses the existing guarded create_group transport and original receipt',async t=>{
+ const tool='revit_convert_to_group',op='create_group',all=[...operations,op],parameters={name:'Group A',element_ids:['9007199254740993','9007199254740994']};
+ const value={element_id:'3',name:'Group A',element_ids:parameters.element_ids};
+ const missing=await singleParameterWriteFixture(t,{hostPatch,operations:all});await assert.rejects(invokeWorkbench(tool,args(parameters),missing.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(missing.requests.length,0);
+ const good=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+ const result=await invokeWorkbench(tool,args(parameters),good.options());good.remember(result.receiptOwner);assert.equal(good.requests.length,1);assert.equal(good.requests[0].operation,'create_group');assert.equal(good.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
+ const bad=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,element_ids:['4','5']})});let owner;
+ await assert.rejects(invokeWorkbench(tool,args(parameters),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
 });
