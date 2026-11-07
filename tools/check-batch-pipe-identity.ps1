@@ -35,3 +35,10 @@ $nodeOut=Join-Path $out 'node-peer'; [IO.Directory]::CreateDirectory($nodeOut) |
 if ($LASTEXITCODE -ne 0) { throw 'Node file experiment failed.' }
 & $node (Join-Path $PSScriptRoot 'batch-file-napi-partial-test.mjs') $addon (Join-Path $out 'controlled-partial.bin') | Tee-Object -FilePath (Join-Path $out 'partial-result.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Node partial file experiment failed.' }
+
+$secureExe=Join-Path $out 'pipe-secure-node-experiment.exe'
+& $compiler /nologo /target:exe /langversion:5 /codepage:65001 ('/out:'+$secureExe) (Join-Path $PSScriptRoot 'batch-pipe-secure-node-experiment.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Secure pipe experiment compilation failed.' }
+$secureOut=Join-Path $out 'secure-node-peer'; [IO.Directory]::CreateDirectory($secureOut) | Out-Null
+& $secureExe $secureOut $node (Join-Path $PSScriptRoot 'batch-file-napi-peer.mjs') $addon | Tee-Object -FilePath (Join-Path $out 'secure-node-result.txt')
+if ($LASTEXITCODE -ne 0) { throw 'Secure pipe experiment failed.' }
