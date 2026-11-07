@@ -101,6 +101,30 @@ namespace RevitLocalCodex
             return new { selected_ids = actual.Select(x => x.Value).ToArray(), count = actual.Length };
         }
 
+        internal static object SelectByUniqueIds(UIApplication uiapp, Dictionary<string, object> args)
+        {
+            Fields(args, "expected_document", "element_uids");
+            Document doc = uiapp.ActiveUIDocument.Document;
+            IList input = RequiredList(args, "element_uids", 1, 200);
+            var ids = new List<ElementId>(); var uids = new HashSet<string>(StringComparer.Ordinal); var idSet = new HashSet<long>();
+            foreach (object value in input)
+            {
+                string uid = value as string;
+                if (String.IsNullOrWhiteSpace(uid) || uid.Length > 256 || !String.Equals(uid, uid.Trim(), StringComparison.Ordinal) || uid.Any(Char.IsControl) || !uids.Add(uid)) throw new InvalidOperationException("Each UniqueId must be unique, exact and nonblank.");
+                Element element = doc.GetElement(uid);
+                if (element == null || !element.IsValidObject || element is ElementType || element.Document == null || !element.Document.Equals(doc) || !String.Equals(element.UniqueId, uid, StringComparison.Ordinal) || element.Id == null || element.Id.Value <= 0 || !idSet.Add(element.Id.Value))
+                    throw new InvalidOperationException("Every UniqueId must identify one distinct valid instance in the active document.");
+                ids.Add(element.Id);
+            }
+            uiapp.ActiveUIDocument.Selection.SetElementIds(ids);
+            var actual = uiapp.ActiveUIDocument.Selection.GetElementIds().ToArray();
+            if (actual.Length != ids.Count || !actual.Select(x => x.Value).OrderBy(x => x).SequenceEqual(ids.Select(x => x.Value).OrderBy(x => x))) throw new InvalidOperationException("The actual selection differs from the requested elements.");
+            var selected = actual.Select(x => RequiredElement(doc, x.Value)).OrderBy(x => x.UniqueId, StringComparer.Ordinal).ToArray();
+            if (selected.Any(x => !x.IsValidObject || x is ElementType || x.Document == null || !x.Document.Equals(doc) || !uids.Contains(x.UniqueId)) || selected.Select(x => x.UniqueId).Distinct(StringComparer.Ordinal).Count() != uids.Count)
+                throw new InvalidOperationException("The actual selection UniqueIds changed after selection.");
+            return new { selected = selected.Select(x => new { unique_id = x.UniqueId, element_id = NativeModelQueries.SignedId(x.Id) }).ToArray(), count = selected.Length };
+        }
+
         internal static object Write(UIApplication uiapp, string operation, Dictionary<string, object> args)
         {
             if (operation == "set_type_parameter") return WriteTypeParameter(uiapp, args);

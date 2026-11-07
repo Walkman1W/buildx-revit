@@ -413,3 +413,9 @@ test('selection is a discoverable guarded UI effect without rollback mode',async
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{element_ids:[1]},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
 test('titleblock write contract is discoverable and guarded',async()=>{const name='revit_populate_titleblock',schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(schema.value.inputSchema.properties.mode.default,'rollback');assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{sheet_id:'1',titleblock_id:'2',changes:[]},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);});
+
+
+test('UniqueId selection exposes a guarded UI contract without zoom or rollback',async()=>{
+ const name='revit_select_by_unique_ids',schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(Object.hasOwn(schema.value.inputSchema.properties,'mode'),false);assert.equal(Object.hasOwn(schema.value.inputSchema.properties,'zoom'),false);assert.equal(modelOperationEffect(name).kind,'ui_selection');assert.equal(supportsModelPermissionTool(name),true);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{element_uids:['uid-a']},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
+});

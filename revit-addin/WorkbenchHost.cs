@@ -319,7 +319,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
-                    nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection" },
+                    nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
@@ -755,7 +755,7 @@ namespace RevitLocalCodex
 
         private static bool RequiresProjectEdit(string operation)
         {
-            return WorkbenchActions.IsWrite(operation) || new[] { "set_selection", "execute_csharp", "smart_annotate", "build_schematic", "export_schematic", "inspect_elements", "family_create_valve", "family_save_job", "family_load_job" }.Contains(operation);
+            return WorkbenchActions.IsWrite(operation) || new[] { "set_selection", "select_by_unique_ids", "execute_csharp", "smart_annotate", "build_schematic", "export_schematic", "inspect_elements", "family_create_valve", "family_save_job", "family_load_job" }.Contains(operation);
         }
 
         private object DispatchAtomicRead(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access)
@@ -888,10 +888,10 @@ namespace RevitLocalCodex
                 object readResult = FreezeResult(WorkbenchActions.Read(uiapp, operation, args));
                 return new { operation, hostSession = session, document = doc == null ? null : new { title = doc.Title, path = doc.PathName }, value = readResult, modifiedByOperation = false };
             }
-            if (operation == "set_selection")
+            if (operation == "set_selection" || operation == "select_by_unique_ids")
             {
                 RequireProjectEdit(doc, ExpectedDocument(args), access);
-                object selected = FreezeResult(WorkbenchActions.SetSelection(uiapp, args));
+                object selected = FreezeResult(operation == "set_selection" ? WorkbenchActions.SetSelection(uiapp, args) : WorkbenchActions.SelectByUniqueIds(uiapp, args));
                 return new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = selected, effect = "ui_selection" };
             }
             if (operation == "set_type_parameter")
@@ -959,7 +959,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
-                    nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection" },
+                    nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
