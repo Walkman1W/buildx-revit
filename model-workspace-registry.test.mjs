@@ -368,3 +368,11 @@ test('change type contract is discoverable and requires guarded model permission
  const name='revit_change_element_type',schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(schema.value.inputSchema.properties.mode.default,'rollback');assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{element_id:'1',target_type_id:'2'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+test('room appears in elements discovery with a guarded exact schema',()=>{
+ const exact=describeModelOperationSchema({tool:'revit_create_room'});assert.equal(exact.ok,true);
+ assert.deepEqual(exact.value.inputSchema.required,['expected_document','level_id','point_xy_mm']);
+ assert.equal(exact.value.inputSchema.properties.phase_id,undefined);
+ let offset=0,found=[];for(;;){const page=describeModelOperationSchema({domain:'elements',offset,limit:20});found.push(...page.value.tools.map(x=>x.name));if(!page.value.hasMore)break;offset+=20;}
+ assert.equal(found.filter(x=>x==='revit_create_room').length,1);
+});

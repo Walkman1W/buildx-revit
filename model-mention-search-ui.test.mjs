@@ -281,3 +281,18 @@ test('change type is searchable and manual form requires confirmation',async t=>
  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();ui.get('model-command-'+name+'-element_id').value='9007199254740993';ui.get('model-command-'+name+'-target_type_id').value='9007199254740994';
  const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',element_id:'9007199254740993',target_type_id:'9007199254740994'});await ui.respond(ui.requests[0],{ok:true,executionId:'change-type-write'});
 });
+
+test('room mention and manual XY controls require confirmation and preserve parameters',async t=>{
+ const name='revit_create_room';
+ for(const q of [name,'创建房间'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,q).some(tool=>tool.name===name&&tool.readOnly===false));
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@create_room');
+ const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ const field=key=>ui.get('model-command-'+name+'-'+key);
+ for(const [key,value] of Object.entries({level_id:'3',name:'Office',number:'101','point_xy_mm-x':'100','point_xy_mm-y':'-200'}))field(key).value=value;
+ const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];
+ run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();
+ assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',level_id:3,point_xy_mm:{x:100,y:-200},name:'Office',number:'101'});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'room-write'});
+});

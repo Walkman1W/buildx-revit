@@ -79,3 +79,10 @@ test('unmodeled structured content retains its exact advanced input rather than 
   assert.equal(item.element.children[1].textContent,'高级输入（JSON）');
   assert.equal(COMMAND_PARAMETER_LABELS.axis_origin_mm,'旋转中心（mm）');
 });
+
+test('XY coordinates use native numeric controls while preserving exact object values',()=>{
+ const item=field({key:'point_xy_mm',rule:{type:'object',properties:{x:{type:'number'},y:{type:'number'}},required:['x','y'],additionalProperties:false}});
+ const axes=item.controls.slice(1);assert.equal(axes.length,2);assert.ok(axes.every(a=>a.type==='number'&&a.step==='any'));
+ axes[0].value='-1.5';axes[1].value='200';assert.deepEqual(JSON.parse(item.input.value),{x:-1.5,y:200});
+ item.input.value='{"x":4,"y":5}';assert.deepEqual(axes.map(a=>a.value),['4','5']);
+});

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Plumbing;
+using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 using Autodesk.Revit.UI;
@@ -15,7 +16,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "create_material", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "create_material", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -103,7 +104,7 @@ namespace RevitLocalCodex
                     else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_material" || operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_material" || operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_room" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -539,6 +540,28 @@ namespace RevitLocalCodex
                 created.Id = id; doc.Regenerate();
                 return ReadBasicCreated(doc, operation, args, id);
             }
+            if (operation == "create_room")
+            {
+                Fields(args, "expected_document", "mode", "level_id", "point_xy_mm", "name", "number");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Rooms require a project document.");
+                Level level = RequiredElement(doc, NativeModelQueries.ExactId(args, "level_id")) as Level;
+                if (level == null || !level.IsValidObject) throw new InvalidOperationException("level_id must identify a valid level.");
+                XYZ point = RoomPoint(args, level);
+                foreach (string field in new[] { "name", "number" }) if (args.ContainsKey(field)) RoomText(args, field);
+                if (args.ContainsKey("number")) using (var collector = new FilteredElementCollector(doc))
+                    if (collector.OfCategory(BuiltInCategory.OST_Rooms).WhereElementIsNotElementType().Cast<Room>().Any(r => String.Equals(r.Number, RoomText(args, "number"), StringComparison.OrdinalIgnoreCase)))
+                        throw new InvalidOperationException("Room number is already in use.");
+                // Positive detection is useful but null does not establish absence of overlap.
+                if (doc.GetRoomAtPoint(new XYZ(point.X, point.Y, point.Z + Feet(1))) != null)
+                    throw new InvalidOperationException("A room was found at the requested point.");
+                Room room = doc.Create.NewRoom(level, new UV(point.X, point.Y));
+                if (room == null || !room.IsValidObject) throw new InvalidOperationException("Revit did not create a valid room.");
+                created.Id = room.Id;
+                if (args.ContainsKey("name")) room.Name = RoomText(args, "name");
+                if (args.ContainsKey("number")) room.Number = RoomText(args, "number");
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_section_view")
             {
                 Fields(args, "expected_document", "mode", "view_family_type_id", "name", "origin_mm", "angle_degrees", "width_mm", "height_mm", "depth_mm");
@@ -745,6 +768,26 @@ namespace RevitLocalCodex
                 if (color == null || color.Red != red || color.Green != green || color.Blue != blue || material.Transparency != transparency || material.Shininess != shininess || material.Smoothness != smoothness)
                     throw new InvalidOperationException("Created material graphics properties changed.");
                 return new { element_id = DescribedId(material.Id), name = material.Name, red = (int)color.Red, green = (int)color.Green, blue = (int)color.Blue, transparency = material.Transparency, shininess = material.Shininess, smoothness = material.Smoothness };
+            }
+            if (operation == "create_room")
+            {
+                Room room = element as Room;
+                Level level = doc.GetElement(new ElementId(NativeModelQueries.ExactId(args, "level_id"))) as Level;
+                LocationPoint location = room == null ? null : room.Location as LocationPoint;
+                if (room == null || !room.IsValidObject || level == null || !level.IsValidObject || room.LevelId.Value != level.Id.Value || location == null)
+                    throw new InvalidOperationException("Created room identity, level or location is invalid.");
+                XYZ requested = RoomPoint(args, level), actual = location.Point;
+                if (actual == null || Math.Abs(actual.X-requested.X) > Feet(0.001) || Math.Abs(actual.Y-requested.Y) > Feet(0.001))
+                    throw new InvalidOperationException("Created room location differs from requested point.");
+                if ((args.ContainsKey("name") && room.Name != RoomText(args, "name")) || (args.ContainsKey("number") && room.Number != RoomText(args, "number")))
+                    throw new InvalidOperationException("Created room name or number differs from requested value.");
+                double area = room.Area, volume = room.Volume;
+                if (Double.IsNaN(area) || Double.IsInfinity(area) || area <= 0) throw new InvalidOperationException("Created room is unbounded or its area is not calculated.");
+                Parameter phase = room.get_Parameter(BuiltInParameter.ROOM_PHASE_ID);
+                ElementId phaseId = phase != null && phase.HasValue && phase.StorageType == StorageType.ElementId ? phase.AsElementId() : null;
+                if (phaseId != null && (phaseId.Value <= 0 || !(doc.GetElement(phaseId) is Phase))) phaseId = null;
+                double? computedVolume = Double.IsNaN(volume) || Double.IsInfinity(volume) || volume <= 0 ? (double?)null : volume;
+                return new { element_id = DescribedId(room.Id), level_id = DescribedId(level.Id), phase_id = DescribedId(phaseId), point_xy_mm = new { x = Millimeters(actual.X), y = Millimeters(actual.Y) }, name = room.Name, number = room.Number, area_internal = area, volume_internal = computedVolume };
             }
             if (operation == "create_section_view")
             {
@@ -1039,6 +1082,22 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("text contains a disallowed control character.");
             return NormalizeTextNote(text);
         }
+        private static string RoomText(Dictionary<string, object> args, string key)
+        {
+            string value = Required(args, key) as string;
+            if (String.IsNullOrWhiteSpace(value) || value.Length > 255 || value != value.Trim() || value.Any(Char.IsControl)) throw new InvalidOperationException(key + " must be nonblank without surrounding whitespace or controls.");
+            return value;
+        }
+        private static XYZ RoomPoint(Dictionary<string, object> args, Level level)
+        {
+            var point = Required(args, "point_xy_mm") as Dictionary<string, object>;
+            if (point == null) throw new InvalidOperationException("point_xy_mm must be an object.");
+            Fields(point, "x", "y");
+            var result = new XYZ(Feet(FiniteNumber(Required(point, "x"), "point_xy_mm.x")), Feet(FiniteNumber(Required(point, "y"), "point_xy_mm.y")), level.ProjectElevation);
+            if (!XYZ.IsWithinLengthLimits(result)) throw new InvalidOperationException("Room point exceeds Revit coordinate limits.");
+            return result;
+        }
+
         private static XYZ MillimeterPoint(object raw, string label)
         {
             var point = raw as Dictionary<string, object>;

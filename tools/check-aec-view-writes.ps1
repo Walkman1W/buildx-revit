@@ -11,7 +11,7 @@ $c=$s.IndexOf('        private sealed class BasicCreatedExpectation'); $d=$s.Ind
 if ($a -lt 0 -or $b -le $a -or $c -lt 0 -or $d -le $c) { throw 'Source extraction markers missing.' }
 $e=$s.IndexOf('        private static string NormalizeTextNote('); $f=$s.IndexOf('        private static double Feet(', $e)
 if ($e -lt 0 -or $f -le $e) { throw 'Text note and coordinate extraction markers missing.' }
-$extracted='using System; using System.Linq; using System.Collections.Generic; using Autodesk.Revit.DB; using Autodesk.Revit.DB.Electrical; using Autodesk.Revit.DB.Mechanical; using Autodesk.Revit.UI; namespace RevitLocalCodex { internal static partial class WorkbenchActions {' + "`n" + $s.Substring($a,$b-$a) + $s.Substring($c,$d-$c) + $s.Substring($e,$f-$e) + "`n}}"
+$extracted='using System; using System.Linq; using System.Collections.Generic; using Autodesk.Revit.DB; using Autodesk.Revit.DB.Architecture; using Autodesk.Revit.DB.Electrical; using Autodesk.Revit.DB.Mechanical; using Autodesk.Revit.UI; namespace RevitLocalCodex { internal static partial class WorkbenchActions {' + "`n" + $s.Substring($a,$b-$a) + $s.Substring($c,$d-$c) + $s.Substring($e,$f-$e) + "`n}}"
 $source=Join-Path $out 'extracted.cs'; [IO.File]::WriteAllText($source,$extracted,[Text.UTF8Encoding]::new($false))
 $exe=Join-Path $out 'view-peers.exe'; $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 & $csc /nologo /target:exe /langversion:5 /codepage:65001 ('/out:'+$exe) $source (Join-Path $root 'revit-addin/WorkbenchTypeChange.cs') (Join-Path $PSScriptRoot 'aec-view-write-peers.cs')
