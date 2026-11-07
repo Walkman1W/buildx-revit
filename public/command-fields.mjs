@@ -1,6 +1,7 @@
 // Native, reusable field presentation. Tool schemas and the server continue to
 // own validation and execution; controls only collect explicit user choices.
 export const COMMAND_PARAMETER_LABELS = Object.freeze({
+  action:'操作',baseline_token:'基线 token',expected_version:'固定事件版本',
   keyword:'关键词',category:'类别',category1:'第一类别',category2:'第二类别',name_contains:'名称包含',limit:'每页数量',offset:'起始位置',
   element_uids:'构件 UniqueId（每行一个）',element_id:'构件',element_ids:'构件',type_id:'类型 ID',target_type_id:'目标类型 ID',old_type_id:'原族类型 ID',new_type_id:'新族类型 ID',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
   name:'名称',description:'说明',parameters:'参数定义',parameter_labels:'输入项名称',parameter_options:'下拉选项与模型来源',steps:'只读步骤',source_request_id:'关联执行请求 ID',
@@ -22,6 +23,7 @@ export function commandChoiceLabel(value, key) {
   if (value === false) return '否';
   if (value === true) return '是';
   if (key === 'copy_option' && value === 'empty') return '空白图纸（仅图框）';
+  if (key === 'action') return ({status:'查询基线状态',start:'显式建立或沿用基线',page:'读取事件页'})[value] ?? String(value);
   if (key === 'mode' && value === 'rollback') return '预览（不保留修改）';
   if (key === 'mode' && value === 'commit') return '应用修改（不保存模型）';
   if (key === 'category') return ({all:'全部类别',walls:'墙',pipes:'管道',equipment:'机械设备'})[value] ?? String(value);

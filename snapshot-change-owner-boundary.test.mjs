@@ -5,11 +5,12 @@ import {MODEL_AI_EFFECT_TOOLS,MODEL_AI_READ_TOOLS} from './lib/panel-tools.mjs';
 import {modelOperationEffect,supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
 import {describeModelOperationSchema} from './lib/model-operation-contracts.mjs';
 
-test('unwired snapshot owner cannot advertise or execute an incomplete delta capability',()=>{
+test('snapshot delta is classified only as a named read and never as write authority',()=>{
  const name='revit_get_snapshot_delta';
- assert.equal(WORKBENCH_TOOLS.some(item=>item.name===name),false);
- assert.equal([...MODEL_AI_READ_TOOLS,...MODEL_AI_EFFECT_TOOLS].some(item=>item.name===name),false);
- assert.equal(modelOperationEffect(name).known,false);
+ assert.equal(WORKBENCH_TOOLS.filter(item=>item.name===name).length,1);
+ assert.equal(MODEL_AI_READ_TOOLS.filter(item=>item.name===name).length,1);
+ assert.equal(MODEL_AI_EFFECT_TOOLS.some(item=>item.name===name),false);
+ assert.equal(modelOperationEffect(name).kind,'read');
  assert.equal(supportsModelPermissionTool(name),false);
- assert.equal(describeModelOperationSchema({tool:name}).ok,false);
+ assert.equal(describeModelOperationSchema({tool:name}).ok,true);
 });

@@ -53,7 +53,7 @@ namespace RevitLocalCodex
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
-        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
+        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "get_snapshot_delta", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
 
         internal string SessionId { get { return session; } }
 
@@ -302,7 +302,10 @@ namespace RevitLocalCodex
                 queueTimer = new Timer(PollQueue, null, Timeout.Infinite, Timeout.Infinite);
                 AppDomain.CurrentDomain.AssemblyResolve += ResolvePrivateDependency;
                 controlledApplication = application;
-                snapshotBridge = new SnapshotRevitBridge(application.ControlledApplication, session);
+                // Snapshot tracking is optional; an event subscription failure
+                // must not prevent existing workbench operations from starting.
+                try { snapshotBridge = new SnapshotRevitBridge(application.ControlledApplication, session); }
+                catch { snapshotBridge = null; }
                 controlledApplication.Idling += OnQueueIdling;
                 PublishFamilyApprovalCapability(false);
                 queueTimer.Change(250, 500);
@@ -321,6 +324,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
+                    nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
@@ -738,6 +742,8 @@ namespace RevitLocalCodex
             if (present && !(value is bool)) throw new InvalidOperationException("atomicRead must be a boolean.");
             if (!present || !(bool)value)
             {
+                if (operation == "get_snapshot_delta")
+                    throw new InvalidOperationException("Snapshot delta requires an atomic read snapshot.");
                 if (operation == "get_model_preparation")
                     throw new InvalidOperationException("Model preparation requires an atomic read snapshot.");
                 if (operation == "get_pipe_network")
@@ -794,6 +800,12 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("Type-write proposal differs from the reviewed type/parameter.");
                 preparation = WorkbenchActions.PrepareTypeParameterWrite(doc, proposal);
                 value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = FreezeResult(preparation.Impact.Dto()), modifiedByOperation = false };
+            }
+            else if (operation == "get_snapshot_delta")
+            {
+                if (snapshotBridge == null || doc == null) throw new InvalidOperationException("Snapshot tracking is unavailable.");
+                object result = FreezeResult(snapshotBridge.Query(doc, boundArgs));
+                value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = result, modifiedByOperation = false };
             }
             else value = Dispatch(uiapp, operation, boundArgs, id, access);
             Document after = uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
@@ -961,6 +973,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
+                    nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",

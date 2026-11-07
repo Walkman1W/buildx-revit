@@ -118,6 +118,10 @@ namespace RevitLocalCodex {
         public static void Move(string source,string target) { if(Path.GetFileName(Path.GetDirectoryName(target))=="outbox"){PublicationRenames++;if(FailRename)throw new IOException("Controlled publication rename failure");}System.IO.File.Move(source,target); }
         public static void Replace(string source,string target,string backup) { PublicationRenames++;if(FailRename)throw new IOException("Controlled publication replace failure");System.IO.File.Replace(source,target,backup); }
     }
+    internal sealed class SnapshotRevitBridge {
+        public int Calls; public object Query(Document doc,Dictionary<string,object> args) { Calls++;if(doc==null||!args.ContainsKey("expected_document"))throw new InvalidOperationException("Missing identity");return new { schema_version=1,state="none",baseline_token=(string)null,version=(long?)null,baseline_count=(int?)null,reason=(string)null }; }
+        public void Dispose() { }
+    }
     internal sealed class WorkbenchHost {
         private sealed class UiPeer {
             public Thread Managed=Thread.CurrentThread;
@@ -150,6 +154,7 @@ namespace RevitLocalCodex {
         private FileStream ownerLock;
         private Timer queueTimer;
         private UIControlledApplication controlledApplication;
+        private SnapshotRevitBridge snapshotBridge;
         private FamilyApprovalPeer familyWorkflow;
         private TypeParameterWriteApproval typeParameterApprovals;
         private ExternalEvent externalEvent = new ExternalEvent();
@@ -376,6 +381,17 @@ namespace RevitLocalCodex {
                 if(!rejected) { var data=(Dictionary<string,object>)result;if(!(bool)data["atomicReadSnapshot"]||Convert.ToString(data["hostSession"])!=session)throw new Exception("Invalid atomic result identity"); }
             }
             return new {name,passed=true,dispatchCalls=DispatchCalls};
+        }
+        public object CheckSnapshotAtomic() {
+            snapshotBridge=new SnapshotRevitBridge();var uiapp=new UIApplication();var args=new Dictionary<string,object>{{"action","status"}};
+            bool rejected=false;try{AtomicReadRequested(new Dictionary<string,object>(),"get_snapshot_delta");}catch(InvalidOperationException){rejected=true;}
+            if(!rejected||!AtomicReadRequested(new Dictionary<string,object>{{"atomicRead",true}},"get_snapshot_delta"))throw new Exception("Snapshot delta must require atomic read");
+            var result=(Dictionary<string,object>)DispatchAtomicRead(uiapp,"get_snapshot_delta",args,"fixture",null);
+            var value=(Dictionary<string,object>)result["value"];var doc=(Dictionary<string,object>)value["document"];
+            if(snapshotBridge.Calls!=1 || (string)doc["path"]!="D:\\fixture.rvt" || (string)value["operation"]!="get_snapshot_delta" || (bool)value["modifiedByOperation"] || (string)result["hostSession"]!=session)throw new Exception("Snapshot atomic identity mismatch");
+            bool mismatch=false;try{DispatchAtomicRead(uiapp,"get_snapshot_delta",new Dictionary<string,object>{{"action","status"},{"expected_document","D:\\other.rvt"}},"fixture",null);}catch(InvalidOperationException){mismatch=true;}
+            if(!mismatch||snapshotBridge.Calls!=1)throw new Exception("Snapshot mismatched document dispatched");
+            return new {name="snapshot-atomic",passed=true,dispatchCalls=snapshotBridge.Calls};
         }
         public object CheckNamedRead(string operation) {
             var request = new Dictionary<string, object> { { "atomicRead", true } };
@@ -635,6 +651,7 @@ namespace RevitLocalCodex {
                 foreach(string name in new[]{"matched-success","dispatch-failure","expired","invalid-deadline","wrong-session","wrong-id","malformed-json","different-next-request","pending-result","unobserved-execute","optional-timing-budget","publication-write-failure","publication-rename-failure"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).Check(name));}
                 foreach(string name in new[]{"queue-oldest-finalized-file","queue-time-tie","queue-observed-retained","queue-observed-missing","queue-observed-claimed","queue-observed-receipt","queue-observed-expired","queue-invalid-and-claimed-excluded"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckQueueOrder(name));}
                 foreach(string name in new[]{"atomic-auto-bind","atomic-explicit-mismatch","atomic-document-changed","atomic-null-status","atomic-null-health","atomic-native-document","atomic-invalid-flag","atomic-write-refused","idle-empty","idle-pending","idle-bounded","atomic-equivalent-wrapper","atomic-same-path-new-document","atomic-invalid-before","atomic-invalid-after","atomic-view-changed","atomic-null-to-document"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
+                current="snapshot-atomic";results.Add(new WorkbenchHost(Path.Combine(root,current)).CheckSnapshotAtomic());
                 foreach(string name in new[]{"atomic-preparation-success","atomic-preparation-document-changed","atomic-preparation-view-changed","atomic-preparation-without-snapshot"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
                 foreach(string operation in new[]{"get_warnings","get_rvt_links","get_link_instances","get_pipe_network","get_revision_sequences","get_schedule_data","get_group_members","calculate_material_quantities","check_clashes"}){current=operation;results.Add(new WorkbenchHost(Path.Combine(root,operation)).CheckNamedRead(operation));}
                 foreach(string name in new[]{"wake-once-and-timing","wake-stale-after-completion","wake-stale-after-dispose","wake-abort-failure-retry","wake-post-failure-expired","wake-raise-denied","wake-shutdown","wake-cleanup-blocks-next"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckWake(name));}

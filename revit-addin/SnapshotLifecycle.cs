@@ -38,6 +38,7 @@ namespace RevitLocalCodex
             }
             if (threadId != System.Threading.Thread.CurrentThread.ManagedThreadId) throw new InvalidOperationException("Snapshot lifecycle requires the owner UI thread.");
         }
+        internal bool HasTrackedDocuments { get { CheckThread(); return documents.Count != 0; } }
         internal SnapshotChangeOwner Capture(object document, IEnumerable<SnapshotChangeOwner.Identity> completeEnumeration, int maxElements, int maxEvents)
         {
             CheckThread();
@@ -58,6 +59,14 @@ namespace RevitLocalCodex
             }
             catch { if (owner != null) owner.Expire("baseline_capture_untrusted"); documents.Remove(document); throw; }
             finally { slot.Capturing = false; }
+        }
+        internal SnapshotChangeOwner Current(object document)
+        {
+            CheckThread(); Slot slot;
+            if (document == null) throw new InvalidOperationException("Document missing.");
+            if (!documents.TryGetValue(document, out slot)) return null;
+            if (slot.Capturing) throw new InvalidOperationException("Baseline capture is in progress.");
+            return slot.Owner;
         }
         internal SnapshotChangeOwner StartOrCurrent(object document, Func<IEnumerable<SnapshotChangeOwner.Identity>> completeEnumeration, int maxElements, int maxEvents)
         {

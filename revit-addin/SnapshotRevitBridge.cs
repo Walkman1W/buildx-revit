@@ -21,7 +21,15 @@ namespace RevitLocalCodex
             if (app == null) throw new ArgumentNullException("app");
             application = app; lifecycle = new SnapshotLifecycle(hostSession);
             try { application.DocumentChanged += OnChanged; application.DocumentClosing += OnClosing; application.DocumentClosed += OnClosed; }
-            catch { application.DocumentChanged -= OnChanged; application.DocumentClosing -= OnClosing; application.DocumentClosed -= OnClosed; lifecycle.Dispose(); throw; }
+            catch
+            {
+                disposed = true;
+                try { application.DocumentChanged -= OnChanged; } catch { }
+                try { application.DocumentClosing -= OnClosing; } catch { }
+                try { application.DocumentClosed -= OnClosed; } catch { }
+                try { lifecycle.Dispose(); } catch { }
+                throw;
+            }
         }
         private static IEnumerable<SnapshotChangeOwner.Identity> FullEnumeration(Document doc)
         {
@@ -65,10 +73,42 @@ namespace RevitLocalCodex
             if (doc == null || !doc.IsValidObject) throw new InvalidOperationException("An open document is required.");
             return lifecycle.Read(doc, token, version, offset, limit);
         }
+        // Internal candidate only; not dispatched until capability, atomic queue,
+        // receipt and authorization checks are proven together.
+        internal object Query(Document doc, Dictionary<string, object> args)
+        {
+            if (args == null || args.Keys.Any(k => k != "expected_document" && k != "action" && k != "baseline_token" && k != "expected_version" && k != "offset" && k != "limit"))
+                throw new InvalidOperationException("Invalid snapshot query fields.");
+            object raw; if (!args.TryGetValue("action", out raw) || !(raw is string)) throw new InvalidOperationException("Snapshot action required.");
+            string action = (string)raw;
+            if (action == "status" || action == "start")
+            {
+                if (args.Count != 2 || !args.ContainsKey("expected_document")) throw new InvalidOperationException("Status and start do not accept pagination arguments.");
+                SnapshotChangeOwner owner = action == "start" ? StartOrCurrent(doc, 50000, 5000) : lifecycle.Current(doc);
+                return new { schema_version = 1, state = owner == null ? "none" : owner.Expiry == null ? "active" : "expired", baseline_token = owner == null ? null : owner.BaselineToken, version = owner == null ? (long?)null : owner.Version, baseline_count = owner == null ? (int?)null : owner.BaselineCount, reason = owner == null ? null : owner.Expiry };
+            }
+            if (action != "page" || args.Count != 6 || !args.ContainsKey("expected_document")) throw new InvalidOperationException("Snapshot page requires a token, version, offset and limit.");
+            string token = args.ContainsKey("baseline_token") ? args["baseline_token"] as string : null;
+            Guid parsed; if (!Guid.TryParseExact(token, "N", out parsed) || token != token.ToLowerInvariant()) throw new InvalidOperationException("Invalid baseline token.");
+            long version = ExactPageNumber(args, "expected_version", 0, 9007199254740991L);
+            int offset = (int)ExactPageNumber(args, "offset", 0, 5000), limit = (int)ExactPageNumber(args, "limit", 1, 100);
+            SnapshotChangeOwner.Page page = Read(doc, token, version, offset, limit);
+            return new { schema_version = 1, state = "active", baseline_token = page.BaselineToken, version = page.Version, offset = page.Offset, limit = limit, total = page.Total, has_more = page.HasMore,
+                items = page.Items.Select(item => new { version = item.Version, kind = item.Kind, element_id = item.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), unique_id = item.UniqueId }).ToArray() };
+        }
+        private static long ExactPageNumber(Dictionary<string, object> args, string key, long min, long max)
+        {
+            object value; if (!args.TryGetValue(key, out value) || !(value is int || value is long || value is double || value is decimal)) throw new InvalidOperationException("Invalid snapshot page number.");
+            decimal number = Convert.ToDecimal(value, System.Globalization.CultureInfo.InvariantCulture);
+            if (number < min || number > max || Decimal.Truncate(number) != number) throw new InvalidOperationException("Invalid snapshot page bounds.");
+            return (long)number;
+        }
         private void OnChanged(object sender, DocumentChangedEventArgs e)
         {
+            if (disposed) return;
             try
             {
+                if (!lifecycle.HasTrackedDocuments) return;
                 if (e == null || !e.IsValidObject) { lifecycle.Poison(); return; }
                 Document doc = e.GetDocument();
                 if (doc == null || !doc.IsValidObject) { lifecycle.Poison(); return; }
@@ -78,19 +118,25 @@ namespace RevitLocalCodex
         }
         private void OnClosing(object sender, DocumentClosingEventArgs e)
         {
-            try { if (e == null || !e.IsValidObject || e.Document == null || !closing.Add(e.DocumentId)) { lifecycle.Poison(); return; } lifecycle.Close(e.Document); }
+            if (disposed) return;
+            try { if (!lifecycle.HasTrackedDocuments) return; if (e == null || !e.IsValidObject || e.Document == null || !closing.Add(e.DocumentId)) { lifecycle.Poison(); return; } lifecycle.Close(e.Document); }
             catch { lifecycle.Poison(); }
         }
         private void OnClosed(object sender, DocumentClosedEventArgs e)
         {
-            try { if (e == null || !e.IsValidObject || !closing.Remove(e.DocumentId)) lifecycle.Poison(); }
+            if (disposed) return;
+            try { if (closing.Count == 0 && !lifecycle.HasTrackedDocuments) return; if (e == null || !e.IsValidObject || !closing.Remove(e.DocumentId)) lifecycle.Poison(); }
             catch { lifecycle.Poison(); }
         }
         public void Dispose()
         {
             if (disposed) return;
-            application.DocumentChanged -= OnChanged; application.DocumentClosing -= OnClosing; application.DocumentClosed -= OnClosed;
-            lifecycle.Dispose(); closing.Clear(); disposed = true;
+            disposed = true;
+            try { application.DocumentChanged -= OnChanged; } catch { }
+            try { application.DocumentClosing -= OnClosing; } catch { }
+            try { application.DocumentClosed -= OnClosed; } catch { }
+            try { lifecycle.Dispose(); } catch { lifecycle.Poison(); }
+            closing.Clear();
         }
     }
 }
