@@ -96,6 +96,40 @@ export function modelToolCountLabel(catalog) {
 export function messageStatus(value) {
   return ({ streaming: '生成中', completed: '', failed: '回答失败', interrupted: '已停止', unknown: '结果未知' })[value] ?? '';
 }
+// Older servers stored receipt notices as errors. Match exact server templates
+// and distinguish settled operations from scripts with unverified effects.
+export function receiptNoticeState(message) {
+  if (message?.role !== 'error') return null;
+  const {status, text} = message;
+  if (['completed','failed'].includes(status) && text === '已核实临时检查视图恢复，后续操作可以继续。')
+    return {state:'completed', label:'已恢复', dismissible:true};
+  if (status === 'completed' && text === '原模型操作回执已自动核实；后续操作已恢复。')
+    return {state:'completed', label:'已核实', dismissible:true};
+  if (status !== 'failed') return null;
+  switch (text) {
+    case '脚本已报错结束；已由用户核查模型并恢复后续操作。回滚及事务外影响仍未确认。':
+      return {state:'unknown', label:'回滚与影响待核查', dismissible:false};
+    case '脚本执行失败，已核实模型事务回滚；后续操作已恢复，事务外影响仍未核实。':
+      return {state:'unknown', label:'事务外影响待核查', dismissible:false};
+    case '原模型操作回执已核实（failed）；后续操作已恢复。':
+      return {state:'failed', label:'操作失败', dismissible:true};
+    case '原模型操作回执已核实（not_started）；后续操作已恢复。':
+    case '原模型操作回执已核实（expired）；后续操作已恢复。':
+      return {state:'completed', label:'未执行', dismissible:true};
+    default:
+      return null;
+  }
+}
+export function receiptDismissalStore(storage) {
+  const key = 'buildx-dismissed-receipts-v1';
+  let entries = [];
+  try { const parsed = JSON.parse(storage?.getItem(key) || '[]'); if (Array.isArray(parsed)) entries = parsed.filter(item => typeof item === 'string').slice(-500); } catch {}
+  const values = new Set(entries);
+  return {
+    has: id => values.has(id),
+    add(id) { values.add(id); while (values.size > 500) values.delete(values.values().next().value); try { storage?.setItem(key, JSON.stringify([...values])); } catch {} },
+  };
+}
 export function previewText(value) {
   if (value === undefined || value === null || value === '') return '未提供';
   return typeof value === 'string' ? value : JSON.stringify(value, null, 2);

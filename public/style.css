@@ -26,3 +26,6 @@ footer{flex:none;padding:0 14px 10px;background:var(--paper)}.context-panel{marg
 .dynamic-approval dd { min-width: 0; max-height: 14rem; overflow: auto; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .dynamic-approval-actions { display: flex; gap: 8px; margin-top: 12px; }
 .dynamic-approval-feedback { margin: 8px 0 0; }
+.message.receipt-notice .body { padding: 10px 12px; color: var(--ink); background: #f0f1ef; border-radius: 6px; white-space: pre-wrap; }
+.dismiss-receipt-notice { border: 0; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
+.dismiss-receipt-notice[hidden] { display: none; }

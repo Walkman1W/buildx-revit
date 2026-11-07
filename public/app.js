@@ -1,4 +1,4 @@
-import { markdownBlocks, toolStatus, messageStatus, previewText, sessionMessages, legacyDelta, modelToolEntries, modelToolCountLabel } from './chat-view.mjs';
+import { markdownBlocks, toolStatus, messageStatus, previewText, sessionMessages, legacyDelta, modelToolEntries, modelToolCountLabel, receiptNoticeState, receiptDismissalStore } from './chat-view.mjs';
 
 const $ = id => document.getElementById(id);
 let client;
@@ -90,6 +90,8 @@ const conversationDrafts = new Map();
 const sourceWorkspace = () => fixedWorkspace === 'source-development';
 const customerWorkspace = () => fixedWorkspace === 'customer-chat';
 const messageNodes = new Map();
+let dismissedReceiptNotices;
+try { dismissedReceiptNotices = receiptDismissalStore(sessionStorage); } catch { dismissedReceiptNotices = receiptDismissalStore(null); }
 const openedTools = new Set();
 // A transport response may arrive after SSE has advanced the session or the
 // user has begun another action. Only its current owner may change this view.
@@ -892,13 +894,21 @@ function renderConversation() {
     if (!entry) {
       const article = node('article', 'message ' + message.role), head = node('div', 'message-head'), label = node('span', 'label'), state = node('span', 'message-state'), body = node('div', 'body'), tools = node('div', 'tool-calls'), attachments = node('div','model-sent-attachments');
       attachments.hidden=true;
-      head.append(label, state); article.append(head, tools, attachments, body); entry = { article, label, state, body, tools, attachments, signature: null, toolSignature: null }; messageNodes.set(message.id, entry);
+      const dismiss = node('button', 'dismiss-receipt-notice', '关闭'); dismiss.type = 'button'; dismiss.setAttribute('aria-label', '关闭已核实回执提示');
+      head.append(label, state, dismiss); article.append(head, tools, attachments, body); entry = { article, label, state, body, tools, attachments, dismiss, signature: null, toolSignature: null }; messageNodes.set(message.id, entry);
+      dismiss.addEventListener('click', () => { if (entry.dismissKey) { dismissedReceiptNotices.add(entry.dismissKey); entry.article.hidden = true; } });
     }
     const signature = JSON.stringify([message,accountEpoch,contextEpoch,commandIdentityKey(),commandConversationId(),modelUiEnabled,modelContextAllowed]);
     if (entry.signature !== signature) {
-      entry.article.className = 'message ' + message.role;
-      entry.label.textContent = message.role === 'user' ? '你' : message.role === 'error' ? '连接提示' : 'BUILDX · CODEX';
-      entry.state.className = 'message-state ' + (message.status || ''); entry.state.textContent = messageStatus(message.status);
+      const receiptNotice = receiptNoticeState(message);
+      const dismissKey = receiptNotice?.dismissible ? JSON.stringify([commandIdentityFacts.userId, activeConversationId, message.id]) : null;
+      entry.article.className = 'message ' + (receiptNotice ? 'receipt-notice' : message.role);
+      entry.article.hidden = dismissKey !== null && dismissedReceiptNotices.has(dismissKey);
+      entry.dismiss.hidden = dismissKey === null;
+      entry.dismissKey = dismissKey;
+      entry.label.textContent = receiptNotice ? '操作回执' : message.role === 'user' ? '你' : message.role === 'error' ? '连接提示' : 'BUILDX · CODEX';
+      entry.state.className = 'message-state ' + (receiptNotice?.state ?? (message.status || ''));
+      entry.state.textContent = receiptNotice?.label ?? messageStatus(message.status);
       if (message.role === 'assistant') renderMarkdown(entry.body, message.text || '', message); else entry.body.textContent = message.text || '';
       entry.body.hidden = !message.text;
       const attachments=modelUiEnabled && ['user','assistant'].includes(message.role) && Array.isArray(message.attachments) ? message.attachments.filter(item => item && typeof item.name === 'string' && ['text','image'].includes(item.kind) && Number.isSafeInteger(item.bytes) && item.bytes >= 0).slice(0,message.role==='assistant'?12:4) : [];
