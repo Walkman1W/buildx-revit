@@ -40,10 +40,14 @@ namespace RevitLocalCodex
                         () => doc.Regenerate(),
                         () => { if (inner.Commit() != TransactionStatus.Committed) throw new InvalidOperationException("Inner transaction did not commit."); },
                         () => { if (inner != null && inner.GetStatus() == TransactionStatus.Started) inner.RollBack(); if (groupStarted && group.GetStatus() == TransactionStatus.Started) { if (group.RollBack() != TransactionStatus.RolledBack) throw new InvalidOperationException("Outer rollback not confirmed."); groupStarted = false; } });
+                    object after = capture(); phases.Verify(after, true);
+                    // Fail before the outer group finishes if the evidence is not serializable.
+                    var evidence = new { before = approvedSnapshot, after = after };
+                    if (serializer.Serialize(evidence).Length > 180000) throw new InvalidOperationException("Batch result evidence exceeds budget.");
                     TransactionStatus finish = mode == "commit" ? group.Assimilate() : group.RollBack();
                     if (finish != (mode == "commit" ? TransactionStatus.Committed : TransactionStatus.RolledBack)) throw new InvalidOperationException("Group completion not confirmed.");
                     groupStarted = false;
-                    return new { count = rows.Length, mode, transaction_status = finish.ToString(), saved = false };
+                    return new { count = rows.Length, mode, transaction_status = finish.ToString(), saved = false, before = approvedSnapshot, after = after };
                 }
                 catch
                 {
@@ -56,3 +60,4 @@ namespace RevitLocalCodex
         }
     }
 }
+
