@@ -421,3 +421,8 @@ test('UniqueId selection exposes a guarded UI contract without zoom or rollback'
 });
 
 test('family type batch is discoverable and guarded by model permission',async()=>{const name='revit_replace_family_type',schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(schema.value.inputSchema.properties.mode.default,'rollback');assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{element_ids:['1'],old_type_id:'7',new_type_id:'8'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);});
+
+test('batch sheet creation schema is discoverable in views',()=>{
+ const name='revit_batch_create_sheets_from_csv',exact=describeModelOperationSchema({tool:name});assert.equal(exact.ok,true);assert.deepEqual(exact.value.inputSchema.required,['expected_document','sheets']);let offset=0,found=[];
+ for(;;){const p=describeModelOperationSchema({domain:'views',offset,limit:20});found.push(...p.value.tools.map(x=>x.name));if(!p.value.hasMore)break;offset+=20;}assert.equal(found.filter(x=>x===name).length,1);
+});

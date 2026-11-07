@@ -76,6 +76,9 @@ namespace RevitLocalCodex {
         private static void VerifyTitleblockOwner(Document d, TitleblockWriteExpectation e){throw new InvalidOperationException("Out of scope titleblock peer.");}
         private static List<TypeChangeExpectation> ReplaceFamilyTypes(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope family type peer.");}
         private static object VerifyFamilyTypeChanges(Document d, Dictionary<string,object> a, List<TypeChangeExpectation> e){throw new InvalidOperationException("Out of scope family type peer.");}
+        private sealed class SheetBatchExpectation {}
+        private static List<SheetBatchExpectation> CreateSheetBatch(UIApplication u, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope sheet batch peer.");}
+        private static object VerifySheetBatch(Document d, List<SheetBatchExpectation> e){throw new InvalidOperationException("Out of scope sheet batch peer.");}
         private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
