@@ -60,7 +60,11 @@ namespace RevitLocalCodex
             var guard = BatchFilterFactsGuard.Create(hostSession, doc, expected, storage, unit, target);
             guard.Compare(hostSession, doc, PreviewBatchParameterFilter(doc, category, typeId, levelId, parameterId), storage, unit, target);
         }
-        internal static object RunBatchFilterNativeReviewCore(UIApplication app, string hostSession, Dictionary<string, object> args, Func<bool> permissionCurrent, Func<string, bool> nativeDecision)
+#if BUILDX_TESTS
+        internal static object TestBatchFilterNativeReview(UIApplication app, string hostSession, Dictionary<string, object> args, Func<bool> permissionCurrent, Func<string, bool> decision)
+        { return RunBatchFilterNativeReviewCore(app, hostSession, args, permissionCurrent, decision); }
+#endif
+        private static object RunBatchFilterNativeReviewCore(UIApplication app, string hostSession, Dictionary<string, object> args, Func<bool> permissionCurrent, Func<string, bool> nativeDecision)
         {
             if (app == null || app.ActiveUIDocument == null || app.ActiveUIDocument.Document == null || String.IsNullOrWhiteSpace(hostSession) || nativeDecision == null) throw new InvalidOperationException("Host, document and decision owner required.");
             Fields(args, "expected_document", "mode", "category", "type_id", "level_id", "parameter_id", "value", "value_unit");
@@ -74,7 +78,7 @@ namespace RevitLocalCodex
             object preview = PreviewBatchParameterFilter(doc, category, typeId, levelId, parameterId);
             Dictionary<string, object> original = BatchDto(preview); object[] rows = (object[])original["items"];
             if (rows.Length < 1 || rows.Length > 20) throw new InvalidOperationException("A complete review requires 1 to 20 matching instances.");
-            string storage = null; object target = null; var serializer = new JavaScriptSerializer { MaxJsonLength = 180000, RecursionLimit = 16 };
+            string storage = null; string dataType = null; object target = null; var serializer = new JavaScriptSerializer { MaxJsonLength = 180000, RecursionLimit = 16 };
             var text = new StringBuilder();
             text.Append("文档: ").Append(expectedDocument).Append("\n类别: ").Append(category).Append("\n类型 ID: ").Append(typeId.HasValue ? typeId.Value.ToString() : "全部").Append("\n标高 ID: ").Append(levelId.HasValue ? levelId.Value.ToString() : "全部").Append("\n参数 ID: ").Append(parameterId).Append("\n模式: ").Append(mode == "commit" ? "应用（不保存）" : "预览并回滚").Append("\n目标原始值: ").Append(serializer.Serialize(rawValue)).Append("\n单位: ").Append(unit ?? "无").Append("\n匹配总数: ").Append(rows.Length).Append("\n");
             foreach (object item in rows)
@@ -82,6 +86,9 @@ namespace RevitLocalCodex
                 var row = item as Dictionary<string, object>; if (row == null) throw new InvalidOperationException("Invalid batch row.");
                 string rowStorage = row["storage_type"] as string;
                 if (storage == null) storage = rowStorage; else if (!String.Equals(storage, rowStorage, StringComparison.Ordinal)) throw new InvalidOperationException("All selected parameters must have the same storage type.");
+                string rowDataType = row["data_type"] as string;
+                if (rowDataType == null) throw new InvalidOperationException("Parameter data type must be known.");
+                if (dataType == null) dataType = rowDataType; else if (!String.Equals(dataType, rowDataType, StringComparison.Ordinal)) throw new InvalidOperationException("All selected parameters must have the same data type.");
                 long elementId = Int64.Parse((string)row["element_id"], System.Globalization.CultureInfo.InvariantCulture);
                 Element owner; Parameter parameter = ResolveInstanceParameter(doc, elementId, parameterId, out owner);
                 if (rowStorage == "Double" && unit != "internal" || rowStorage != "Double" && unit != null) throw new InvalidOperationException("Value unit must match storage type.");
@@ -125,15 +132,39 @@ namespace RevitLocalCodex
                             BatchVerify(doc, hostSession, BatchStage(original, completed, target), category, typeId, levelId, parameterId, storage, unit, target);
                             if (transaction.Commit() != TransactionStatus.Committed) throw new InvalidOperationException("Parameter transaction did not commit.");
                         }
-                        catch { if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack(); throw; }
+                        catch (Exception failure)
+                        {
+                            try { if (transaction.GetStatus() == TransactionStatus.Started && transaction.RollBack() != TransactionStatus.RolledBack) throw new InvalidOperationException("Transaction rollback status is unknown."); }
+                            catch (Exception rollbackFailure) { throw new InvalidOperationException("Batch outcome unknown: transaction rollback was not confirmed.", new AggregateException(failure, rollbackFailure)); }
+                            throw;
+                        }
                     }
                     VerifyParameterWrites(doc, expectations); BatchContinue(permissionCurrent, app, doc, clock);
                     BatchVerify(doc, hostSession, BatchStage(original, completed, target), category, typeId, levelId, parameterId, storage, unit, target);
                     TransactionStatus groupResult = mode == "commit" ? group.Assimilate() : group.RollBack();
                     if (groupResult != (mode == "commit" ? TransactionStatus.Committed : TransactionStatus.RolledBack)) throw new InvalidOperationException("Transaction group outcome unknown.");
+                    if (mode == "rollback")
+                    {
+                        try { BatchVerify(doc, hostSession, preview, category, typeId, levelId, parameterId, storage, unit, target); }
+                        catch (Exception readbackFailure) { throw new InvalidOperationException("Batch outcome unknown: rollback readback was not confirmed.", readbackFailure); }
+                    }
                     return new { status = "completed", selected_count = rows.Length, committed = mode == "commit", mode = mode, saved = false, reviewed = preview, target = target, value_unit = unit };
                 }
-                catch { if (group.GetStatus() == TransactionStatus.Started) group.RollBack(); throw; }
+                catch (Exception failure)
+                {
+                    try
+                    {
+                        TransactionStatus status = group.GetStatus();
+                        if (status == TransactionStatus.Started)
+                        {
+                            if (group.RollBack() != TransactionStatus.RolledBack) throw new InvalidOperationException("Transaction group rollback status is unknown.");
+                            BatchVerify(doc, hostSession, preview, category, typeId, levelId, parameterId, storage, unit, target);
+                        }
+                        else if (status != TransactionStatus.RolledBack) throw new InvalidOperationException("Transaction group outcome is unknown.");
+                    }
+                    catch (Exception rollbackFailure) { throw new InvalidOperationException("Batch outcome unknown: group rollback was not confirmed.", new AggregateException(failure, rollbackFailure)); }
+                    throw;
+                }
             }
         }
     }

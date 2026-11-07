@@ -29,7 +29,12 @@ namespace RevitLocalCodex
         }
         // Injection is only for the isolated in-assembly peer; never expose this
         // entry, the delegates or any decision through an MCP/queue contract.
-        internal object RunCore(UIApplication app, string requestId, string targetSession, Dictionary<string, object> args,
+#if BUILDX_TESTS
+        internal object TestRun(UIApplication app, string requestId, string targetSession, Dictionary<string, object> args,
+            Func<UIApplication, string, Dictionary<string, object>, Func<bool>, object> nativeWorkflow)
+        { return RunCore(app, requestId, targetSession, args, nativeWorkflow); }
+#endif
+        private object RunCore(UIApplication app, string requestId, string targetSession, Dictionary<string, object> args,
             Func<UIApplication, string, Dictionary<string, object>, Func<bool>, object> nativeWorkflow)
         {
             Guid parsed;
