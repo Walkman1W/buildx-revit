@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **102 项**，包括 43 项只读查询和 59 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **103 项**，包括 44 项只读查询和 59 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、43 项具名候选、14 项有关联工具、10 项尚无具名入口、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。具名候选和关联工具可能只覆盖原工具的一部分用途；下表注明边界，不代表真实 Revit 验收。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、44 项具名候选、14 项有关联工具、9 项尚无具名入口、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。具名候选和关联工具可能只覆盖原工具的一部分用途；下表注明边界，不代表真实 Revit 验收。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-本次新增 21 个 AEC 具名候选，覆盖高频视图、图纸、建模、材质和选择；原 31 个未接入名称中还余 10 个没有具名入口。若干已登记候选仍不覆盖 AEC 全部输入和副作用，[本批范围与验证](AEC-HIGH-FREQUENCY-BATCH-20261107.zh-CN.md)。
+本次新增 22 个 AEC 具名候选，覆盖高频图纸、建模、材质、选择和会话变更；原 31 个未接入名称中还余 9 个没有具名入口。若干已登记候选仍不覆盖 AEC 全部输入和副作用，[本批范围与验证](AEC-HIGH-FREQUENCY-BATCH-20261107.zh-CN.md)。
 
 本批增加竖直剖面视图。既有候选涵盖墙上放窗、文字注释、视图样板、视口放置、普通和占位图纸、直风管、直线电气导管、楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[剖面验收](AEC-SECTION-WRITE.zh-CN.md) · [放窗验收](AEC-WINDOW-WRITE.zh-CN.md) · [文字注释验收](AEC-TEXT-NOTE-WRITE.zh-CN.md) · [视图样板验收](AEC-VIEW-TEMPLATE-WRITE.zh-CN.md) · [视口验收](AEC-VIEWPORT-WRITE.zh-CN.md) · [图纸验收](AEC-SHEET-WRITE.zh-CN.md) · [风管验收](AEC-DUCT-WRITE.zh-CN.md) · [导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
 
@@ -13,7 +13,7 @@ AEC 侧有 **27 项已有同名工具、43 项具名候选、14 项有关联工�
 | AEC 工具 | 用途 | BuildX 对照 |
 | --- | --- | --- |
 | `revit_extract_snapshot` | 提取语义模型快照 | 关联能力 · `revit_capture_model_snapshot`。有限的包围盒快照，不覆盖流式语义导出。 |
-| `revit_get_snapshot_delta` | 读取会话内构件增删改 | 未接入 |
+| `revit_get_snapshot_delta` | 读取会话内构件增删改 | 具名候选 · 显式建立有界基线后按固定版本读取观察到的事件；身份不明或连续性失效即拒绝，多文档可能保守过期，并非净差异；真实 Revit 待验。 |
 | `revit_health` | 检查 Revit 连接 | 已有同名 |
 | `revit_list_levels` | 列出标高 | 已有同名 |
 | `revit_list_elements` | 按类别列出构件 | 关联能力 · `revit_get_elements_by_type`。支持按类别分页，类别按 BuildX 契约填写。 |
