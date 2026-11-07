@@ -18,7 +18,7 @@ namespace RevitLocalCodex
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
         private const string HostVersion = "0.8.9";
-        private static readonly string[] NativeBasicWriteOperations = { "set_element_material", "create_material", "create_roof", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_foundation", "create_beam", "create_schedule", "create_group", "ungroup", "change_element_type", "create_conduit", "create_duct", "create_sheet", "renumber_sheets", "duplicate_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        private static readonly string[] NativeBasicWriteOperations = { "set_element_material", "create_material", "create_roof", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_foundation", "create_beam", "create_schedule", "create_group", "mirror_element", "ungroup", "change_element_type", "create_conduit", "create_duct", "create_sheet", "renumber_sheets", "duplicate_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");

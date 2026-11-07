@@ -113,6 +113,9 @@ namespace RevitLocalCodex {
         private sealed class SheetRenumberExpectation {}
         private static List<SheetRenumberExpectation> RenumberSheets(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope sheet renumber peer.");}
         private static object VerifyRenumberSheets(Document d, List<SheetRenumberExpectation> e){throw new InvalidOperationException("Out of scope sheet renumber peer.");}
+        private sealed class MirrorExpectation {}
+        private static MirrorExpectation MirrorOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope mirror peer.");}
+        private static object VerifyMirror(Document d, Dictionary<string,object> a, MirrorExpectation e){throw new InvalidOperationException("Out of scope mirror peer.");}
         private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
