@@ -199,6 +199,8 @@ namespace RevitLocalCodex {
     internal static class ArgusTools { internal static object Annotate(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope annotation peer."); }internal static object Schematic(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope schematic peer."); } }
     internal static class SchematicRevitService { internal static object Export(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope export peer."); } }
     internal sealed class Producer {
+        // Required by the extracted project-only receipt branch; legacy parameter outputs do not expose this fixture session.
+        private readonly string session = "controlled-peer-session";
         private readonly JavaScriptSerializer json=new JavaScriptSerializer { MaxJsonLength=1024*1024,RecursionLimit=40 };
         // PRODUCTION_HOST_METHODS
         internal object Produce(UIApplication uiapp,string operation,Dictionary<string,object> args) {

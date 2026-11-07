@@ -10,3 +10,9 @@ test('project binding receipt requires matching source, result and any envelope 
  for(const bad of [{...envelope,hostSession:other},{...envelope,result:{...envelope.result,hostSession:other}},{...envelope,result:{...envelope.result,hostSession:undefined}},{...envelope,timing:{...timing,hostSession:other}}]){const actual=check(bad);assert.equal(actual.status,'unconfirmed');assert.equal(actual.terminal,false);}
  for(const bad of [{...source,session:other},{...source,path:'D:\\other.rvt'}]){const actual=check(envelope,bad);assert.equal(actual.status,'unconfirmed');assert.equal(actual.terminal,false);}
 });
+
+test('legacy script write success remains compatible without result hostSession',()=>{
+ const legacy={...envelope,result:{operation:'execute_csharp',mode:'rollback',committed:false,document:source.title,value:{}}};
+ const result=interpretModelWriteReceipt(JSON.stringify(legacy),host,id,'execute_csharp',{mode:'rollback'},source);
+ assert.equal(result.status,'received');assert.equal(result.terminal,true);
+});
