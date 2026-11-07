@@ -55,6 +55,11 @@ namespace RevitLocalCodex
             if (doc == null || !doc.IsValidObject) throw new InvalidOperationException("An open document is required.");
             return lifecycle.Capture(doc, FullEnumeration(doc), maxElements, maxEvents);
         }
+        internal SnapshotChangeOwner StartOrCurrent(Document doc, int maxElements, int maxEvents)
+        {
+            if (doc == null || !doc.IsValidObject) throw new InvalidOperationException("An open document is required.");
+            return lifecycle.StartOrCurrent(doc, () => FullEnumeration(doc), maxElements, maxEvents);
+        }
         internal SnapshotChangeOwner.Page Read(Document doc, string token, long version, int offset, int limit)
         {
             if (doc == null || !doc.IsValidObject) throw new InvalidOperationException("An open document is required.");

@@ -37,16 +37,18 @@ namespace RevitLocalCodex
         private readonly int maxElements, maxEvents;
         private Dictionary<long, string> elements;
         private readonly List<Entry> events = new List<Entry>();
+        private readonly int baselineCount;
         private long version;
         private string expiry;
         internal string BaselineToken { get { return baselineToken; } }
         internal long Version { get { return version; } }
+        internal int BaselineCount { get { return baselineCount; } }
         internal string Expiry { get { return expiry; } }
 
         private SnapshotChangeOwner(string host, object doc, int elementLimit, int eventLimit, Dictionary<long, string> baseline)
         {
             hostSession = host; document = doc; maxElements = elementLimit; maxEvents = eventLimit; elements = baseline;
-            baselineToken = Guid.NewGuid().ToString("N");
+            baselineToken = Guid.NewGuid().ToString("N"); baselineCount = baseline.Count;
         }
         private static bool Valid(Identity item)
         {
@@ -89,6 +91,7 @@ namespace RevitLocalCodex
                 if (added == null || modified == null || deleted == null) throw new InvalidOperationException("Event unavailable.");
                 var next = new Dictionary<long, string>(elements); var uidSet = new HashSet<string>(next.Values, StringComparer.Ordinal);
                 var seen = new HashSet<long>(); var batch = new List<Entry>();
+                if (version >= 9007199254740991L) throw new InvalidOperationException("Version budget exceeded.");
                 long nextVersion = checked(version + 1);
                 foreach (long id in deleted)
                 {

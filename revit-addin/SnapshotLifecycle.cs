@@ -59,6 +59,17 @@ namespace RevitLocalCodex
             catch { if (owner != null) owner.Expire("baseline_capture_untrusted"); documents.Remove(document); throw; }
             finally { slot.Capturing = false; }
         }
+        internal SnapshotChangeOwner StartOrCurrent(object document, Func<IEnumerable<SnapshotChangeOwner.Identity>> completeEnumeration, int maxElements, int maxEvents)
+        {
+            CheckThread(); Slot slot;
+            if (document == null || completeEnumeration == null) throw new InvalidOperationException("Document or enumeration missing.");
+            if (documents.TryGetValue(document, out slot))
+            {
+                if (slot.Capturing) { slot.ChangedDuringCapture = true; throw new InvalidOperationException("Reentrant capture."); }
+                if (slot.Owner != null && slot.Owner.Expiry == null) return slot.Owner;
+            }
+            return Capture(document, completeEnumeration(), maxElements, maxEvents);
+        }
         internal void Observe(object document, Func<IEnumerable<SnapshotChangeOwner.Identity>> added, Func<IEnumerable<SnapshotChangeOwner.Identity>> modified, Func<IEnumerable<long>> deleted)
         {
             CheckThread(); Slot slot;
