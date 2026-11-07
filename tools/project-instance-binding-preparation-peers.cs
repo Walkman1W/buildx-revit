@@ -10,7 +10,8 @@ namespace Autodesk.Revit.DB {
  public class Settings { public CategorySet Categories=new CategorySet(); }
  public class ForgeTypeId { public string TypeId; }
  public class InternalDefinition { public ElementId Id;public string Name,DataType;public ForgeTypeId GetDataType(){return new ForgeTypeId{TypeId=DataType};} }
- public class BindingMap { public bool Bound;public int InsertCalls;public bool Contains(InternalDefinition d){return Bound;} }
+ public class BindingMap { public bool Bound;public int InsertCalls;public InstanceBinding Binding;public bool Contains(InternalDefinition d){return Bound;}public object get_Item(InternalDefinition d){return Binding;} }
+ public class InstanceBinding { public CategorySet Categories; }
  public class Element { public ElementId Id;public Category Category;public Document Document;public bool IsValidObject=true,HasParameter;public string UniqueId;public object get_Parameter(Guid g){return HasParameter?new object():null;} }
  public class ElementType:Element {}
  public class Document { public bool IsFamilyDocument;public string Title="controlled",PathName="D:\\controlled.rvt";public Settings Settings=new Settings();public BindingMap ParameterBindings=new BindingMap();public SharedParameterElement Shared;public List<Element> Elements=new List<Element>(); }
@@ -42,6 +43,13 @@ namespace RevitLocalCodex {
    Fail(()=>ProjectInstanceBindingPreparation.Describe(snapshot,1,1,null,"synthetic-session"),"later page without snapshot refused");
    Fail(()=>ProjectInstanceBindingPreparation.Describe(snapshot,1,1,new string('a',64),"synthetic-session"),"changed snapshot refused");
    ProjectInstanceBindingPreparation.Revalidate(d,snapshot);Check(true,"unchanged impact revalidated");
+   var review=ProjectInstanceBindingReadback.Review(d,snapshot);Check((bool)Prop(review,"future_instances_affected") && !(bool)Prop(review,"human_decision") && (string)Prop(review,"write_authorization")=="not_granted","complete review is not an approval");
+   d.ParameterBindings.Bound=true;d.ParameterBindings.Binding=new InstanceBinding{Categories=new CategorySet{walls,floors}};foreach(var item in d.Elements)item.HasParameter=true;
+   ProjectInstanceBindingReadback.VerifyBound(d,snapshot);Check(true,"bound complete instance set verified");
+   d.ParameterBindings.Binding.Categories.Remove(floors);Fail(()=>ProjectInstanceBindingReadback.VerifyBound(d,snapshot),"missing bound category refused");d.ParameterBindings.Binding.Categories.Add(floors);
+   d.Elements[0].HasParameter=false;Fail(()=>ProjectInstanceBindingReadback.VerifyBound(d,snapshot),"missing bound instance parameter refused");d.Elements[0].HasParameter=true;
+   d.Elements[0].UniqueId="replacement";Fail(()=>ProjectInstanceBindingReadback.VerifyBound(d,snapshot),"bound instance identity drift refused");d.Elements[0].UniqueId="element-5";
+   d.ParameterBindings.Bound=false;foreach(var item in d.Elements)item.HasParameter=false;ProjectInstanceBindingPreparation.Revalidate(d,snapshot);Check(true,"simulated rollback returns to exact unbound state");
    d.Elements.Add(new Element{Id=new ElementId(7),Document=d,Category=walls,UniqueId="element-7"});var changed=ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,floors.Id.Value});Fail(()=>ProjectInstanceBindingPreparation.Describe(changed,1,1,fingerprint,"synthetic-session"),"recaptured impact drift refuses later page");Fail(()=>ProjectInstanceBindingPreparation.Revalidate(d,snapshot),"added instance drift refused");d.Elements.RemoveAt(2);
    d.Elements[0].UniqueId="replaced";Fail(()=>ProjectInstanceBindingPreparation.Revalidate(d,snapshot),"instance identity drift refused");d.Elements[0].UniqueId="element-5";
    d.Elements[0].HasParameter=true;Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"existing instance GUID conflict refused");d.Elements[0].HasParameter=false;
@@ -49,6 +57,10 @@ namespace RevitLocalCodex {
    Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"wrong",new long[]{walls.Id.Value}),"definition data type drift refused");
    Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,walls.Id.Value}),"duplicate category refused");
    d.Elements[0].Document=new Document();Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"foreign instance refused");d.Elements[0].Document=d;
+   for(int i=0;i<19;i++)d.Elements.Add(new Element{Id=new ElementId(200+i),Document=d,Category=walls,UniqueId="review-"+i});
+   var tooMany=ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,floors.Id.Value});
+   Fail(()=>ProjectInstanceBindingReadback.Review(d,tooMany),"more than 20 instances cannot be presented for human review");
+   d.Elements.RemoveRange(2,19);
    FilteredElementCollector.Slow=true;Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"blocking collector over time budget refuses complete result");FilteredElementCollector.Slow=false;
    for(int i=0;i<500;i++)d.Elements.Add(new Element{Id=new ElementId(1000+i),Document=d,Category=walls,UniqueId="bulk-"+i});Fail(()=>ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value}),"over-budget impact refused");
    Check(d.ParameterBindings.InsertCalls==0,"no binding write or external owner invoked");
