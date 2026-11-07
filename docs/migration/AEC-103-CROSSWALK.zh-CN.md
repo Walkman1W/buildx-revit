@@ -130,7 +130,7 @@ AEC 侧有 **27 项已有同名工具、44 项具名候选、14 项有关联工�
 | `revit_export_ifc` | 导出 IFC | 未接入 |
 | `revit_export_navisworks` | 导出 NWC | 未接入 |
 | `revit_export_image` | 导出视图图像 | 关联能力 · `revit_capture_view`。返回当前视图快照，独立文件导出另议。 |
-| `revit_render_3d` | 渲染三维视图 | 未接入 |
+| `revit_render_3d` | 渲染三维视图 | 未接入 · AEC 当前 handler 使用视图图像导出；BuildX `revit_capture_view` 可截取视图，但不能据此称为真实渲染。 |
 
 ## 文档管理与高权限操作
 
