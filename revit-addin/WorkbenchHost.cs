@@ -770,7 +770,7 @@ namespace RevitLocalCodex
 
         private static bool RequiresProjectEdit(string operation)
         {
-            return WorkbenchActions.IsWrite(operation) || new[] { "set_selection", "select_by_unique_ids", "execute_csharp", "smart_annotate", "build_schematic", "export_schematic", "inspect_elements", "family_create_valve", "family_save_job", "family_load_job" }.Contains(operation);
+            return operation == "bind_existing_project_parameter" || WorkbenchActions.IsWrite(operation) || new[] { "set_selection", "select_by_unique_ids", "execute_csharp", "smart_annotate", "build_schematic", "export_schematic", "inspect_elements", "family_create_valve", "family_save_job", "family_load_job" }.Contains(operation);
         }
 
         private object DispatchAtomicRead(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access)

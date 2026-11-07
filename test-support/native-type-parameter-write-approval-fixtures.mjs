@@ -31,7 +31,7 @@ class TypeWriteCodex extends EventEmitter{
   }
 }
 
-export async function typeWriteHttpFixture(t,{prepare,invoke,expiryMs=110000}={}){
+export async function typeWriteHttpFixture(t,{prepare,invoke,expiryMs=110000,projectBinding=false,projectObserve=null}={}){
   const parent=await fs.realpath(os.tmpdir()),base=await fs.mkdtemp(path.join(parent,'buildx-type-write-http-')),identity=await fs.lstat(base,{bigint:true}),root=path.join(base,'program');await fs.mkdir(root);
   let app;
   t.after(async()=>{if(app)await app.close();const target=path.resolve(base),current=await fs.lstat(target,{bigint:true});assert.ok(path.isAbsolute(target));assert.equal(path.dirname(target),parent);assert.match(path.basename(target),/^buildx-type-write-http-/);
@@ -40,17 +40,19 @@ export async function typeWriteHttpFixture(t,{prepare,invoke,expiryMs=110000}={}
   const services=createModelPermissionServices({observe:async(name,args,control)=>{
     observations.push({name,args,control});
     if(name==='revit_workbench_status')return {hostSession:document.session,document:{title:document.title,path:document.path,allowedSample:true}};
+    if(name==='revit_preview_project_parameter_binding'&&projectBinding&&projectObserve)return projectObserve(name,args,control);
+    if(name==='revit_preview_project_parameter_binding'&&projectBinding){preparations.push({args:structuredClone(control.projectBindingProposal),control});const output={receiptOwner:{close:async()=>({ok:true,value:{closed:true}})}};Object.defineProperty(output,'projectBindingPreparation',{value:await prepare(control.projectBindingProposal,control)});return output;}
     assert.equal(name,'revit_get_type_parameter_impact');preparations.push({args:structuredClone(control.typeWriteProposal),control});
     if(prepare)return prepare(control.typeWriteProposal,control);
     const output={};Object.defineProperty(output,'typeWritePreparation',{value:preparedTypeWrite(control.typeWriteProposal,{sourceDocument:control.sourceDocument,
       nativePreparation:nativeTypePreparation({expires_utc:new Date(Date.now()+expiryMs).toISOString()})})});return output;
   },invoke:async(tool,args,control)=>{
-    writes.push({tool,args,control});const native=consumeApprovedTypeWrite(control.approvedTypeWrite,{args,sourceDocument:control.sourceDocument,host:typeWriteHost()});
+    writes.push({tool,args,control});if(projectBinding)return invoke(tool,args,control);const native=consumeApprovedTypeWrite(control.approvedTypeWrite,{args,sourceDocument:control.sourceDocument,host:typeWriteHost()});
     assert.equal(native.token,TYPE_WRITE_NATIVE_TOKEN);if(invoke)return invoke(tool,args,control);
     return {operation:'set_type_parameter',mode:args.mode,committed:args.mode==='commit',value:{controlled:true}};
   }});
   app=createPanelServer({root,dataRoot:path.join(base,'data'),codex,port:0,profile:MODEL_WORKSPACE_SESSION_PROFILE,modelPermissionServices:services,
-    modelReceiptPollDelays:[60000],invokeWorkbench:async()=>{throw new Error('Unexpected live host');},
+    modelReceiptPollDelays:[60000],projectBindingCandidateTesting:projectBinding,invokeWorkbench:async()=>{throw new Error('Unexpected live host');},
     invokeReadonlyCommand:async(...args)=>{direct.push(args);return {ok:true,value:{controlled:true}};}});
   const {origin}=await app.listen(),status=await(await fetch(origin+'/api/status')).json(),session=app.snapshot('browser').session.conversation.id;
   const post=async(route,data={},options={})=>{const headers={'Content-Type':'application/json','X-Local-Chat':status.csrf};if(options.origin!==null)headers.Origin=options.origin??origin;

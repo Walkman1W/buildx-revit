@@ -75,9 +75,9 @@
         "realWebViewVerified": false
       },
       "projectBindingSafety20261107": {
-        "status": "closed_queue_preparation_and_panel_components",
-        "validation": "isolated project tests 20/20; existing type permission HTTP UI tests 36/36; full Revit 2024 API host build",
-        "remaining": "model conversation proposal, approved write transport and original write receipt, durable replay guard, real WebView and Revit",
+        "status": "closed_synthetic_e2e",
+        "validation": "synthetic conversation HTTP original preparation and write queue end-to-end; related 60/60; complete Revit API host build",
+        "remaining": "durable replay guard and original receipt recovery, real WebView and Revit",
         "writeRegistered": false
       }
     },
