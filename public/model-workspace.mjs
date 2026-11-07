@@ -45,7 +45,7 @@ export function modelCommandCatalog(value) {
   }).map(item => ({id:item.id,tool:item.tool,name:typeof item.label === 'string' ? item.label.slice(0,160) : item.tool,
     description:typeof item.description === 'string' ? item.description.slice(0,500) : '',
     group:typeof item.group === 'string' ? item.group.slice(0,80) : '其他',readOnly:item.readOnly === true,
-    effectKind:item.effectKind==='model_transaction'?'model_transaction':null,
+    effectKind:['model_transaction','ui_selection'].includes(item.effectKind)?item.effectKind:null,
     enabled:item.enabled === true,unavailableReason:typeof item.unavailableReason === 'string' ? item.unavailableReason.slice(0,500) : '',
     manualExecution:item.manualExecution!==false,manualUnavailableReason:typeof item.manualUnavailableReason==='string'?item.manualUnavailableReason.slice(0,500):'',
     requiresTypeParameterReview:item.requiresTypeParameterReview===true,
@@ -533,7 +533,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const item = el('section','model-command-item'), row = el('div','model-command-row');
       item.dataset.commandId = command.id;item.dataset.toolName=command.tool || '';item.dataset.toolLabel=command.name || '';item.dataset.baseSearch=[command.name,command.tool,command.description,group,'系统'].filter(Boolean).join(' ').toLocaleLowerCase();item.dataset.search=item.dataset.baseSearch;
       const copy = el('span','model-command-copy'); copy.append(commandName(command.name,'system'),el('small','',command.description));
-      if (command.readOnly === false) copy.append(el('small','model-command-effect','涉及模型或文件操作'));
+      if (command.readOnly === false) copy.append(el('small','model-command-effect',command.tool==='revit_set_selection'?'更改 Revit 界面选择，不修改模型':'涉及模型或文件操作'));
       if (command.enabled === false) copy.append(el('small','model-command-unavailable',command.unavailableReason || '当前环境尚未就绪'));
       if(command.manualExecution===false||command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview!==true){
         copy.append(el('small','model-command-unavailable',command.manualUnavailableReason||'请在对话中发起，逐项审阅类型影响并确认本次操作。'));
@@ -588,7 +588,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         }
         const options={document,Event,id,key,rule,label,required:required.has(key),value:draft?.values[key],multiline:command.tool==='revit_create_text_note'&&key==='text',onChange:invalidate,onCommand};
         const field=command.tool==='revit_renumber_sheets' && key==='sheets'?createSheetRenumberField(options):command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
-          (rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);
+          command.tool!=='revit_set_selection'&&(rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);
         const input=field.input;inputs[key]=input;formFields.push(field);
         for(const control of field.controls){control.dataset.commandEnabled=String(command.enabled !== false);parameterInputs.push(control);}
         const personalIdentity=['revit_get_command','revit_run_command'].includes(command.tool)&&['command_id','revision'].includes(key);
@@ -599,7 +599,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       if(advanced.children.length>1)parameters.append(advanced);
       if(command.tool==='revit_run_command')for(const key of ['command_id','revision'])for(const event of ['input','change'])inputs[key]?.addEventListener(event,()=>{formFields.find(field=>typeof field.setDefinition==='function')?.setDefinition(null);invalidate();});
       let confirmLabel=null;
-      if(command.readOnly === false&&!manualTypeWrite){confirmLabel=el('label','model-command-confirm');const confirm=el('input');confirm.type='checkbox';confirm.dataset.commandEnabled=String(command.enabled !== false);confirm.checked=false;for(const input of Object.values(inputs))for(const event of ['input','change'])input.addEventListener(event,()=>{confirm.checked=false;renderCommandConfirmation({command,inputs,confirmLabel});});inputs.$confirmation=confirm;parameterInputs.push(confirm);const confirmationText=command.tool==='revit_ungroup'?'我已核对模型组 ID，确认解散该组并保留可核验成员':command.tool==='revit_save_command'?'我已核对草稿内容，确认保存本地版本':command.tool==='revit_family_create_cabinet'?'我已核对尺寸，确认创建独立临时柜体族；不保存或加载项目':command.tool==='revit_family_save_cabinet'?'我已核对作业，确认保存为新 RFA、关闭原临时族并重新打开复核':command.tool==='revit_family_close_cabinet'?'我已核对作业，确认关闭临时柜体族并丢弃未保存内容':'我已核对本次参数和执行方式';confirmLabel.append(confirm,el('span','',confirmationText));parameters.append(confirmLabel);}
+      if(command.readOnly === false&&!manualTypeWrite){confirmLabel=el('label','model-command-confirm');const confirm=el('input');confirm.type='checkbox';confirm.dataset.commandEnabled=String(command.enabled !== false);confirm.checked=false;for(const input of Object.values(inputs))for(const event of ['input','change'])input.addEventListener(event,()=>{confirm.checked=false;renderCommandConfirmation({command,inputs,confirmLabel});});inputs.$confirmation=confirm;parameterInputs.push(confirm);const confirmationText=command.tool==='revit_set_selection'?'我已核对本次选择；界面选择不可通过模型回滚':command.tool==='revit_ungroup'?'我已核对模型组 ID，确认解散该组并保留可核验成员':command.tool==='revit_save_command'?'我已核对草稿内容，确认保存本地版本':command.tool==='revit_family_create_cabinet'?'我已核对尺寸，确认创建独立临时柜体族；不保存或加载项目':command.tool==='revit_family_save_cabinet'?'我已核对作业，确认保存为新 RFA、关闭原临时族并重新打开复核':command.tool==='revit_family_close_cabinet'?'我已核对作业，确认关闭临时柜体族并丢弃未保存内容':'我已核对本次参数和执行方式';confirmLabel.append(confirm,el('span','',confirmationText));parameters.append(confirmLabel);}
       if(hasParameters){
         apply.setAttribute('aria-expanded',String(Boolean(draft?.open)));apply.setAttribute('aria-controls',parameters.id);parameters.hidden=!draft?.open;
         const run=manualTypeWrite?null:button('model-command-run',command.tool === 'revit_save_command' ? '保存版本' : command.readOnly === false ? '执行' : '查询');

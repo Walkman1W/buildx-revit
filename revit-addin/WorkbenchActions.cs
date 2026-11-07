@@ -80,6 +80,27 @@ namespace RevitLocalCodex
             throw new InvalidOperationException("Unknown read operation.");
         }
 
+        internal static object SetSelection(UIApplication uiapp, Dictionary<string, object> args)
+        {
+            Fields(args, "expected_document", "element_ids");
+            Document doc = uiapp.ActiveUIDocument.Document;
+            IList input = RequiredList(args, "element_ids", 0, 200);
+            var ids = new List<ElementId>(); var seen = new HashSet<long>();
+            foreach (object item in input)
+            {
+                long value = ElementIdValue(item, "element_ids");
+                if (!seen.Add(value)) throw new InvalidOperationException("Selection IDs must be unique.");
+                Element element = RequiredElement(doc, value);
+                if (!element.IsValidObject || element is ElementType || element.Document == null || !element.Document.Equals(doc)) throw new InvalidOperationException("Every selected ID must identify an instance in the active document.");
+                ids.Add(element.Id);
+            }
+            uiapp.ActiveUIDocument.Selection.SetElementIds(ids);
+            var actual = uiapp.ActiveUIDocument.Selection.GetElementIds().OrderBy(x => x.Value).ToArray();
+            var expected = ids.OrderBy(x => x.Value).ToArray();
+            if (actual.Length != expected.Length || !actual.Select(x => x.Value).SequenceEqual(expected.Select(x => x.Value))) throw new InvalidOperationException("The actual selection differs from the requested IDs.");
+            return new { selected_ids = actual.Select(x => x.Value).ToArray(), count = actual.Length };
+        }
+
         internal static object Write(UIApplication uiapp, string operation, Dictionary<string, object> args)
         {
             if (operation == "set_type_parameter") return WriteTypeParameter(uiapp, args);
