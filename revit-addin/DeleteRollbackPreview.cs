@@ -17,11 +17,15 @@ namespace RevitLocalCodex
         internal sealed class Identity { internal long Id; internal string UniqueId; }
         internal sealed class Result
         {
-            internal string RequestId, HostSession, DocumentPath, DocumentTitle, TargetUniqueId, ExpiresUtc;
+            internal string RequestId, HostSession, DocumentPath, DocumentTitle, TargetUniqueId, TargetKind, ExpiresUtc;
             internal long TargetId;
             internal Identity[] Deleted;
         }
         internal static Result Capture(Document doc, string documentPath, long targetId, string targetUniqueId, string requestId, string hostSession)
+        {
+            return Capture(doc, documentPath, targetId, targetUniqueId, requestId, hostSession, "sheet");
+        }
+        internal static Result Capture(Document doc, string documentPath, long targetId, string targetUniqueId, string requestId, string hostSession, string targetKind)
         {
             Guid parsed;
             if (doc == null || !doc.IsValidObject || doc.IsFamilyDocument || doc.IsLinked || doc.IsReadOnly || String.IsNullOrWhiteSpace(documentPath) ||
@@ -30,8 +34,9 @@ namespace RevitLocalCodex
                 throw new InvalidOperationException("Delete preview document, target or request identity is invalid.");
             string originalTitle = doc.Title;
             if (String.IsNullOrWhiteSpace(originalTitle)) throw new InvalidOperationException("Delete preview document title is unavailable.");
-            ViewSheet target = doc.GetElement(new ElementId(targetId)) as ViewSheet;
-            if (target == null || !target.IsValidObject || !String.Equals(target.UniqueId, targetUniqueId, StringComparison.Ordinal))
+            Element target = doc.GetElement(new ElementId(targetId));
+            if (!(targetKind == "sheet" || targetKind == "element") || target == null || !target.IsValidObject || target is ElementType ||
+                targetKind == "sheet" && !(target is ViewSheet) || !String.Equals(target.UniqueId, targetUniqueId, StringComparison.Ordinal))
                 throw new InvalidOperationException("Delete preview target identity is invalid.");
             var before = new Dictionary<long, string>();
             using (var collector = new FilteredElementCollector(doc))
@@ -90,7 +95,7 @@ namespace RevitLocalCodex
                     throw new RollbackUnknownException(new InvalidOperationException("Rollback did not restore an original element identity."));
             }
             return new Result { RequestId = requestId, HostSession = hostSession, DocumentPath = doc.PathName, DocumentTitle = doc.Title,
-                TargetId = targetId, TargetUniqueId = targetUniqueId, Deleted = deleted,
+                TargetId = targetId, TargetUniqueId = targetUniqueId, TargetKind = targetKind, Deleted = deleted,
                 ExpiresUtc = DateTime.UtcNow.AddSeconds(120).ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture) };
         }
     }

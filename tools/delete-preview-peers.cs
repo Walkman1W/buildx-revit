@@ -7,6 +7,7 @@ namespace Autodesk.Revit.DB {
  public enum TransactionStatus { Started,Committed,RolledBack,Pending }
  public class ElementId { public long Value;public ElementId(long id){Value=id;} }
  public class Element { public ElementId Id;public string UniqueId;public bool IsValidObject=true; }
+ public class ElementType:Element {}
  public class ViewSheet:Element {}
  public class Document { public bool IsValidObject=true,IsFamilyDocument,IsLinked,IsReadOnly,FailDelete,RollbackUnknown,RestoreDrift,MissingIdentity,FailCommit;public string PathName="D:\\controlled\\demo.rvt",Title="demo";public Dictionary<long,Element> Elements=new Dictionary<long,Element>();public Dictionary<long,Element> Snapshot;
   public Element GetElement(ElementId id){Element e;return Elements.TryGetValue(id.Value,out e)?e:null;}public void Regenerate(){}
@@ -23,12 +24,20 @@ namespace RevitLocalCodex {
   static DeleteRollbackPreview.Result Run(Document d){return DeleteRollbackPreview.Capture(d,d.PathName,3,"uid-3","3dd22134-29e8-4b12-a71a-c24503c99139",new string('a',32));}
   static void Reject(Action a,string label,bool unknown=false){try{a();}catch(DeleteRollbackPreview.RollbackUnknownException){if(!unknown)throw;Console.WriteLine("PASS "+label);return;}catch(InvalidOperationException){if(unknown)throw;Console.WriteLine("PASS "+label);return;}throw new Exception("Expected failure: "+label);}
   static void Main(){var d=Doc();var r=Run(d);Assert(r.Deleted.Length==2&&r.Deleted[0].Id==3&&r.Deleted[1].UniqueId=="uid-15"&&d.Elements.Count==2,"rollback restores exact cascade identities");
+   DeleteImpactGuard.VerifyBefore(d,r,r.RequestId,r.HostSession);DeleteImpactGuard.VerifyDeleteResult(r,new[]{new ElementId(15),new ElementId(3)});Console.WriteLine("PASS reviewed identities and exact unordered deletion set");
+   Reject(()=>DeleteImpactGuard.VerifyDeleteResult(r,new[]{new ElementId(3),new ElementId(3)}),"duplicate deletion IDs rejected");
+   Reject(()=>DeleteImpactGuard.VerifyDeleteResult(r,new[]{new ElementId(3),new ElementId(16)}),"cascade mismatch rejected");
+   d.Elements[15].UniqueId="changed";Reject(()=>DeleteImpactGuard.VerifyBefore(d,r,r.RequestId,r.HostSession),"pre-delete dependent identity drift");d.Elements[15].UniqueId="uid-15";
+   Reject(()=>DeleteImpactGuard.VerifyBefore(d,r,r.RequestId,new string('b',32)),"preview host drift");
+   Reject(()=>DeleteImpactGuard.VerifyAbsent(d,r),"deleted elements still present");d.Elements.Remove(3);d.Elements.Remove(15);DeleteImpactGuard.VerifyAbsent(d,r);Console.WriteLine("PASS reviewed elements absent");
    d=Doc();d.FailDelete=true;Reject(()=>Run(d),"delete failure with confirmed rollback");Assert(d.Elements.Count==2,"failed delete keeps original elements");
    d=Doc();d.MissingIdentity=true;Reject(()=>Run(d),"unknown cascade identity rejected");Assert(d.Elements.Count==2,"unknown cascade rolled back");
    d=Doc();d.FailCommit=true;Reject(()=>Run(d),"inner transaction not committed");
    d=Doc();d.RollbackUnknown=true;Reject(()=>Run(d),"unconfirmed rollback does not produce facts",true);
    d=Doc();d.RestoreDrift=true;Reject(()=>Run(d),"rollback identity drift is unknown",true);
    d=Doc();Reject(()=>DeleteRollbackPreview.Capture(d,d.PathName,3,"wrong","3dd22134-29e8-4b12-a71a-c24503c99139",new string('a',32)),"target unique id mismatch");
+   d=Doc();d.Elements[3]=new Element{Id=new ElementId(3),UniqueId="uid-3"};var elementResult=DeleteRollbackPreview.Capture(d,d.PathName,3,"uid-3","3dd22134-29e8-4b12-a71a-c24503c99139",new string('a',32),"element");Assert(elementResult.TargetKind=="element"&&elementResult.Deleted.Length==2,"generic instance preview");
+   d=Doc();d.Elements[3]=new ElementType{Id=new ElementId(3),UniqueId="uid-3"};Reject(()=>DeleteRollbackPreview.Capture(d,d.PathName,3,"uid-3","3dd22134-29e8-4b12-a71a-c24503c99139",new string('a',32),"element"),"type targets are excluded");
    d=Doc();d.PathName="different";Reject(()=>DeleteRollbackPreview.Capture(d,"original",3,"uid-3","3dd22134-29e8-4b12-a71a-c24503c99139",new string('a',32)),"document path mismatch");
   }
  }
