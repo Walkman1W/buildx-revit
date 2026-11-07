@@ -324,3 +324,15 @@ test('roof is searchable and manual XY form requires confirmation',async t=>{
  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();const field=key=>ui.get('model-command-'+name+'-'+key);for(const [key,value] of Object.entries({roof_type_id:'9007199254740993',level_id:'9007199254740994','origin_xy_mm-x':0,'origin_xy_mm-y':100,width_mm:3000,depth_mm:2000}))field(key).value=String(value);
  const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',roof_type_id:'9007199254740993',level_id:'9007199254740994',origin_xy_mm:{x:0,y:100},width_mm:3000,depth_mm:2000});await ui.respond(ui.requests[0],{ok:true,executionId:'roof-write'});
 });
+
+test('material assignment has searchable guarded manual form',async t=>{
+ const name='revit_set_element_material',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);assert.equal(tool?.label,'设置构件材质');assert.equal(tool.readOnly,false);
+ for(const query of [name,'set_element_material','sem','设置构件材质'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [key,value] of Object.entries({element_id:'101',parameter_id:'-123',material_id:'202',expected_has_value:'true',expected_value_internal:'-1'}))ui.get('model-command-'+name+'-'+key).value=value;
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,1);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',element_id:101,parameter_id:-123,material_id:202,expected_has_value:true,expected_value_internal:-1});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'assignment-write'});
+});

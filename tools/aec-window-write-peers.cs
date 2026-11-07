@@ -54,6 +54,10 @@ namespace Autodesk.Revit.UI { public class UIDocument { public Document Document
 namespace RevitLocalCodex {
  internal static class NativeModelQueries { internal static long ExactId(Dictionary<string,object> a,string k){object v=a[k];if(v==null || !(v is long) || (long)v<=0)throw new InvalidOperationException("invalid id");return (long)v;} }
  internal static partial class WorkbenchActions {
+  private sealed class MaterialAssignmentExpectation {}
+  private static object SetElementMaterial(Document doc, Dictionary<string,object> args, out MaterialAssignmentExpectation expectation){expectation=null;throw new InvalidOperationException("Out of scope material assignment peer.");}
+  private static void VerifyElementMaterial(Document doc, MaterialAssignmentExpectation expectation){throw new InvalidOperationException("Out of scope material assignment peer.");}
+
   class ParameterWriteExpectation {} class RejectErrors {}
   static string TextNoteInput(Dictionary<string,object> args){throw new InvalidOperationException("Out of scope text-note peer.");} static string NormalizeTextNote(string value){throw new InvalidOperationException("Out of scope text-note peer.");}
   static object WriteTypeParameter(UIApplication u,Dictionary<string,object>a){throw new Exception("unused");}

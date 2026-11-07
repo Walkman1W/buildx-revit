@@ -30,10 +30,10 @@ function declaration(source,marker){const begin=start(source,marker);return sour
 /** Exact production setter, transaction and host write branch with controlled API peers. */
 export async function loadNativeParameterWriteProducer(t){
   if(process.platform!=='win32')throw new Error('Parameter-write peers require Windows .NET Framework compiler');
-  const [actions,host,peers,queries]=await Promise.all(['revit-addin/WorkbenchActions.cs','revit-addin/WorkbenchHost.cs','test-support/native-parameter-write-peers.cs','revit-addin/NativeModelQueries.cs'].map(name=>fs.readFile(path.join(root,name),'utf8')));
+  const [actions,host,peers,queries,material]=await Promise.all(['revit-addin/WorkbenchActions.cs','revit-addin/WorkbenchHost.cs','test-support/native-parameter-write-peers.cs','revit-addin/NativeModelQueries.cs','revit-addin/MaterialAssignment.cs'].map(name=>fs.readFile(path.join(root,name),'utf8')));
   const writeStart=start(actions,'internal static object Write('),writeEnd=start(actions,'private static object TransformElements(');
   if(writeEnd<=writeStart)throw new Error('Production parameter-write region reversed');
-  const fragments={parameterWrite:actions.slice(writeStart,writeEnd).trim()};
+  const fragments={parameterWrite:actions.slice(writeStart,writeEnd).trim(),materialAssignment:['private sealed class MaterialAssignmentExpectation','private static Parameter MaterialInstanceParameter(','private static object SetElementMaterial(','private static long ExactMaterialOldValue(','private static void VerifyElementMaterial('].map(marker=>block(material,marker).text).join('\n')};
   for(const marker of ['private static object DescribedId(','private static object DescribeElement(','private static object InternalValue(','private static Element RequiredElement(','private static object Required(','private static IList RequiredList(','private static string OptionalString(','private static long ElementIdValue(','private static long Integer(','private static double FiniteNumber(','private static void Fields(','private sealed class RejectErrors'])fragments[marker]=block(actions,marker).text;
   fragments.writeOperations=declaration(actions,'internal static readonly string[] WriteOperations =');
   fragments.isWrite=block(actions,'internal static bool IsWrite(').text;

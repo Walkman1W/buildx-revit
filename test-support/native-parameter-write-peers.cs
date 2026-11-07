@@ -20,7 +20,7 @@ namespace Autodesk.Revit.DB {
         public static bool operator !=(ForgeTypeId a,ForgeTypeId b) { return !(a==b); }
         public override bool Equals(object value) { return this==value as ForgeTypeId; } public override int GetHashCode() { return TypeId.GetHashCode(); }
     }
-    internal static class SpecTypeId { internal static class Boolean { internal static readonly ForgeTypeId YesNo=new ForgeTypeId("yesno"); } }
+    internal static class SpecTypeId { internal static class Reference { internal static readonly ForgeTypeId Material=new ForgeTypeId("material"); } internal static class Boolean { internal static readonly ForgeTypeId YesNo=new ForgeTypeId("yesno"); } }
     internal enum StorageType { None,Integer,Double,String,ElementId }
     internal sealed class Definition { public string Name;public ForgeTypeId DataType; public ForgeTypeId GetDataType() { return DataType; } }
     internal sealed class Parameter {
@@ -41,10 +41,11 @@ namespace Autodesk.Revit.DB {
             Document.AfterSet(this);
             return Behavior!="falseApplied"&&Behavior!="falseNoChange";
         }
-        public bool Set(double value) { return Store(value); } public bool Set(int value) { return Store(value); } public bool Set(string value) { return Store(value); }
+        public bool Set(ElementId value) { return Store(value); } public bool Set(double value) { return Store(value); } public bool Set(int value) { return Store(value); } public bool Set(string value) { return Store(value); }
     }
     internal sealed class Category { public ElementId Id;public string Name; }
     internal class Element { public ElementId Id,LevelId=new ElementId(-1),TypeId=new ElementId(-1);public string Name="Controlled instance";public Category Category;public Document Document;public bool IsValidObject=true;public List<Parameter> Parameters=new List<Parameter>();public ElementId GetTypeId() { return TypeId; } }
+    internal sealed class Material:Element {}
     internal sealed class ElementType:Element { public string FamilyName="Controlled family"; }
     internal sealed class Document {
         public string Title="Parameter write fixture",PathName=@"D:\controlled\parameter-write.rvt",CommitBehavior="normal",RegenerateBehavior="normal",GroupBehavior="normal",StartBehavior="normal";
@@ -67,7 +68,7 @@ namespace Autodesk.Revit.DB {
                 source.Parameters[source.Parameters.IndexOf(target)]=replacement;
             }
         }
-        public void Drift() { foreach(Parameter p in Elements.SelectMany(element=>element.Parameters)) { if(p.StorageType==StorageType.Double)p.Value=Convert.ToDouble(p.Value)+1;else if(p.StorageType==StorageType.Integer)p.Value=Convert.ToInt32(p.Value)+1;else if(p.StorageType==StorageType.String)p.Value=(string)p.Value+"-drift"; } }
+        public void Drift() { foreach(Parameter p in Elements.SelectMany(element=>element.Parameters)) { if(p.StorageType==StorageType.Double)p.Value=Convert.ToDouble(p.Value)+1;else if(p.StorageType==StorageType.Integer)p.Value=Convert.ToInt32(p.Value)+1;else if(p.StorageType==StorageType.String)p.Value=(string)p.Value+"-drift";else if(p.StorageType==StorageType.ElementId)p.Value=new ElementId(((ElementId)p.Value).Value+1); } }
         public void Boundary(string behavior) {
             if(behavior=="drift")Drift();
             if(behavior=="removeElement")Elements.Clear();
@@ -174,7 +175,7 @@ namespace RevitLocalCodex {
         private static string Text(Dictionary<string,object> args,string key,string fallback) { return Convert.ToString(Value(args,key,fallback),CultureInfo.InvariantCulture); }
         private static object Facts(Document doc) { return new { doc.IsModified,source_ids=doc.Elements.Select(element=>element.Id.Value.ToString(CultureInfo.InvariantCulture)).ToArray(),parameters=doc.Elements.SelectMany(element=>element.Parameters.Select(p=>new { element_id=element.Id.Value.ToString(CultureInfo.InvariantCulture),source_is_type=element is ElementType,source_same_document=Object.ReferenceEquals(element.Document,doc),parameter_id=p.Id.Value,id_exact=p.Id.Value.ToString(CultureInfo.InvariantCulture),storage_type=p.StorageType.ToString(),data_type=p.Definition.DataType==null?null:p.Definition.DataType.TypeId,owner_id=p.Element==null?null:p.Element.Id.Value.ToString(CultureInfo.InvariantCulture),owner_is_type=p.Element is ElementType,owner_same_document=p.Element!=null&&Object.ReferenceEquals(p.Element.Document,doc),p.IsReadOnly,p.HasValue,value=p.Value is ElementId?(object)((ElementId)p.Value).Value:p.Value,p.SetCalls,p.ReadCalls })).ToArray() }; }
         private static Element AddElement(Document doc,Dictionary<string,object> raw) {
-            Element element=(bool)Value(raw,"isType",false)?new ElementType():new Element();element.Id=new ElementId(Convert.ToInt64(Value(raw,"id",100),CultureInfo.InvariantCulture));element.Document=doc;element.IsValidObject=!(bool)Value(raw,"invalid",false);doc.Elements.Add(element);
+            Element element=(bool)Value(raw,"isMaterial",false)?(Element)new Material():(bool)Value(raw,"isType",false)?new ElementType():new Element();element.Id=new ElementId(Convert.ToInt64(Value(raw,"id",100),CultureInfo.InvariantCulture));element.Document=doc;element.IsValidObject=!(bool)Value(raw,"invalid",false);doc.Elements.Add(element);
             element.TypeId=new ElementId(Convert.ToInt64(Value(raw,"typeId",-1),CultureInfo.InvariantCulture));element.LevelId=new ElementId(Convert.ToInt64(Value(raw,"levelId",-1),CultureInfo.InvariantCulture));if(raw.ContainsKey("categoryId"))element.Category=new Category { Id=new ElementId(Convert.ToInt64(raw["categoryId"],CultureInfo.InvariantCulture)),Name="Controlled category" };
             foreach(Dictionary<string,object> parameter in (IList)Value(raw,"parameters",new object[0])) {
                 StorageType storage=(StorageType)Enum.Parse(typeof(StorageType),Text(parameter,"storage","Double"));object value=Value(parameter,"value",null);if(storage==StorageType.Double&&value!=null)value=Convert.ToDouble(value);if(storage==StorageType.Integer&&value!=null)value=Convert.ToInt32(value);if(storage==StorageType.ElementId&&value!=null)value=new ElementId(Convert.ToInt64(value));

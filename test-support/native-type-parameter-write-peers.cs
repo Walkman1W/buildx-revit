@@ -91,6 +91,10 @@ namespace Autodesk.Revit.DB {
 namespace RevitLocalCodex {
  internal static class AccessPolicy {internal sealed class Binding {}}
  internal static partial class WorkbenchActions {
+  private sealed class MaterialAssignmentExpectation {}
+  private static object SetElementMaterial(Document doc, Dictionary<string,object> args, out MaterialAssignmentExpectation expectation){expectation=null;throw new InvalidOperationException("Out of scope material assignment peer.");}
+  private static void VerifyElementMaterial(Document doc, MaterialAssignmentExpectation expectation){throw new InvalidOperationException("Out of scope material assignment peer.");}
+
         // View-template writes are outside this parameter-write fixture.
         private static object ApplyViewTemplate(Document doc, Dictionary<string, object> args, out ElementId before) { before = null; throw new InvalidOperationException("Out of scope view-template peer."); }
         private static object VerifyViewTemplate(Document doc, Dictionary<string, object> args, ElementId before = null) { throw new InvalidOperationException("Out of scope view-template peer."); }

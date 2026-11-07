@@ -384,3 +384,14 @@ test('roof validates host and input and retains original receipt without replay'
  assert.equal(f.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(f.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
  for(const change of [{roof_type_id:'4'},{origin_xy_mm:{x:0,y:101}},{width_mm:2999},{slope:1}]){const x=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;await assert.rejects(invokeWorkbench(tool,args(parameters),x.options()),e=>{const facts=workbenchFailureEvidence(e);owner=x.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(x.requests.length,1);}
 });
+
+test('material assignment requires exact prior state and retains unknown original receipt',async t=>{
+ const operation='set_element_material',tool='revit_set_element_material',all=[...operations,operation],patch={...hostPatch,nativeBasicWriteOperations:all};
+ const parameters={element_id:'101',parameter_id:'-123',material_id:'202',expected_has_value:true,expected_value_internal:'-1'};
+ const value={element_id:'101',parameter_id:'-123',material_id:'202',before_has_value:true,before_value_internal:'-1',changed:true};
+ const f=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{parameter_id:'-1'},{expected_has_value:false},{material_id:0},{element_id:9007199254740992},{face_index:0}])await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(f.requests[0].args.mode,'rollback');
+ const bad=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,{...value,material_id:'203'})});let owner;
+ await assert.rejects(invokeWorkbench(tool,args(parameters),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
+});

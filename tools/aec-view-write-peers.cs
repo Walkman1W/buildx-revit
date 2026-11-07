@@ -92,6 +92,9 @@ namespace RevitLocalCodex {
  internal static partial class WorkbenchActions {
   private static object CreateColumn(Document d, Dictionary<string,object> a, BasicCreatedExpectation c) { throw new InvalidOperationException("Column is covered by its dedicated peer fixture."); }
   private static object ReadColumn(Document d, Dictionary<string,object> a, ElementId id) { throw new InvalidOperationException("Column is covered by its dedicated peer fixture."); }
+  private sealed class MaterialAssignmentExpectation {}
+  private static object SetElementMaterial(Document doc, Dictionary<string,object> args, out MaterialAssignmentExpectation expectation){expectation=null;throw new InvalidOperationException("Out of scope material assignment peer.");}
+  private static void VerifyElementMaterial(Document doc, MaterialAssignmentExpectation expectation){throw new InvalidOperationException("Out of scope material assignment peer.");}
 
         // Window placement is outside this fixture; window producer tests exercise the real methods.
         private static object PlaceWindow(Document doc, Dictionary<string, object> args, BasicCreatedExpectation created) { throw new InvalidOperationException("Out of scope window-write peer."); }
