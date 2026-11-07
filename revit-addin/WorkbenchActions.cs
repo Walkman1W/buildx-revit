@@ -27,7 +27,6 @@ namespace RevitLocalCodex
             Document doc = uiapp.ActiveUIDocument.Document;
             if (AecPilotQueries.IsRead(operation)) return AecPilotQueries.Read(doc, operation, args);
             if (AecDrawingQueries.IsRead(operation)) return AecDrawingQueries.Read(doc, operation, args);
-            if (operation == "preview_project_parameter_binding") return ProjectInstanceBindingPreparation.Read(doc, args);
             if (operation == "get_pipe_network") return SchematicRevitService.ReadPipeNetwork(doc, args);
             if (operation == "capture_model_snapshot")
             {
