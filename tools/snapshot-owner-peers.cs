@@ -10,6 +10,9 @@ namespace RevitLocalCodex {
   static IEnumerable<SnapshotChangeOwner.Identity> Broken(){yield return I(1,"a");throw new InvalidOperationException("interrupted baseline");}
   static SnapshotChangeOwner Make(object doc,int cap=8,int budget=8){return SnapshotChangeOwner.Capture("host-A",doc,new[]{I(1,"a"),I(2,"b")},cap,budget);}
   static void Observe(SnapshotChangeOwner o,object doc,SnapshotChangeOwner.Identity[] add,SnapshotChangeOwner.Identity[] modify,long[] delete){o.Observe("host-A",doc,o.BaselineToken,add,modify,delete);}
+  static IEnumerable<SnapshotChangeOwner.Identity> DuringCapture(SnapshotLifecycle life, object doc){yield return I(1,"a");life.Observe(doc,()=>new[]{I(2,"b")},()=>new SnapshotChangeOwner.Identity[0],()=>new long[0]);yield return I(2,"b");}
+  static IEnumerable<SnapshotChangeOwner.Identity> UnknownDuringCapture(SnapshotLifecycle life, object other){yield return I(1,"a");life.Observe(other,()=>new SnapshotChangeOwner.Identity[0],()=>new SnapshotChangeOwner.Identity[0],()=>new long[0]);}
+  static IEnumerable<SnapshotChangeOwner.Identity> IdentityFailure(){throw new InvalidOperationException("unavailable event identity");}
   static void Main(){
    object doc=new object(),other=new object();
    Reject(()=>SnapshotChangeOwner.Capture("host-A",doc,Broken(),8,8),"interrupted baseline never published");
@@ -32,6 +35,16 @@ namespace RevitLocalCodex {
    var changed=Make(doc);Reject(()=>Observe(changed,doc,new SnapshotChangeOwner.Identity[0],new[]{I(1,"other")},new long[0]),"modified identity drift rejected");
    var closed=Make(doc);closed.Expire("document_closed");Reject(()=>closed.Read("host-A",doc,closed.BaselineToken,0,0,1),"closed document invalidates token");
    var restarted=Make(doc);Reject(()=>restarted.Read("host-A",doc,token,0,0,1),"restarted owner rejects previous token");
+   var life=new SnapshotLifecycle("host-A");var docB=new object();var baselineA=life.Capture(doc,new[]{I(1,"a")},8,8);var baselineB=life.Capture(docB,new[]{I(1,"other")},8,8);
+   life.Observe(doc,()=>new[]{I(2,"b")},()=>new SnapshotChangeOwner.Identity[0],()=>new long[0]);
+   Check(life.Read(doc,baselineA.BaselineToken,1,0,10).Items.Length==1&&life.Read(docB,baselineB.BaselineToken,0,0,10).Items.Length==0,"events stay in original document slot");
+   life.Observe(doc,()=>IdentityFailure(),()=>new SnapshotChangeOwner.Identity[0],()=>new long[0]);Reject(()=>life.Read(doc,baselineA.BaselineToken,1,0,1),"identity fetch failure expires affected document");Check(life.Read(docB,baselineB.BaselineToken,0,0,1).Total==0,"identity failure leaves other document isolated");
+   Reject(()=>life.Capture(doc,DuringCapture(life,doc),8,8),"change during baseline capture rejects publication");Reject(()=>life.Read(doc,"old",0,0,1),"failed capture cannot be read");
+   life.Close(docB);Reject(()=>life.Read(docB,baselineB.BaselineToken,0,0,1),"closing invalidates document even if close is cancelled");
+   var fresh=life.Capture(doc,new[]{I(1,"a")},8,8);life.Poison();Reject(()=>life.Read(doc,fresh.BaselineToken,0,0,1),"unmatched lifecycle event fails all reads");Check(fresh.Expiry=="event_lifecycle_fault","poison expires original baseline");life.Dispose();
+   var unknownDoc=new SnapshotLifecycle("host-A");var known=unknownDoc.Capture(doc,new[]{I(1,"a")},8,8);unknownDoc.Observe(other,()=>new SnapshotChangeOwner.Identity[0],()=>new SnapshotChangeOwner.Identity[0],()=>new long[0]);Reject(()=>unknownDoc.Read(doc,known.BaselineToken,0,0,1),"unrecognized document event invalidates rather than drops possible change");unknownDoc.Dispose();
+   var race=new SnapshotLifecycle("host-A");Reject(()=>race.Capture(doc,UnknownDuringCapture(race,other),8,8),"unrecognized event during baseline prevents publication");race.Dispose();
+   var shutdown=new SnapshotLifecycle("host-A");var live=shutdown.Capture(doc,new[]{I(1,"a")},8,8);shutdown.Dispose();Check(live.Expiry=="host_stopped","host shutdown expires baseline");Reject(()=>shutdown.Read(doc,live.BaselineToken,0,0,1),"disposed host cannot read");
    Console.WriteLine("PASS total=" + tests);
   }
  }

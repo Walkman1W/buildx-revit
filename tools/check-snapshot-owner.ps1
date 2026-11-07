@@ -7,7 +7,7 @@ if (!$out.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) -or (Test-Pa
 [IO.Directory]::CreateDirectory($out) | Out-Null
 $exe=Join-Path $out 'snapshot-owner-peers.exe'
 $csc=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-& $csc /nologo /target:exe /langversion:5 /codepage:65001 ('/out:'+$exe) (Join-Path $root 'revit-addin/SnapshotChangeOwner.cs') (Join-Path $PSScriptRoot 'snapshot-owner-peers.cs')
+& $csc /nologo /target:exe /langversion:5 /codepage:65001 ('/out:'+$exe) (Join-Path $root 'revit-addin/SnapshotChangeOwner.cs') (Join-Path $root 'revit-addin/SnapshotLifecycle.cs') (Join-Path $PSScriptRoot 'snapshot-owner-peers.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Peer compile failed.' }
 & $exe | Tee-Object -FilePath (Join-Path $out 'result.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Peer checks failed.' }

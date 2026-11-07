@@ -46,6 +46,7 @@ namespace RevitLocalCodex
         private readonly object hostDescriptorGate = new object();
         private readonly DateTime hostStartedUtc = DateTime.UtcNow;
         private UIControlledApplication controlledApplication;
+        private SnapshotRevitBridge snapshotBridge;
         // One owner per host session; family documents never enter the project script group.
         private BuildX.FamilyRevit.RevitFamilyWorkflow familyWorkflow;
         private TypeParameterWriteApproval typeParameterApprovals;
@@ -301,6 +302,7 @@ namespace RevitLocalCodex
                 queueTimer = new Timer(PollQueue, null, Timeout.Infinite, Timeout.Infinite);
                 AppDomain.CurrentDomain.AssemblyResolve += ResolvePrivateDependency;
                 controlledApplication = application;
+                snapshotBridge = new SnapshotRevitBridge(application.ControlledApplication, session);
                 controlledApplication.Idling += OnQueueIdling;
                 PublishFamilyApprovalCapability(false);
                 queueTimer.Change(250, 500);
@@ -1064,6 +1066,7 @@ namespace RevitLocalCodex
                 activeWindowWake.Clear();
                 if (familyWorkflow != null) { familyWorkflow.DisposeApprovalObserver(); familyWorkflow = null; }
                 bool wakeReleased = CancelUiWake(pendingWakeObservation);
+                if (snapshotBridge != null) { snapshotBridge.Dispose(); snapshotBridge = null; }
                 if (controlledApplication != null) { controlledApplication.Idling -= OnQueueIdling; controlledApplication = null; }
                 if (queueTimer != null) { queueTimer.Dispose(); queueTimer = null; }
                 if (externalEvent != null) { externalEvent.Dispose(); externalEvent = null; }
