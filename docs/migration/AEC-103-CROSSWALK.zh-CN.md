@@ -1,6 +1,6 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **106 项**，包括 47 项只读查询和 59 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **107 项**，包括 48 项只读查询和 59 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
 AEC 侧有 **27 项已有同名工具、44 项具名候选、14 项有关联工具、9 项尚无具名入口、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。具名候选和关联工具可能只覆盖原工具的一部分用途；下表注明边界，不代表真实 Revit 验收。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
@@ -128,7 +128,7 @@ AEC 侧有 **27 项已有同名工具、44 项具名候选、14 项有关联工�
 | --- | --- | --- |
 | `revit_export_dwg` | 导出 DWG | 未接入 · BuildX 只读 `revit_preview_dwg_export` 可查询导出器、单个视图和命名设置。文件导出和发布仍待接入。[验收](AEC-DWG-PREFLIGHT.zh-CN.md) |
 | `revit_export_ifc` | 导出 IFC | 未接入 |
-| `revit_export_navisworks` | 导出 NWC | 未接入 |
+| `revit_export_navisworks` | 导出 NWC | 未接入 · BuildX 只读 `revit_preview_nwc_export` 可查询 Navisworks 导出器及指定三维视图的可打印状态。文件导出和发布仍待接入。[验收](AEC-NWC-PREFLIGHT.zh-CN.md) |
 | `revit_export_image` | 导出视图图像 | 关联能力 · `revit_capture_view`。返回当前视图快照，独立文件导出另议。 |
 | `revit_render_3d` | 渲染三维视图 | 未接入 · AEC 当前 handler 使用视图图像导出；BuildX `revit_capture_view` 可截取视图，但不能据此称为真实渲染。 |
 
