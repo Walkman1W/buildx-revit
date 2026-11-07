@@ -10,8 +10,11 @@ namespace RevitLocalCodex
  {
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool CreateDirectory(string path, IntPtr attributes);
   readonly GuardedSingleArtifactPublisher.JournalRoot captured;
+  readonly string expectedName;
   public string StageId {get;private set;} public string DirectoryPath {get;private set;}
-  internal UnregisteredDwgHostLease(string hostRoot) {
+  internal UnregisteredDwgHostLease(string hostRoot) : this(hostRoot, "drawing.dwg") { }
+  internal UnregisteredDwgHostLease(string hostRoot, string name) {
+   if(name!="drawing.dwg" && name!="model.ifc")throw new ArgumentException("Unsupported fixed staging filename."); expectedName=name;
    var parent=GuardedSingleArtifactPublisher.CaptureJournalRoot(hostRoot);
    StageId=Guid.NewGuid().ToString("D"); DirectoryPath=Path.Combine(parent.Directory,StageId);
    if(!CreateDirectory(DirectoryPath,IntPtr.Zero))throw new IOException("Cannot exclusively create stage directory.");
@@ -27,7 +30,7 @@ namespace RevitLocalCodex
    foreach(string path in Directory.EnumerateFileSystemEntries(DirectoryPath)) {
     if(facts.Count>=128)throw new InvalidOperationException("Stage entry budget exceeded.");
     var name=Path.GetFileName(path);
-    if(!String.Equals(name,"drawing.dwg",StringComparison.Ordinal)) { facts.Add(new DwgStageFileFact {Name=name,Regular=false}); continue; }
+    if(!String.Equals(name,expectedName,StringComparison.Ordinal)) { facts.Add(new DwgStageFileFact {Name=name,Regular=false}); continue; }
     var plan=GuardedSingleArtifactPublisher.Prepare(path,DirectoryPath,"inspection.dwg");
     facts.Add(new DwgStageFileFact {Name=name,Identity=plan.SourceIdentity,Sha256=plan.Sha256,Bytes=plan.Bytes,Regular=true});
    }
