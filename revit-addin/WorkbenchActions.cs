@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -100,7 +100,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -426,6 +426,22 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "create_text_note")
+            {
+                Fields(args, "expected_document", "mode", "view_id", "text_type_id", "point_mm", "text");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Text notes require a project document.");
+                View view = RequiredElement(doc, NativeModelQueries.ExactId(args, "view_id")) as View;
+                TextNoteType type = RequiredElement(doc, NativeModelQueries.ExactId(args, "text_type_id")) as TextNoteType;
+                if (view == null || !view.IsValidObject || view.IsTemplate) throw new InvalidOperationException("view_id must identify a valid non-template view.");
+                if (type == null || !type.IsValidObject) throw new InvalidOperationException("text_type_id must identify a valid TextNoteType.");
+                XYZ point = MillimeterPoint(Required(args, "point_mm"), "point_mm");
+                if (point.DistanceTo(XYZ.Zero) > 52800.0) throw new InvalidOperationException("point_mm exceeds the 10 mile radius.");
+                string text = TextNoteInput(args);
+                TextNote note = TextNote.Create(doc, view.Id, point, text.Replace("\n", "\r"), type.Id);
+                created.Id = note.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "place_viewport_on_sheet")
             {
                 Fields(args, "expected_document", "mode", "sheet_id", "view_id", "x_mm", "y_mm");
@@ -572,6 +588,20 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "create_text_note")
+            {
+                TextNote note = element as TextNote;
+                long viewId = NativeModelQueries.ExactId(args, "view_id"), typeId = NativeModelQueries.ExactId(args, "text_type_id");
+                if (note == null || !note.IsValidObject || note.OwnerViewId.Value != viewId || note.GetTypeId().Value != typeId)
+                    throw new InvalidOperationException("Created text note identity changed.");
+                string actualText = NormalizeTextNote(note.Text);
+                XYZ actual = note.Coord, requested = MillimeterPoint(Required(args, "point_mm"), "point_mm");
+                if (!String.Equals(actualText, TextNoteInput(args), StringComparison.Ordinal) || actual == null
+                    || Double.IsNaN(actual.X) || Double.IsInfinity(actual.X) || Double.IsNaN(actual.Y) || Double.IsInfinity(actual.Y)
+                    || Double.IsNaN(actual.Z) || Double.IsInfinity(actual.Z) || actual.DistanceTo(requested) > Feet(0.001))
+                    throw new InvalidOperationException("Created text note text or point changed.");
+                return new { element_id = DescribedId(note.Id), view_id = DescribedId(note.OwnerViewId), text_type_id = DescribedId(note.GetTypeId()), point_mm = PointDto(actual), text = actualText };
+            }
             if (operation == "place_viewport_on_sheet")
             {
                 Viewport viewport = element as Viewport;
@@ -765,6 +795,20 @@ namespace RevitLocalCodex
         {
             if (start.DistanceTo(end) <= uiapp.Application.ShortCurveTolerance)
                 throw new InvalidOperationException("Start and end must be separated by more than Revit ShortCurveTolerance.");
+        }
+        private static string NormalizeTextNote(string text)
+        {
+            return text == null ? null : text.Replace("\r\n", "\n").Replace('\r', '\n');
+        }
+        private static string TextNoteInput(Dictionary<string, object> args)
+        {
+            string text = Required(args, "text") as string;
+            if (text == null || text.Length > 2000 || !text.Any(c => !Char.IsWhiteSpace(c) && c != '\ufeff'))
+                throw new InvalidOperationException("text must be nonblank and at most 2000 UTF-16 code units.");
+            foreach (char c in text)
+                if ((c < 0x20 && c != '\r' && c != '\n') || (c >= 0x7f && c <= 0x9f))
+                    throw new InvalidOperationException("text contains a disallowed control character.");
+            return NormalizeTextNote(text);
         }
         private static XYZ MillimeterPoint(object raw, string label)
         {

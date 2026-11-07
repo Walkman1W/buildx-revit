@@ -184,3 +184,22 @@ test('view template is searchable and manual submission requires one confirmatio
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',view_id:'9007199254740993',template_id:'9007199254740994'});
  await ui.respond(ui.requests[0],{ok:true,executionId:'view-template-write'});
 });
+
+test('text note is searchable and manual multiline submission requires confirmation',async t=>{
+ const name='revit_create_text_note',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+ assert.equal(tool?.label,'创建文字注释');assert.equal(tool.readOnly,false);
+ for(const query of [name,'create_text_note','ctn','创建文字注释'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@ctn');const picker=ui.get('model-tool-picker');
+ const option=picker.querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();
+ assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ assert.equal(ui.get('model-command-'+name+'-text').tagName,'TEXTAREA');
+ for(const [key,value] of Object.entries({view_id:'9007199254740993',text_type_id:'9007199254740994',text:'第一行\n第二行'}))ui.get('model-command-'+name+'-'+key).value=value;
+ for(const [axis,value] of Object.entries({x:1,y:2,z:3}))ui.get('model-command-'+name+'-point_mm-'+axis).value=String(value);
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',view_id:'9007199254740993',text_type_id:'9007199254740994',point_mm:{x:1,y:2,z:3},text:'第一行\n第二行'});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'text-note-write'});
+});

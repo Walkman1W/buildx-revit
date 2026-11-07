@@ -143,6 +143,25 @@
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     },
     {
+      "id": "BX-022",
+      "title": "AEC 文字注释创建",
+      "status": "in_progress",
+      "acceptance": "精确视图与文字类型 ID、模型空间毫米锚点、纯文本和回读，保留权限、事务、逐次确认和原回执",
+      "evidence": "AEC-TEXT-NOTE-WRITE.zh-CN.md",
+      "unmigratedFromOriginal50": 33,
+      "candidateWorkspaceTools": 79,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpTextNoteChecks": 7,
+      "controlledCSharpChecks": 45,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 120,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
       "id": "BX-021",
       "title": "AEC 视图样板应用",
       "status": "in_progress",

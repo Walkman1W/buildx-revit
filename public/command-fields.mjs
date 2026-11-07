@@ -12,6 +12,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',elevation_mm:'高程（mm）',tolerance_feet:'包围盒容差（英尺）',fields:'返回字段',template_id:'族模板',changes:'参数修改',
   view_id:'视图 ID',view_family_type_id:'视图类型 ID',sheet_id:'图纸 ID',number:'图纸编号',titleblock_id:'图框类型 ID',group_id:'模型组 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
   x_mm:'图纸 X（mm）',y_mm:'图纸 Y（mm）',
+  text:'文字内容',text_type_id:'文字类型 ID',
   orientations:'检查视角',pixel_size:'图片长边（像素）',session_handle:'待恢复检查标识',
 });
 
@@ -51,7 +52,7 @@ export function parseExactIdValue(rule,value) {
   return raw;
 }
 
-export function createCommandField({document,Event=globalThis.Event,id,key,rule,label=COMMAND_PARAMETER_LABELS[key] ?? key,required=false,value,onChange=()=>{}}) {
+export function createCommandField({document,Event=globalThis.Event,id,key,rule,label=COMMAND_PARAMETER_LABELS[key] ?? key,required=false,value,multiline=false,onChange=()=>{}}) {
   const make = (tag,className,text) => {
     const node=document.createElement(tag);
     if(className)node.className=className;
@@ -61,10 +62,11 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
   const initial=value === undefined ? has(rule,'default') ? rule.default : '' : value;
   const exactId=isExactIdRule(rule),complex=!exactId&&(rule.type === 'array' || rule.type === 'object' || rule.anyOf || rule.oneOf);
   const isPoint=pointRule(rule),isIds=rule.type === 'array' && rule.items?.type === 'integer';
+  const multilineText=multiline&&rule.type==='string';
   const element=make(isPoint ? 'div' : 'label','command-field'+(isPoint?' command-field-point':isIds?' command-field-ids':''));
   const title=make('span','command-field-label',label);
   element.append(title);
-  const input=make(Array.isArray(rule.enum) || rule.type === 'boolean' ? 'select' : complex && !isPoint && !isIds || key === 'code' ? 'textarea' : 'input');
+  const input=make(Array.isArray(rule.enum) || rule.type === 'boolean' ? 'select' : complex && !isPoint && !isIds || key === 'code' || multilineText ? 'textarea' : 'input');
   input.id=id;input.required=required;
   if(!isPoint)element.htmlFor=id;
   input.dataset.defaultValue=textValue(has(rule,'default')?rule.default:'');
@@ -144,6 +146,9 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
     const choices=Array.isArray(rule.enum) ? rule.enum : [false,true];
     if(!has(rule,'default')) {const option=make('option','',required?'请选择':'未指定');option.value='';input.append(option);}
     for(const choice of choices) {const option=make('option','',commandChoiceLabel(choice,key));option.value=String(choice);input.append(option);}
+  }else if(multilineText) {
+    input.rows=4;
+    if(rule.maxLength !== undefined)input.maxLength=rule.maxLength;
   }else if(!complex && key !== 'code') {
     input.type=rule.type === 'number' || rule.type === 'integer' ? 'number' : 'text';
     if(exactId){input.inputMode='numeric';const maxLength=rule.anyOf.find(entry=>entry.type==='string').maxLength;if(maxLength!==undefined)input.maxLength=maxLength;}

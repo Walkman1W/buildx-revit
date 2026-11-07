@@ -200,3 +200,32 @@ test('view template mismatched original receipts remain unconfirmed without repl
   assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
  }
 });
+
+test('text note validates host and inputs before queue and normalizes multiline rollback',async t=>{
+ const operation='create_text_note',tool='revit_create_text_note',all=[...operations,operation],patch={...hostPatch,nativeBasicWriteOperations:all};
+ const parameters={view_id:'9007199254740993',text_type_id:'9007199254740994',point_mm:{x:1,y:2,z:3},text:'第一行\r\n第二行\r第三行'};
+ for(const host of [{...patch,version:'0.8.8'},{...patch,nativeBasicWritesVersion:0},{...patch,nativeBasicWriteOperations:operations}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(f.requests.length,0);
+ }
+ const value={element_id:'5',...parameters,text:'第一行\n第二行\n第三行'};
+ const f=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{view_id:'0'},{view_id:'9223372036854775808'},{view_id:9007199254740992},{text_type_id:'-1'},{text_type_id:'1.5'},{point_mm:{x:NaN,y:0,z:0}},{point_mm:{x:Infinity,y:0,z:0}},{point_mm:{x:16093440,y:1,z:0}},{text:''},{text:' \n '},{text:'a'.repeat(2001)},{text:'a\t'},{text:'a\u0085'},{mode:'invalid'}])
+  await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);
+ const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].operation,operation);assert.equal(f.requests[0].args.mode,'rollback');assert.equal(f.requests[0].args.text,value.text);
+ assert.deepEqual(result.value,value);assert.equal(result.receiptOwner.inspect().value.status,'received');
+});
+
+test('text note receipt mismatch remains unconfirmed without replay',async t=>{
+ const operation='create_text_note',all=[...operations,operation],parameters={view_id:'2',text_type_id:'3',point_mm:{x:1,y:2,z:3},text:'a\nb'};
+ const value={element_id:'5',...parameters};
+ for(const change of [{element_id:'0'},{view_id:'4'},{text_type_id:'4'},{point_mm:{x:1.0008,y:2.0008,z:3}},{point_mm:{x:NaN,y:2,z:3}},{text:'a\r\nb'},{extra:true}]){
+  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;
+  await assert.rejects(invokeWorkbench('revit_create_text_note',args(parameters),f.options()),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+  assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
+ }
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,point_mm:{x:1.0006,y:2.0006,z:3}})});
+ const result=await invokeWorkbench('revit_create_text_note',args(parameters),f.options());f.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(f.requests.length,1);
+});
