@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {resolveBuildxPaths,normalizeInstallationConfiguration,readBuildxInstallation} from './lib/buildx-paths.mjs';
+import {resolveBuildxPaths,normalizeInstallationConfiguration,readBuildxInstallation,resolveBuildxPanelPort} from './lib/buildx-paths.mjs';
 
 const base={schemaVersion:1,installationId:'6ab8f6cf-0bad-4149-9184-e19b2031da4d',nodeExecutable:'C:\\fixture-runtime\\node.exe',pythonExecutable:'C:\\fixture-runtime\\python.exe',codexExecutable:'C:\\existing-codex\\codex.exe'};
 async function fixture(t){
@@ -13,6 +13,36 @@ async function fixture(t){
   t.after(async()=>{const target=path.resolve(stage);assert.equal(path.dirname(target),path.resolve(os.tmpdir()));assert.ok(path.basename(target).startsWith('buildx-path-owner-'));await fs.rm(target,{recursive:true,force:true});});
   return {stage,programRoot,dataRoot,file:path.join(programRoot,'buildx-installation.json')};
 }
+
+test('panel listener keeps legacy defaults and requires an explicit schema2 integer port',async t=>{
+  const f=await fixture(t),config={...base,schemaVersion:2,dataRoot:f.dataRoot};
+  for(const value of [null,undefined,base,config])assert.equal(resolveBuildxPanelPort(value),41873);
+  assert.equal(Object.hasOwn(normalizeInstallationConfiguration(config,{programRoot:f.programRoot}),'panelPort'),false);
+  for(const panelPort of [1024,41874,65535]){
+    const normalized=normalizeInstallationConfiguration({...config,panelPort},{programRoot:f.programRoot});
+    assert.equal(resolveBuildxPanelPort(normalized),panelPort);assert.ok(Object.isFrozen(normalized));
+  }
+  for(const panelPort of [null,undefined,true,false,'41874',0,1023,65536,-1,41874.5,NaN,Infinity,{},[]]){
+    assert.throws(()=>normalizeInstallationConfiguration({...config,panelPort},{programRoot:f.programRoot}),/configuration is invalid/);
+    assert.throws(()=>resolveBuildxPanelPort({...config,panelPort}),/configuration is invalid/);
+  }
+  for(const panelPort of [41873,null])assert.throws(()=>normalizeInstallationConfiguration({...base,panelPort},{programRoot:f.programRoot}),/configuration is invalid/);
+});
+
+test('panel port is read from the owned configuration and duplicate ports fail closed',async t=>{
+  const f=await fixture(t),config={...base,schemaVersion:2,dataRoot:f.dataRoot,panelPort:41874};
+  await fs.writeFile(path.join(f.dataRoot,'buildx-data-owner.json'),JSON.stringify({schemaVersion:1,installationId:base.installationId}));
+  const canonical=JSON.stringify(config);await fs.writeFile(f.file,canonical);
+  assert.equal(resolveBuildxPanelPort(readBuildxInstallation(f.programRoot)),41874);
+  for(const duplicate of ['"panelPort":41873,','"panel\\u0050ort":41873,']){
+    await fs.writeFile(f.file,'{'+duplicate+canonical.slice(1));
+    assert.throws(()=>readBuildxInstallation(f.programRoot),/configuration is invalid/);
+  }
+  for(const value of ['41874.0','41874e0']){
+    await fs.writeFile(f.file,canonical.replace('"panelPort":41874','"panelPort":'+value));
+    assert.equal(resolveBuildxPanelPort(readBuildxInstallation(f.programRoot)),41874);
+  }
+});
 
 test('unconfigured source and schema1 retain their exact legacy data roots without moving history',async t=>{
   const f=await fixture(t),history=path.join(f.programRoot,'runtime-history','retained.txt');

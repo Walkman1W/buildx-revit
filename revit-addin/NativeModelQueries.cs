@@ -14,7 +14,8 @@ namespace RevitLocalCodex
     internal static class NativeModelQueries
     {
         private const int MaximumScan = 100000;
-        private static readonly string[] Operations = { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" };
+        private const int MaximumPreparationItems = 200;
+        private static readonly string[] Operations = { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation" };
         private static readonly string[] DefaultFields = { "name", "category", "type_id", "level" };
         private static readonly string[] ElementFields = { "name", "category", "type_id", "level", "length", "area", "volume" };
         private static readonly Dictionary<string, string> CategoryAliases = new Dictionary<string, string>(StringComparer.Ordinal) {
@@ -39,7 +40,8 @@ namespace RevitLocalCodex
         internal static object Read(UIApplication uiapp, string operation, Dictionary<string, object> args)
         {
             var budget = new ReadBudget();
-            Document doc = uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
+            UIDocument uidoc = uiapp.ActiveUIDocument;
+            Document doc = uidoc == null ? null : uidoc.Document;
             if (operation == "health")
             {
                 Fields(args, "expected_document");
@@ -49,9 +51,13 @@ namespace RevitLocalCodex
             if (operation == "get_document_info")
             {
                 Fields(args, "expected_document");
-                object result = new { schema_version = 1, title = doc.Title, path = doc.PathName, is_family_document = doc.IsFamilyDocument,
-                    is_read_only = doc.IsReadOnly, is_modified = doc.IsModified, active_view = doc.ActiveView == null ? null : ViewDto(doc.ActiveView) };
+                object result = DocumentInfo(doc);
                 budget.Reserve(result); return result;
+            }
+            if (operation == "get_model_preparation")
+            {
+                Fields(args, "expected_document");
+                return ModelPreparation(uidoc, doc, budget);
             }
             if (operation == "list_views")
             {
@@ -79,6 +85,42 @@ namespace RevitLocalCodex
                 budget.Reserve(result); return result;
             }
             throw new InvalidOperationException("Unknown native model query.");
+        }
+
+        private static object DocumentInfo(Document doc)
+        {
+            View activeView = doc.ActiveView;
+            return new { schema_version = 1, title = doc.Title, path = doc.PathName, is_family_document = doc.IsFamilyDocument,
+                is_read_only = doc.IsReadOnly, is_modified = doc.IsModified, active_view = activeView == null ? null : ViewDto(activeView) };
+        }
+
+        private static object ModelPreparation(UIDocument uidoc, Document doc, ReadBudget budget)
+        {
+            var selection = uidoc.Selection.GetElementIds();
+            if (selection.Count > MaximumPreparationItems)
+                throw new InvalidOperationException("Model preparation supports at most 200 selected elements; no partial result published.");
+            var selectionIds = selection.OrderBy(id => id.Value).Select(SignedId).ToArray();
+            var levels = new List<Level>();
+            using (var collector = new FilteredElementCollector(doc).OfClass(typeof(Level)))
+            {
+                foreach (Level level in collector)
+                {
+                    if (levels.Count >= MaximumPreparationItems)
+                        throw new InvalidOperationException("Model preparation supports at most 200 levels; no partial result published.");
+                    budget.Scan();
+                    levels.Add(level);
+                }
+            }
+            var result = new {
+                schema_version = 1, document = DocumentInfo(doc), selection_ids = selectionIds,
+                levels = levels.OrderBy(level => level.Id.Value).Select(level => new {
+                    element_id = SignedId(level.Id), name = level.Name,
+                    elevation_mm = UnitUtils.ConvertFromInternalUnits(level.Elevation, UnitTypeId.Millimeters),
+                    project_elevation_mm = UnitUtils.ConvertFromInternalUnits(level.ProjectElevation, UnitTypeId.Millimeters)
+                }).ToArray()
+            };
+            budget.Reserve(result);
+            return result;
         }
 
         // Instance/type queries share these exact rows and the existing budget.
@@ -270,7 +312,7 @@ namespace RevitLocalCodex
             if (element == null || !element.IsValidObject) throw new InvalidOperationException("Element does not exist in current document: " + id);
             return element;
         }
-        private static int Page(Dictionary<string, object> args, string key, int fallback, int minimum, int maximum)
+        internal static int Page(Dictionary<string, object> args, string key, int fallback, int minimum, int maximum)
         {
             object raw; if (!args.TryGetValue(key, out raw)) return fallback;
             if (!(raw is int || raw is long || raw is double || raw is decimal)) throw new InvalidOperationException("Invalid page argument: " + key);
@@ -284,7 +326,7 @@ namespace RevitLocalCodex
             if (((string)value).Length > 1024) throw new InvalidOperationException("Query text exceeds budget: " + key);
             return (string)value;
         }
-        private static void Fields(Dictionary<string, object> args, params string[] allowed)
+        internal static void Fields(Dictionary<string, object> args, params string[] allowed)
         { foreach (string key in args.Keys) if (!allowed.Contains(key, StringComparer.Ordinal)) throw new InvalidOperationException("Unknown argument: " + key); }
 
         internal sealed class ReadBudget

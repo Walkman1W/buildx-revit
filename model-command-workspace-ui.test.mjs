@@ -2,12 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createInputUi,session,flush,UiEvent} from './test-support/model-input-ui-fixture.mjs';
 import {MODEL_COMMAND_CATALOG} from './lib/model-command-catalog.mjs';
+import {MODEL_SERVER_PROFILE,panelProfile} from './lib/panel-profile.mjs';
 import {modelSchemaParameters,modelCommandPresentation} from './public/model-workspace.mjs';
 
 const state={workspace:{kind:'model',supportsModelContext:true},ready:false,commandsReady:true,commandReadiness:'local',
   directCommandsAvailable:true,commandCatalog:MODEL_COMMAND_CATALOG,historyAvailable:true,account:{required:false},
   connectionGeneration:1,codexAccount:{accountRevision:1,status:'unavailable'}};
 async function setup(t){const ui=await createInputUi();t.after(()=>ui.close());ui.emit('state',state);ui.emit('conversation',{busy:false,session:session()});await flush();return ui;}
+
+test('Revit tool catalog remains available to chat and commands without a tools panel',async t=>{
+  const ui=await setup(t),catalog=panelProfile(MODEL_SERVER_PROFILE).catalog;
+  ui.emit('state',{...state,toolCatalog:[...catalog,catalog[0],{name:'<invalid>'}]});
+  assert.equal(ui.document.body.querySelectorAll('.model-tools-count').length,0);
+  assert.equal(ui.get('tools-directory').hidden,true);
+  assert.equal(ui.get('tool-list').childElementCount,0);
+  assert.equal(ui.view().toolCatalog.length,catalog.length);
+  ui.emit('state',{...state,toolCount:0});
+  assert.equal(ui.view().toolCatalog.length,catalog.length);
+  ui.emit('state',{...state,toolCount:0,toolCatalog:[]});
+  assert.equal(ui.view().toolCatalog.length,0);
+  assert.ok(ui.view().commandCatalog.length);
+});
 
 test('create command stays directly below search and remains available with no matching or saved commands',async t=>{
   const ui=await setup(t),list=ui.get('model-command-list'),search=list.querySelectorAll('.model-command-filter')[0],create=ui.get('model-create-command'),area=list.querySelectorAll('.command-create-area')[0],items=list.querySelectorAll('.model-command-items')[0];

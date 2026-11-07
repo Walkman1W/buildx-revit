@@ -17,6 +17,20 @@ test('actual native C# query and parameter producers preserve bounded model sema
   await t.test('views retain template facts and sorted pagination',async()=>{
     const page=await query('list_views',{offset:0,limit:3});assert.equal(page.total,20);assert.equal(page.items[0].is_template,true);assert.deepEqual(page.items.map(row=>row.id),['2000','2001','2002']);assert.equal(page.has_more,true);
   });
+  await t.test('model preparation preserves exact selection and level IDs and both millimetre elevations',async()=>{
+    const preparation=await query('get_model_preparation');
+    assert.deepEqual(preparation.document,await query('get_document_info'));
+    assert.deepEqual(preparation.selection_ids,['10000','9007199254740993']);
+    assert.deepEqual(preparation.levels,[
+      {element_id:'1',name:'L1',elevation_mm:-304.8,project_elevation_mm:0},
+      {element_id:'2',name:'L2',elevation_mm:9*304.8,project_elevation_mm:3048},
+    ]);
+    assert.deepEqual((await query('get_model_preparation',{}, {emptySelection:true})).selection_ids,[]);
+    for(const [flags,message] of [[{selectionOverflow:true},/200 selected elements/],[{levelOverflow:true},/200 levels/],[{noDocument:true},/Open a Revit document/]]){
+      const result=await produce({operation:'get_model_preparation',...flags});
+      assert.equal(result.ok,false);assert.equal(result.value,undefined);assert.match(result.error,message);
+    }
+  });
   await t.test('the collector scans beyond 500, then pages stable exact type identities',async()=>{
     const args={category:'Walls',type_id:'100',offset:500,limit:100,fields:['name','category','type_id']};
     const page=await query('get_elements_by_type',args);assert.equal(page.total,650);assert.equal(page.items.length,100);assert.equal(page.items[0].id,'10500');assert.equal(page.items[99].id,'10599');assert.equal(page.coverage.complete,true);assert.ok(page.coverage.scanned>=650);assert.equal(page.items[0].category.built_in_category,'OST_Walls');assert.deepEqual(Object.keys(page.items[0]).sort(),['id','name','category','type_id'].sort());

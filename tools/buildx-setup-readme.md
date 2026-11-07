@@ -1,5 +1,13 @@
 # BuildX Windows 安装向导开发候选
 
+## 跨电脑只读测试包
+
+包含 `buildx-test-scope.json` 的只读测试包使用独立的内部安装计划。运行包根目录中的 `BuildX-Setup.cmd`，按同目录的 `INSTALL.zh-CN.md` 核对环境与步骤。向导验证 Windows x64、Revit 2024、WebView2 Runtime、目标机自有运行程序、包文件和只读宿主编译证据，再登记当前 Windows 用户的 Revit 2024 插件。范围为对话与模型概况、选择、标高和构件搜索四项只读查询。以下通用开发候选说明中的发布阻断适用于原有完整功能候选。
+
+构建该包时，使用 `revit-addin/build.ps1 -IsolatedBuild -NativeReadonlyTest` 编译宿主，并运行 `node tools/buildx-installer.mjs --build-native-readonly-candidate <新目录> <插件输出目录> <版本>`。专用 CLI 安装入口是 `--plan-internal-test` 和 `--apply-internal-test`，参数与普通预检和安装一致。内部测试继续标记为 `releaseReady:false`。
+
+## 通用开发候选
+
 在候选包根目录双击 `BuildX-Setup.cmd` 可打开开发候选向导；从源码目录测试时可双击 `tools/buildx-setup.cmd`。向导需要同目录 `buildx-setup.ps1`、`buildx-installer.mjs` 及父目录的 `lib/local-runtimes.mjs`。当前候选尚不是完整安装包。
 
 窗口首次显示时，如果已从 PATH 找到可信的 `node.exe`，会自动执行一次只读检测；否则请手动选择已有的 `node.exe` 再点击“检测 / 重新检测已有程序”。找到 Codex 后会预填其路径；检查仅识别路径，不代表 Codex 已登录或版本、工具协议兼容，已有登录由 BuildX 启动后的账号和工具握手确认。若找不到可直接运行的 `codex.exe`，可点击官方安装说明，安装完成后点击“重新检测”，或手动选择已有程序。检测变为缺失或歧义时会清除上次自动填入的旧路径；手动输入或选择的路径会保留，并在安装计划中检查。不会自动安装或升级 Codex。CLI 安装仅提供命令包装、或新安装的 PATH 尚未被向导进程读取时，自动检测可能无法定位 `codex.exe`，需手动选择或重新打开向导；检测到多个无法确定的候选时不会猜选。

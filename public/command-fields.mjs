@@ -10,7 +10,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   diameter_mm:'管径（mm）',start_mm:'起点（mm）',end_mm:'终点（mm）',delta_mm:'位移（mm）',
   point_mm:'位置（mm）',origin_mm:'起点（mm）',axis_origin_mm:'旋转中心（mm）',
   angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',template_id:'族模板',changes:'参数修改',
-  view_id:'截图视图',source_view_id:'参照视图',context_element_ids:'周边参照构件',
+  view_id:'截图视图',sheet_id:'图纸 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
   orientations:'检查视角',pixel_size:'图片长边（像素）',session_handle:'待恢复检查标识',
 });
 

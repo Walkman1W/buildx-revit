@@ -138,6 +138,16 @@ test('view trimming is not deletion of older recorded messages',async t=>{
   assert.ok(after.toString().includes(oldest));assert.equal(value.session.contextMessageId,oldest);
 });
 
+test('tool display truncation survives history storage and restoration',async t=>{
+  const f=await fixture(t),session=conversation();
+  session.messages[1].toolHistoryTruncated=true;
+  assert.equal((await f.store.save(scope,session.view())).ok,true);
+  const saved=await f.store.get(scope,session.conversationId);
+  assert.equal(saved.session.messages[1].toolHistoryTruncated,true);
+  const restored=new ChatSession();restored.restoreHistory(saved.session);
+  assert.equal(restored.view().messages[1].toolHistoryTruncated,true);
+});
+
 test('incomplete and malformed files remain unchanged and appear as list issues with bounded paging',async t=>{
   const f=await fixture(t),sessions=[conversation('A'),conversation('B'),conversation('C')];
   for(const session of sessions)await f.store.save(scope,session.view());

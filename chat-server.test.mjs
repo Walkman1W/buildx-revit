@@ -1,10 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import fs from 'node:fs/promises';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
+import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {createPanelServer} from './lib/panel-server.mjs';
+import {invokeAtomicWorkbenchRead} from './lib/workbench-client.mjs';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
 class FakeCodex extends EventEmitter{
@@ -149,8 +153,8 @@ test('HTTP snapshot does not report a complete execution when the tool-record bu
   for(let i=0;i<40;i++)f.codex.notify('item/completed',turn,{item:{id:'tool-'+i,type:'mcpToolCall',tool:'revit_get_selection',status:'completed'}});
   f.codex.notify('item/started',turn,{item:{id:'tool-40',type:'mcpToolCall',tool:'revit_execute_csharp',status:'inProgress'}});
   f.codex.notify('turn/completed',turn,{turn:{id:turn.turnId,status:'completed'}});
-  const view=f.app.snapshot('client-a');assert.equal(view.busy,false);assert.equal(view.session.messages[1].status,'unknown');
-  assert.equal(view.session.messages[1].tools.length,40);assert.equal(view.session.messages[1].toolHistoryTruncated,true);assert.match(view.session.messages.at(-1).text,/原始执行回执/);
+  const view=f.app.snapshot('client-a');assert.equal(view.busy,false);assert.equal(view.session.messages[1].status,'completed');
+  assert.equal(view.session.messages[1].tools.length,40);assert.equal(view.session.messages[1].toolHistoryTruncated,true);
 });
 test('non-retryable error without a terminal receipt eventually retires the connection as unknown',async t=>{
   const original=setTimeout;
@@ -298,6 +302,152 @@ function contextResult(name,model='A'){
 }
 function deferred(){let resolve,reject;const promise=new Promise((accept,fail)=>{resolve=accept;reject=fail;});return {promise,resolve,reject};}
 async function contextEvent(stream,predicate){while(true){const event=await stream.next();if(event.event==='conversation'&&predicate(event.data.session.context))return event.data;}}
+
+test('a late expiry updates the original context and chat error without submitting a Codex turn',{timeout:10000},async t=>{
+  const temporary=await fs.realpath(os.tmpdir());
+  const workbench=await fs.mkdtemp(path.join(temporary,'buildx-chat-context-'));
+  const identity=await fs.lstat(workbench,{bigint:true});
+  const marker=path.join(workbench,'owner.json'),nonce=randomUUID();
+  await fs.writeFile(marker,JSON.stringify({nonce}),{flag:'wx'});
+  let f;
+  t.after(async()=>{
+    if(f)await f.app.close();
+    const resolved=await fs.realpath(workbench),current=await fs.lstat(resolved,{bigint:true});
+    assert.equal(resolved,path.resolve(workbench));
+    assert.equal(path.dirname(resolved),temporary);
+    assert.match(path.basename(resolved),/^buildx-chat-context-/);
+    assert.ok(current.isDirectory()&&!current.isSymbolicLink());
+    assert.deepEqual([current.dev,current.ino,current.birthtimeNs],[identity.dev,identity.ino,identity.birthtimeNs]);
+    assert.deepEqual(JSON.parse(await fs.readFile(marker,'utf8')),{nonce});
+    await fs.rm(resolved,{recursive:true});
+  });
+  const queue=path.join(workbench,'queue'),sessionId='d'.repeat(32);
+  for(const folder of ['inbox','processing','outbox'])await fs.mkdir(path.join(queue,folder),{recursive:true});
+  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId,pid:process.pid,version:'0.8.8',atomicReadSnapshot:true}),{flag:'wx'});
+  const publications=[];
+  f=await setup(t,{
+    contextReceiptPollDelays:[20,60,100,150,250,500,1000],
+    invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,{
+      ...control,root:workbench,timeout:70,onTiming:event=>{
+        if(event.phase==='published')publications.push(event.requestId);
+        control?.onTiming?.(event);
+      }
+    })
+  });
+  const stream=await f.events();
+  await stream.next();
+  const failed=await f.post('turn',{message:'读取当前模型',context:{includeDocument:true}});
+  assert.equal(failed.status,502);
+  assert.match(failed.data.context.error,/本轮未提交给 Codex/);
+  assert.equal(failed.data.error,failed.data.context.error);
+  const waiting=f.app.snapshot('client-a');
+  const waitingErrors=waiting.session.messages.filter(message=>message.role==='error');
+  assert.equal(waitingErrors.length,1);
+  assert.equal(waitingErrors[0].text,failed.data.context.error);
+  assert.equal(f.codex.threads,0);
+  assert.equal(f.codex.turns.length,0);
+  assert.equal(publications.length,1);
+  const [id]=publications,filename=id+'.json';
+  assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[filename]);
+  assert.deepEqual(await fs.readdir(path.join(queue,'outbox')),[]);
+  const original=path.join(queue,'inbox',filename),claimed=path.join(queue,'processing',filename);
+  const payload=await fs.readFile(original,'utf8'),request=JSON.parse(payload);
+  assert.equal(request.id,id);
+  assert.equal(request.targetSession,sessionId);
+  assert.equal(request.operation,'status');
+  assert.equal(request.atomicRead,true);
+  assert.ok(Date.parse(request.expiresUtc)<=Date.now());
+  await fs.rename(original,claimed);
+  const receipt=path.join(queue,'outbox',filename);
+  const response={id,hostSession:sessionId,ok:false,
+    error:{code:'WORKBENCH_REQUEST_EXPIRED',message:'Request expired before execution; no operation was run.'},
+    execution:{started:false,phase:'validation',reason:'expired'},completedUtc:new Date().toISOString()};
+  await fs.writeFile(receipt+'.tmp',JSON.stringify(response),{flag:'wx'});
+  await fs.rename(receipt+'.tmp',receipt);
+  const updated=await contextEvent(stream,context=>context.error!==failed.data.context.error&&/过期/.test(context.error??''));
+  assert.match(updated.session.context.error,/本轮未提交给 Codex/);
+  assert.equal(updated.session.context.document,null);
+  assert.equal(updated.session.context.capturedAt,null);
+  const finalErrors=updated.session.messages.filter(message=>message.role==='error');
+  assert.equal(finalErrors.length,1);
+  assert.equal(finalErrors[0].text,updated.session.context.error);
+  assert.deepEqual(f.app.snapshot('client-a').session,updated.session);
+  assert.deepEqual(publications,[id]);
+  assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[]);
+  assert.equal(await fs.readFile(claimed,'utf8'),payload);
+  assert.equal(f.codex.threads,0);
+  assert.equal(f.codex.turns.length,0);
+});
+
+test('a context receipt already being inspected cannot overwrite a newer context snapshot',{timeout:10000},async t=>{
+  const started=deferred(),inspection=deferred(),closed=deferred();
+  const requestId=randomUUID(),timeout=new Error('Controlled context read timeout');
+  const expired={ok:true,value:{requestId,status:'expired',terminal:true}};
+  t.after(()=>inspection.resolve(expired));
+  const receiptOwner=Object.freeze({
+    inspect:()=>{started.resolve();return inspection.promise;},
+    close:()=>{closed.resolve();return {ok:true,value:{closed:true}};}
+  });
+  let reads=0;
+  const f=await setup(t,{
+    contextReceiptPollDelays:[0],
+    readContextFailure:error=>error===timeout?{outcome:'unconfirmed',requestIds:[requestId],receiptOwner}:null,
+    invokeAtomicContextRead:async name=>{
+      if(++reads===1)throw timeout;
+      const current=contextResult(name,'B');
+      return {...current,snapshot:current};
+    }
+  });
+  const failed=await f.post('turn',{message:'旧的上下文读取',context:{includeDocument:true}});
+  assert.equal(failed.status,502);
+  assert.match(failed.data.context.error,/本轮未提交给 Codex/);
+  await started.promise;
+  const fresh=await f.post('context',{includeDocument:true});
+  assert.equal(fresh.status,200);
+  assert.equal(fresh.data.context.document.title,'Model B');
+  const current=f.app.snapshot('client-a').session;
+  inspection.resolve(expired);
+  await closed.promise;
+  assert.deepEqual(f.app.snapshot('client-a').session,current);
+  assert.equal(reads,2);
+  assert.equal(f.codex.threads,0);
+  assert.equal(f.codex.turns.length,0);
+});
+
+test('Stop discards a context success that returns after cancellation',{timeout:10000},async t=>{
+  const started=deferred(),pending=deferred();
+  const status=contextResult('revit_workbench_status','B');
+  const result={...status,snapshot:status};
+  t.after(()=>pending.resolve(result));
+  const f=await setup(t,{
+    invokeAtomicContextRead:(_name,_args,control)=>{
+      started.resolve(control);
+      return pending.promise;
+    }
+  });
+  const stream=await f.events();
+  await stream.next();
+  const sending=f.post('turn',{message:'读取当前模型',context:{includeDocument:true}});
+  const control=await started.promise;
+  assert.equal(control.shouldContinue(),true);
+  assert.equal((await f.post('interrupt')).status,202);
+  assert.equal(control.shouldContinue(),false);
+  pending.resolve(result);
+  assert.equal((await sending).status,202);
+  while(true){
+    const event=await stream.next();
+    if(event.event!=='conversation')continue;
+    assert.equal(event.data.session.context.document,null);
+    assert.equal(event.data.session.context.capturedAt,null);
+    if(event.data.session.messages[1]?.status==='interrupted')break;
+  }
+  const view=f.app.snapshot('client-a');
+  assert.equal(view.busy,false);
+  assert.equal(view.session.messages[1].status,'interrupted');
+  assert.equal(view.session.context.document,null);
+  assert.equal(f.codex.threads,0);
+  assert.deepEqual(f.codex.turns,[]);
+});
 
 test('failed context refresh clears old model and selection in HTTP, SSE and restored snapshots without erasing tool history',{timeout:10000},async t=>{
   for(const route of ['context','turn'])await t.test(route,async t=>{

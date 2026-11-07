@@ -1,0 +1,43 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei UI, Segoe UI, sans-serif","fontSize":"16px","primaryTextColor":"#142d25","lineColor":"#466558","edgeLabelBackground":"#ffffff","clusterBkg":"#f6f9f7","clusterBorder":"#c5d6ce"},"flowchart":{"htmlLabels":false,"nodeSpacing":32,"rankSpacing":44,"curve":"linear","padding":14}}}%%
+flowchart LR
+  accTitle: BuildX 对话与 Revit API 执行架构
+  accDescr: Revit 加载 BuildX 插件并显示 WebView2。本机面板服务连接 Codex。只读工具经 MCP，受控操作和手动命令经 BuildX 授权，再由 Revit 回调执行并返回原请求回执。
+
+  subgraph UI["01　Revit · 插件入口"]
+    direction TB
+    ADDIN[".addin 清单"] -->|加载| DLL["BuildX C# 插件 DLL<br/>按需启动本机服务"] -->|注册停靠面板| WEB["WebView2 对话与命令"]
+  end
+
+  subgraph LOCAL["02　本机服务与 Codex"]
+    direction TB
+    PANEL["BuildX Node 服务"]
+    CODEX["Codex app-server"]
+    READ["具名只读 MCP"]
+    POLICY["受控操作与手动命令<br/>参数 · 范围 · 执行方式"]
+    QUEUE[("本地请求队列")]
+    PANEL <-->|stdio · turn/start| CODEX
+    CODEX -->|只读工具| READ
+    CODEX -->|动态工具回调| POLICY
+    PANEL -->|手动命令| POLICY
+    READ --> QUEUE
+    POLICY -->|按策略核验与确认| QUEUE
+  end
+
+  subgraph EXEC["03　Revit · 模型执行"]
+    direction TB
+    CALLBACK["C# 宿主<br/>ExternalEvent.Execute"] -->|复核活动文档| API["Revit API<br/>读取 · 事务写入"] --> RECEIPT[("原请求回执<br/>按 ID 核对")]
+  end
+
+  UI <-->|本地 HTTP · SSE| LOCAL
+  LOCAL <-->|队列与回执| EXEC
+
+  classDef host fill:#e6f0ea,stroke:#719685,color:#142d25,stroke-width:1.4px;
+  classDef panel fill:#ffffff,stroke:#719685,color:#142d25,stroke-width:1.4px;
+  classDef ai fill:#e8eefb,stroke:#7f96c3,color:#193154,stroke-width:1.4px;
+  classDef guard fill:#fff1d9,stroke:#b28a42,color:#523b15,stroke-width:1.4px;
+  classDef store fill:#f3f5f3,stroke:#87988d,color:#24392d,stroke-width:1.4px;
+  class ADDIN,DLL,CALLBACK,API host;
+  class WEB,PANEL panel;
+  class CODEX,READ ai;
+  class POLICY guard;
+  class QUEUE,RECEIPT store;

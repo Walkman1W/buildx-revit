@@ -81,8 +81,42 @@ export function markdownBlocks(value) {
 export function toolStatus(value) {
   return ({ running: '执行中', returned: '已返回', failed: '失败', unknown: '结果未知' })[value] ?? '结果未知';
 }
+export function modelToolEntries(catalog) {
+  if (!Array.isArray(catalog)) return [];
+  const names = new Set();
+  return catalog.slice(0,1024).filter(tool => {
+    if (!tool || typeof tool.name !== 'string' || !/^[A-Za-z][A-Za-z0-9_.:/-]{0,159}$/.test(tool.name) || names.has(tool.name)) return false;
+    names.add(tool.name); return true;
+  });
+}
 export function messageStatus(value) {
   return ({ streaming: '生成中', completed: '', failed: '回答失败', interrupted: '已停止', unknown: '结果未知' })[value] ?? '';
+}
+// Older servers persisted settled receipt notices as errors. Match only exact
+// server templates and their expected status; leave arbitrary errors untouched.
+export function isResolvedReceiptNotice(message) {
+  if (message?.role !== 'error') return false;
+  if (message.status === 'completed') return [
+    '原模型操作回执已自动核实；后续操作已恢复。',
+    '已核实临时检查视图恢复，后续操作可以继续。',
+  ].includes(message.text);
+  if (message.status !== 'failed') return false;
+  return [
+    '已核实临时检查视图恢复，后续操作可以继续。',
+    '脚本已报错结束；已由用户核查模型并恢复后续操作。回滚及事务外影响仍未确认。',
+    '脚本执行失败，已核实模型事务回滚；后续操作已恢复，事务外影响仍未核实。',
+    ...['failed', 'not_started', 'expired'].map(status => `原模型操作回执已核实（${status}）；后续操作已恢复。`),
+  ].includes(message.text);
+}
+export function receiptDismissalStore(storage) {
+  const key = 'buildx-dismissed-receipts-v1';
+  let entries = [];
+  try { const parsed = JSON.parse(storage?.getItem(key) || '[]'); if (Array.isArray(parsed)) entries = parsed.filter(item => typeof item === 'string').slice(-500); } catch {}
+  const values = new Set(entries);
+  return {
+    has: id => values.has(id),
+    add(id) { values.add(id); while (values.size > 500) values.delete(values.values().next().value); try { storage?.setItem(key, JSON.stringify([...values])); } catch {} },
+  };
 }
 export function previewText(value) {
   if (value === undefined || value === null || value === '') return '未提供';

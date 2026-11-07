@@ -126,7 +126,7 @@ $script:AutoCodexPath = $null
     <StackPanel Grid.Row="0" Margin="0,0,0,10">
       <TextBlock Text="BuildX 安装向导" FontSize="25" FontWeight="SemiBold"/>
       <TextBlock Text="本地开发候选：使用你已安装的 Codex，不会安装或升级其他软件。" TextWrapping="Wrap" Margin="0,5,0,0"/>
-      <TextBlock Text="当前候选尚未完成商业接入与全部功能验证；检测到缺项时不能安装。" TextWrapping="Wrap" Foreground="#8A5000" Margin="0,4,0,0"/>
+      <TextBlock x:Name="Scope" Text="当前候选尚未完成商业接入与全部功能验证；检测到缺项时不能安装。" TextWrapping="Wrap" Foreground="#8A5000" Margin="0,4,0,0"/>
     </StackPanel>
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel>
       <TextBlock Text="已有运行程序" FontWeight="Bold" FontSize="16" Margin="0,3,0,7"/>
@@ -151,7 +151,7 @@ $script:AutoCodexPath = $null
 '@
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $script:Window = [Windows.Markup.XamlReader]::Load($reader)
-foreach ($name in @('NodePath','CodexPath','PythonPath','PackagePath','InstallPath','DataPath','AddinsPath','BrowseNode','BrowseCodex','BrowsePython','BrowsePackage','BrowseInstall','BrowseData','BrowseAddins','Detect','InstallHelp','Plan','Install','Detection','Result','Progress')) {
+foreach ($name in @('NodePath','CodexPath','PythonPath','PackagePath','InstallPath','DataPath','AddinsPath','BrowseNode','BrowseCodex','BrowsePython','BrowsePackage','BrowseInstall','BrowseData','BrowseAddins','Detect','InstallHelp','Plan','Install','Detection','Result','Progress','Scope')) {
     Set-Variable -Scope Script -Name $name -Value $script:Window.FindName($name)
 }
 $script:NodePath.Text = Find-ExistingNode
@@ -160,11 +160,25 @@ $script:InstallPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Program'
 $script:DataPath.Text = ''
 $script:AddinsPath.Text = Join-Path $env:APPDATA 'Autodesk\Revit\Addins\2024'
 
+function Test-InternalScope {
+    $package = $script:PackagePath.Text.Trim()
+    return $package.Length -gt 0 -and [IO.File]::Exists([IO.Path]::Combine($package, 'buildx-test-scope.json'))
+}
+function Update-ScopeLabel {
+    $script:Scope.Text = if (Test-InternalScope) { '内部只读测试包 · Windows x64 / Revit 2024 · 模型概况、当前选择、标高和构件搜索。' }
+        else { '当前候选尚未完成商业接入与全部功能验证；检测到缺项时不能安装。' }
+}
+Update-ScopeLabel
+if (Test-InternalScope) {
+    $script:InstallPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Revit2024-Test'
+    $script:DataPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Revit2024-Test-Data'
+}
+
 function Get-Inputs {
     return @($script:PackagePath.Text.Trim(), $script:InstallPath.Text.Trim(), $script:AddinsPath.Text.Trim(),
         $script:NodePath.Text.Trim(), $script:PythonPath.Text.Trim(), $script:CodexPath.Text.Trim(), $script:DataPath.Text.Trim())
 }
-function Get-Fingerprint { return [string]::Join([char]0x1f, [string[]](Get-Inputs)) }
+function Get-Fingerprint { return [string]::Join([char]0x1f, [string[]](@((Test-InternalScope)) + (Get-Inputs))) }
 function Clear-Plan {
     $script:PlanFingerprint = $null
     $script:Install.IsEnabled = $false
@@ -286,7 +300,9 @@ function Complete-Installer([string]$Action,[int]$ExitCode,[string]$Out,[string]
             $script:Progress.Text = '安装前需要确认。'
         } else {
             $script:PlanFingerprint = $null
-            $issues = @(); if ($result.blockers) { foreach ($issue in $result.blockers) { if ($issue.reason) { $issues += [string]$issue.reason } } }
+            $issues = @()
+            $blockers = if ($result.PSObject.Properties['installationScope'] -and $result.installationScope -eq 'cross-pc-test') { $result.internalBlockers } else { $result.blockers }
+            foreach ($issue in $blockers) { if ($issue.reason) { $issues += [string]$issue.reason } }
             $script:Result.Text = '暂不能安装：' + [string]$result.reason + $(if ($issues.Count) { "`n待解决：" + [string]::Join('、', [string[]]$issues) } else { '' })
             $script:Progress.Text = '未安装。'
         }
@@ -314,6 +330,7 @@ $script:Timer.Add_Tick({
     } catch { $script:Timer.Stop(); $script:Worker = $null; $script:PlanFingerprint = $null; $script:Progress.Text = '操作结果无法确认，请检查后再决定下一步。'; Set-Busy $false }
 })
 foreach ($field in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:DataPath,$script:AddinsPath)) { $field.Add_TextChanged({ Clear-Plan }) }
+$script:PackagePath.Add_TextChanged({ Update-ScopeLabel })
 $script:CodexPath.Add_TextChanged({ if (-not $script:Updating) { $script:AutoCodexPath = $null } })
 $script:BrowseNode.Add_Click({ Choose-Executable $script:NodePath 'node.exe' })
 $script:BrowseCodex.Add_Click({ Choose-Executable $script:CodexPath 'codex.exe' })
@@ -331,13 +348,15 @@ $script:InstallHelp.Add_Click({
 $script:Plan.Add_Click({
     Clear-Plan; $values = Get-Inputs
     if (@($values | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count) { $script:Result.Text = '请填写组件目录、安装位置与已有程序路径。'; return }
-    Start-Installer 'plan' (@('--plan') + $values)
+    $mode = if (Test-InternalScope) { '--plan-internal-test' } else { '--plan' }
+    Start-Installer 'plan' (@($mode) + $values)
 })
 $script:Install.Add_Click({
     if ($null -eq $script:PlanFingerprint -or $script:PlanFingerprint -ne (Get-Fingerprint)) { Clear-Plan; return }
     $question = '将在以下目录安装 BuildX：' + "`n" + $script:InstallPath.Text.Trim() + "`n`n" + '独立数据目录：' + "`n" + $script:DataPath.Text.Trim() + "`n`n" + '并在 Revit Addins 目录发布插件入口。是否继续？'
     if ([Windows.MessageBox]::Show($script:Window,$question,'确认安装',[Windows.MessageBoxButton]::YesNo,[Windows.MessageBoxImage]::Question) -ne [Windows.MessageBoxResult]::Yes) { return }
-    Start-Installer 'apply' (@('--apply') + (Get-Inputs))
+    $mode = if (Test-InternalScope) { '--apply-internal-test' } else { '--apply' }
+    Start-Installer 'apply' (@($mode) + (Get-Inputs))
 })
 $script:Window.Add_Closing({ param($sender,$eventArgs) if ($null -ne $script:Worker) { $eventArgs.Cancel = $true; $script:Progress.Text = '正在等待操作结果，请勿重复执行或关闭窗口。' } })
 $script:Window.Add_ContentRendered({ Invoke-InitialDetection })

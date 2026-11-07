@@ -10,6 +10,7 @@ import {modelOperationEffect,supportsModelPermissionTool} from './lib/model-oper
 import {createCreatedElementLedger} from './lib/created-elements.mjs';
 import {createModelToolDispatcher} from './lib/model-tool-dispatch.mjs';
 import {createModelPermissionOwner} from './lib/model-permission-owner.mjs';
+import {createModelPermissionServices} from './lib/model-permission-services.mjs';
 import {createVisualRecoveryOwner} from './lib/visual-inspection-recovery.mjs';
 
 const source={session:'a'.repeat(32),title:'sample',path:'D:\\sample.rvt'};
@@ -74,12 +75,15 @@ test('timed-out visual request keeps late receipt ownership and publishes cancel
   assert.equal((await facts.receiptOwner.inspect()).value.status,'received');await facts.receiptOwner.close();
 });
 
-test('original native receipt inspection restores only its owned pending session and preserves the failure',async t=>{
+test('checking a pending native visual receipt only reads, and explicit recovery restores its original session',async t=>{
   const f=await fixture(t),pending=invokeWorkbench('revit_inspect_elements',{expected_document:source.path,element_ids:[12]},{root:f.root,timeout:2000,...retained});
   const req=await request(f),failed=value(f,req.id,req.args);
   failed.value.success=false;failed.value.cleanup_pending=true;failed.value.outcome='cleanup_pending';failed.value.code='VISUAL_RESTORE_PENDING';failed.value.restoration={status:'pending',session_handle:'owned-handle',source_view_unchanged:true};
   await fs.writeFile(path.join(f.root,'queue','outbox',req.id+'.json'),JSON.stringify(envelope(req.id,failed)));
-  const result=await pending,checking=result.receiptOwner.inspect();let recoveryRequest;
+  const result=await pending;
+  assert.equal((await result.receiptOwner.inspect()).value.canRestoreVisual,true);
+  assert.equal((await fs.readdir(f.inbox)).filter(name=>name.endsWith('.json')).length,1);
+  const checking=result.receiptOwner.restoreVisual();let recoveryRequest;
   for(let i=0;i<200&&!recoveryRequest;i++){
     for(const name of (await fs.readdir(f.inbox)).filter(name=>name.endsWith('.json')&&name!==req.id+'.json')){
       const candidate=JSON.parse(await fs.readFile(path.join(f.inbox,name),'utf8'));if(candidate.operation==='restore_visual_session')recoveryRequest=candidate;
@@ -91,6 +95,20 @@ test('original native receipt inspection restores only its owned pending session
   const checked=await checking;assert.equal(checked.value.terminal,true);assert.equal(checked.value.status,'failed');assert.equal(checked.value.evidence.recoveryRequestId,recoveryRequest.id);
   assert.equal((await result.receiptOwner.inspect()).value.terminal,true);assert.equal((await fs.readdir(f.inbox)).filter(name=>name.endsWith('.json')).length,2);
   assert.equal((await result.receiptOwner.close()).value.closed,true);
+});
+
+test('an unusable creation reference is reported as not started without opening a model receipt gate',async()=>{
+  const calls=[];
+  const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>({hostSession:source.session,document:{title:source.title,path:source.path}}),
+    invokeWorkbench:async(name)=>{calls.push(name);throw new Error('unexpected publication');}});
+  const services=createModelPermissionServices({invoke:dispatcher.invokeTool});
+  const binding={client:'fixture',conversationId:scope.conversationId,generation:1,revision:0,account:scope.account,document:source};
+  const owner=createModelPermissionOwner({verifyDocument:async()=>true,invoke:services.invoke});
+  owner.setLevel({level:'confirm',scope:binding,isCurrent:()=>true});
+  const proposal=owner.propose({scope:binding,callId:'stale-source',tool:'revit_inspect_elements',parameters:{source_request_id:randomUUID()},isCurrent:()=>true});
+  const result=await owner.decide({ticket:proposal.ticket,digest:proposal.digest,decision:'accept'});
+  assert.equal(result.status,'not_started');assert.equal(result.code,'MODEL_VISUAL_SOURCE_INVALID');assert.deepEqual(calls,[]);
+  assert.equal((await owner.close()).closed,true);
 });
 
 test('creation ledger owns producer field interpretation and rejects rollback/foreign scopes',()=>{
@@ -105,7 +123,9 @@ test('creation ledger owns producer field interpretation and rejects rollback/fo
 test('dispatcher resolves trusted created source into actual IDs before native inspection',async()=>{
   const calls=[],id=randomUUID();
   const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>({hostSession:source.session,document:{title:source.title,path:source.path}}),invokeWorkbench:async(name,args)=>{calls.push({name,args});return name==='revit_create_wall'?{request_id:id,mode:'commit',committed:true,document:source.title,value:{element_id:23}}:{operation:'inspect_elements',hostSession:source.session,document:{title:source.title,path:source.path},request_id:randomUUID(),value:{success:true}};}});
-  const created=await dispatcher.invokeTool('revit_create_wall',{mode:'commit'},{creationScope:scope});assert.deepEqual(created.created_elements.element_ids,[23]);
+  const created=await dispatcher.invokeTool('revit_create_wall',{mode:'commit',wall_type_id:2,level_id:3,
+    start_mm:{x:0,y:0,z:0},end_mm:{x:3000,y:0,z:0},height_mm:2800},{creationScope:scope});
+  assert.deepEqual(created.created_elements.element_ids,[23]);
   await dispatcher.invokeTool('revit_inspect_elements',{source_request_id:id},{creationScope:scope});assert.deepEqual(calls[1].args.element_ids,[23]);assert.equal(Object.hasOwn(calls[1].args,'source_request_id'),false);
   await assert.rejects(dispatcher.invokeTool('revit_inspect_elements',{source_request_id:id},{creationScope:{...scope,conversationId:'other'}}),/当前账号、对话/);
 });
@@ -119,13 +139,16 @@ test('permission owner permits named visual workflow without adding mode or per-
   assert.equal((await owner.decide({ticket:proposal.ticket,digest:proposal.digest,decision:'accept'})).status,'completed');assert.deepEqual(actual.control.creationScope,scope);await owner.close();
 });
 
-test('pending cleanup recovery is bound, concurrent checks share work and unknown restore is never replayed',async()=>{
+test('pending cleanup recovery requires a decision and an unknown restore is never replayed',async()=>{
   let restoreCalls=0,inspectCalls=0,closeCalls=0,late=false;
   const original={inspect:()=>({ok:true,value:{status:'unconfirmed',terminal:false,evidence:{restorationStatus:'pending',sessionHandle:'owned-handle'}}}),close:()=>({ok:true,value:{closed:true}})};
   const recovery={inspect:()=>{inspectCalls++;return {ok:true,value:{status:late?'received':'pending',terminal:late,requestId:'recovery-id',evidence:{restorationStatus:late?'restored':'pending'}}};},close:()=>{closeCalls++;return {ok:true,value:{closed:true}};}};
   const owner=createVisualRecoveryOwner({receiptOwner:original,restore:async handle=>{assert.equal(handle,'owned-handle');restoreCalls++;throw new Error('unknown');},failureEvidence:()=>({outcome:'unconfirmed',receiptOwner:recovery,requestIds:['recovery-id']})});
-  await Promise.all([owner.inspect(),owner.inspect()]);assert.equal(restoreCalls,1);
+  const first=await Promise.all([owner.inspect(),owner.inspect()]);assert.equal(restoreCalls,0);
+  assert.equal(first[0].value.canRestoreVisual,true);
+  await owner.restoreVisual();assert.equal(restoreCalls,1);
   assert.equal((await owner.inspect()).value.terminal,false);assert.equal(restoreCalls,1);assert.equal(inspectCalls,1);
+  await assert.rejects(owner.restoreVisual(),/没有可恢复/);assert.equal(restoreCalls,1);
   late=true;const fixed=await owner.inspect();assert.equal(fixed.value.terminal,true);assert.equal(fixed.value.evidence.recoveryRequestId,'recovery-id');assert.equal(restoreCalls,1);
   await owner.close();assert.equal(closeCalls,1);
 });

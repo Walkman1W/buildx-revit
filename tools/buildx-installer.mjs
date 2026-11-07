@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {detectLocalRuntimes,inspectPythonExecutable} from '../lib/local-runtimes.mjs';
 import {normalizeInstallationConfiguration} from '../lib/buildx-paths.mjs';
 import {inspectScriptCompilerPackage} from '../lib/script-compiler-package.mjs';
+import {isNativeReadonlyTest} from '../lib/native-readonly-test-scope.mjs';
 
 // This is a development candidate, not a commercial release authority. Only
 // runtime files named here can enter the package; no state or user environment
@@ -18,7 +19,7 @@ const SETUP=['tools/buildx-installer.mjs','tools/buildx-setup.ps1','tools/buildx
 // currently imported by another asset: the route itself remains public even
 // if an import changes. This list is independently checked during planning.
 const WEB=['index.html','style.css','register.html','register.css','app.js','chat-view.mjs','account.js','codex-account.js','model-picker.css','model-picker.mjs','model-workspace.css','model-workspace.mjs','command-form-source.mjs','personal-command-fields.mjs','command-fields.mjs','command-parameter-options.mjs','command-choice-field.mjs','parameter-change-field.mjs','account-license.mjs','project-knowledge-ui.mjs','project-files.css','model-viewer.mjs','model-viewer.css','model-viewer-ui.mjs'];
-const MODULES=['native-model-queries.mjs','assistant-instructions.mjs','buildx-auth.mjs','buildx-runtime-config.mjs','cad-candidates.mjs','cad-document-path.mjs','cad-dxf-reader.mjs','cad-inventory.mjs','cad-read-report.mjs','cad-tools.mjs','chat-context.mjs','chat-session.mjs','chat-store.mjs','codex-client-core.mjs','codex-client.mjs','codex-confirmation.mjs','codex-profile.mjs','command-sequence.mjs','command-store.mjs','family-template-preflight.mjs','family-tools.mjs','installation-identity.mjs','local-runtimes.mjs','model-command-catalog.mjs','model-tool-dispatch.mjs','model-viewer-service.mjs','modelling-tools.mjs','native-schematic-tools.mjs','panel-accounts.mjs','panel-audit.mjs','panel-chat-format.mjs','panel-profile.mjs','panel-server-core.mjs','panel-server.mjs','panel-tools.mjs','parse-project-document.mjs','project-agent-bridge.mjs','project-files.mjs','project-files-picker.mjs','project-files-store.mjs','project-history.mjs','project-knowledge.mjs','source-tools.mjs','turn-attachments.mjs','workbench-client.mjs','workbench-contracts.mjs','workbench-receipt.mjs'];
+const MODULES=['native-model-queries.mjs','assistant-instructions.mjs','buildx-auth.mjs','buildx-runtime-config.mjs','cad-candidates.mjs','cad-document-path.mjs','cad-dxf-reader.mjs','cad-inventory.mjs','cad-read-report.mjs','cad-tools.mjs','chat-context.mjs','chat-read-receipts.mjs','chat-session.mjs','chat-store.mjs','codex-client-core.mjs','codex-client.mjs','codex-confirmation.mjs','codex-profile.mjs','command-sequence.mjs','command-store.mjs','family-template-preflight.mjs','family-tools.mjs','installation-identity.mjs','local-runtimes.mjs','model-command-catalog.mjs','model-tool-dispatch.mjs','model-viewer-service.mjs','modelling-tools.mjs','native-schematic-tools.mjs','panel-accounts.mjs','panel-audit.mjs','panel-chat-format.mjs','panel-profile.mjs','panel-server-core.mjs','panel-server.mjs','panel-tools.mjs','parse-project-document.mjs','project-agent-bridge.mjs','project-files.mjs','project-files-picker.mjs','project-files-store.mjs','project-history.mjs','project-knowledge.mjs','source-tools.mjs','turn-attachments.mjs','workbench-client.mjs','workbench-contracts.mjs','workbench-receipt.mjs'];
 const NON_JS_ASSETS=['lib/project-knowledge-parser.py','lib/chat-lock-recovery.ps1','lib/project-files-lock-recovery.ps1','lib/access-lock-recovery.cs','manifests/script-compiler-5.0.0.json','prompts/buildx-assistant.zh-CN.md','.agents/skills/buildx-project-research/SKILL.md'];
 const THIRD_PARTY_NOTICES=['licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'];
 const PLUGIN=['LocalCodexRevit.dll','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.Wpf.dll','runtimes/win-x64/native/WebView2Loader.dll'];
@@ -108,13 +109,13 @@ async function verifyCompleteToolDependencies(root,present,manifestFiles){
     {reason:'license_backend_and_customer_configuration_unverified'});
   return issues;
 }
-async function pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing){
+async function pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing,testScope){
   const filename=path.join(pluginDirectory,'build-record.json');
   try{
     const info=await plainFile(filename);if(info.size<1||info.size>1024*1024)throw new Error();const bytes=await fs.readFile(filename);if(bytes.length>1024*1024)throw new Error();
     const record=JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/,''));
     const plugin=checked.find(item=>item.dst==='revit-addin/bin/LocalCodexRevit.dll');
-    if(record.compiler_exit_code!==0||!plugin||record.output_sha256!==plugin.sha256||!Array.isArray(record.sources)||!record.sources.length)throw new Error();
+    if(record.compiler_exit_code!==0||!plugin||record.output_sha256!==plugin.sha256||!Array.isArray(record.sources)||!record.sources.length||testScope==='native-readonly'&&!record.compiler_options?.includes('/define:BUILDX_NATIVE_READONLY_TEST'))throw new Error();
     const sources=[];
     for(const item of record.sources){
       const relative=path.relative(sourceRoot,item.path).split(path.sep).join('/');
@@ -126,12 +127,13 @@ async function pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing){
     const sdk=record.webview2_sdk;
     if(sdk?.package_id!=='Microsoft.Web.WebView2'||sdk.version!=='1.0.2478.35'||sdk.package_sha256!=='b1df2d7fe955a3378603735f910b126647e43033213b5cc071b8d6f0168a3b96'||sdk.source!=='https://api.nuget.org/v3/index.json'||sdk.payload_verified_against_package!==true)throw new Error();
     return {compilerExit:0,dllSha256:plugin.sha256,sources,
-      ...(Array.isArray(record.compiler_options)?{compilerOptions:record.compiler_options.filter(value=>['/target:library','/platform:x64','/langversion:5','/optimize+','/debug-'].includes(value))}:{}),
+      ...(Array.isArray(record.compiler_options)?{compilerOptions:record.compiler_options.filter(value=>['/target:library','/platform:x64','/langversion:5','/optimize+','/debug-','/define:BUILDX_NATIVE_READONLY_TEST'].includes(value))}:{}),
       webView2Sdk:{id:sdk.package_id,version:sdk.version,packageSha256:sdk.package_sha256,source:sdk.source,payloadVerifiedAgainstPackage:true},
       realRevitLoadVerified:false,realModelExecutionVerified:false};
   }catch(error){missing.push({file:'revit-addin/build-evidence',reason:error.code==='ENOENT'?'plugin_build_provenance_missing':'plugin_build_provenance_unverified'});return null;}
 }
-export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,productVersion='0.8.8-internal',scriptCompilerDirectory}={}){
+export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,productVersion='0.8.8-internal',scriptCompilerDirectory,testScope}={}){
+  if(testScope!==undefined&&testScope!=='native-readonly')throw fail('TEST_SCOPE_INVALID','未知的内部测试范围。');
   if(typeof productVersion!=='string'||!/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9.-]+)?$/.test(productVersion))throw fail('VERSION_INVALID','候选版本无效。');
   await checkedDirectory(path.dirname(output));await checkedDirectory(pluginDirectory);await checkedDirectory(sourceRoot);if(!path.isAbsolute(output)||!await absent(output))throw fail('OUTPUT_EXISTS','候选目录必须是新的绝对路径。');
   let compiler=null;
@@ -164,7 +166,7 @@ export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,pro
   // Native query migration does not clear the remaining distribution/runtime
   // checks. The compiler has its own pinned payload owner, when selected.
   missing.push({file:'private-runtime/argus/2024/ArgusLearning.Core.dll',reason:'distribution_and_runtime_not_verified'},...compiler?[]:[{file:'private-runtime/script-compiler/csc.exe',reason:'external_compiler_not_packaged'}],{reason:'installer_bootstrap_requires_external_node'},{reason:'private_node_python_runtime_distribution_unverified'},{reason:'webview2_runtime_presence_unverified'});
-  const buildEvidence=await pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing);
+  const buildEvidence=await pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing,testScope);
   for(const item of checked){await checkedDirectory(path.dirname(item.src));await plainFile(item.src);if(sha(await fs.readFile(item.src))!==item.sha256)throw fail('SOURCE_CHANGED','源文件在候选整理期间变化，未确认本次候选。');}
   // The runtime graph currently uses Node built-ins only. The source lock and
   // tests stay in the source snapshot; do not publish scripts for absent tests,
@@ -177,6 +179,7 @@ export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,pro
     sourcePackageHashes[item.dst]=item.sha256;
     if(builtinOnly){item.data=Buffer.from(JSON.stringify(item.dst==='package.json'?packageMetadata:packageLock,null,2)+'\n');item.sha256=sha(item.data);}
   }
+  if(testScope){const data=Buffer.from(JSON.stringify({schemaVersion:1,scope:testScope},null,2)+'\n');checked.push({dst:'buildx-test-scope.json',data,sha256:sha(data)});}
   await fs.mkdir(output);for(const x of checked){const target=path.join(output,...x.dst.split('/'));await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,x.data,{flag:'wx'});}
   const manifest={schemaVersion:1,stage:'candidate',releaseReady:false,productVersion,target:{platform:'win32',architecture:'x64',revit:'2024'},
     installationSchemaVersion:2,runtimePolicy:{node:{minimumVersion:'22.17.0',bundled:false},python:{minimumVersion:'3.11.0',bundled:false},codex:{bundled:false,upgrade:false},privateRuntimeDirectory:'private-runtime',webView2Runtime:{bundled:false,required:true,verified:false}},
@@ -184,7 +187,8 @@ export async function buildCandidate({output,pluginDirectory,sourceRoot=ROOT,pro
   await fs.writeFile(path.join(output,'buildx-package.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
   return {ok:true,output,releaseReady:false,missing};
 }
-export async function planInstall({packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot,projectHistoryRoot,allowTestFixture=false,checkRevit=windowsRevitCheck,probeRuntimes=probeRuntimeVersions}){
+export async function planInstall({packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot,projectHistoryRoot,allowTestFixture=false,installationScope,checkRevit=windowsRevitCheck,probeRuntimes=probeRuntimeVersions,probeEnvironment=probeWindowsEnvironment}){
+  if(installationScope!==undefined&&installationScope!=='cross-pc-test')throw fail('TEST_SCOPE_INVALID','未知的安装范围。');
   await checkedDirectory(packageRoot);await checkedDirectory(path.dirname(installRoot));await checkedDirectory(addinDirectory);
   if(!path.isAbsolute(installRoot)||!await absent(installRoot))throw fail('INSTALL_EXISTS','安装目录已存在，不会覆盖。');
   const root=path.resolve(installRoot),pkg=path.resolve(packageRoot),addin=path.join(path.resolve(addinDirectory),'BuildX.addin');
@@ -213,17 +217,67 @@ export async function planInstall({packageRoot,installRoot,addinDirectory,nodeEx
   // Even an installable candidate remains explicitly experimental; self-
   // declared metadata never implies commercial or real-provider acceptance.
   const ready=manifest.stage==='candidate'&&manifest.releaseReady===false&&blockers.length===0;
+  let internalReady=false,environment=null,internalBlockers=blockers;
+  if(installationScope==='cross-pc-test'){
+    const marker=manifest.files.find(item=>item.path==='buildx-test-scope.json');
+    const validScope=marker&&await isNativeReadonlyTest(pkg).catch(()=>false);
+    if(!validScope)throw fail('TEST_SCOPE_INVALID','内部测试范围标记缺失或无效。');
+    const dll=manifest.files.find(item=>item.path==='revit-addin/bin/LocalCodexRevit.dll');
+    if(!dll||manifest.buildEvidence?.dllSha256!==dll.sha256||!manifest.buildEvidence?.compilerOptions?.includes('/define:BUILDX_NATIVE_READONLY_TEST'))throw fail('TEST_HOST_UNVERIFIED','内部测试宿主编译证据缺失或与程序集不一致。');
+    environment=await probeEnvironment();
+    const accepted=new Set(['|installer_bootstrap_requires_external_node','|private_node_python_runtime_distribution_unverified','|webview2_runtime_presence_unverified','|argus_runtime_distribution_rights_unverified','|plugin_distribution_rights_unverified','|customer_data_root_and_upgrade_unverified','|license_backend_and_customer_configuration_unverified','private-runtime/argus/2024/ArgusLearning.Core.dll|distribution_and_runtime_not_verified','private-runtime/argus/2024/ArgusLearning.Core.dll|argus_runtime_missing','private-runtime/script-compiler/csc.exe|external_compiler_not_packaged','private-runtime/script-compiler/csc.exe|script_compiler_portable_layout_unverified']);
+    internalBlockers=blockers.filter(item=>!accepted.has((item.file??'')+'|'+item.reason)||Object.keys(item).some(key=>key!=='file'&&key!=='reason'));
+    if(!environment?.ok||!environment.webView2||!environment.revit2024)internalBlockers.push({reason:'windows_environment_unverified'});
+    if(runtimeVersions.nodePlatform!=='win32'||runtimeVersions.nodeArchitecture!=='x64')internalBlockers.push({reason:'selected_node_not_windows_x64'});
+    internalReady=manifest.stage==='candidate'&&manifest.releaseReady===false&&runtimeVersions.pypdfAvailable===true&&internalBlockers.length===0;
+  }
   const testReady=allowTestFixture&&manifest.stage==='test_fixture'&&manifest.releaseReady===false&&Array.isArray(manifest.missing)&&manifest.missing.length===0;
-  return {ok:true,readyToApply:ready||testReady,experimental:true,installRoot:root,dataRoot:state,addin,packageRoot:pkg,runtimes,runtimeVersions,dataLayout,files:manifest.files,blockers,reason:ready||testReady?null:'候选组件仍有未验证的运行依赖，不能安装。'};
+  const permitted=installationScope==='cross-pc-test'?internalReady:ready||testReady;
+  return {ok:true,readyToApply:permitted,experimental:true,installationScope:installationScope??null,environment,installRoot:root,dataRoot:state,addin,packageRoot:pkg,runtimes,runtimeVersions,dataLayout,files:manifest.files,blockers,internalBlockers,reason:permitted?null:'候选组件仍有未验证的运行依赖，不能安装。'};
 }
 async function probeRuntimeVersions(runtimes){
   const run=async(file)=>{try{const result=await promisify(execFile)(file,['--version'],{windowsHide:true,timeout:10000,maxBuffer:4096});return (result.stdout||result.stderr||'').trim();}catch{throw fail('RUNTIME_UNAVAILABLE','运行程序版本检查失败；请检查安装。');}};
   const [node,python,codex]=await Promise.all([run(runtimes.nodeExecutable),run(runtimes.pythonExecutable),run(runtimes.codexExecutable)]);
   const versions=validateRuntimeVersionOutputs({node,python,codex});
+  let nodePlatform=null,nodeArchitecture=null;
+  try{const result=await promisify(execFile)(runtimes.nodeExecutable,['-p','JSON.stringify({platform:process.platform,arch:process.arch})'],{windowsHide:true,timeout:10000,maxBuffer:4096});const info=JSON.parse(result.stdout.trim());nodePlatform=info.platform;nodeArchitecture=info.arch;}catch{/* Unknown platform or architecture cannot pass the internal check. */}
   // PDF parsing is an external dependency, not bundled or installed here.
   let pypdfAvailable=false;
   try{await promisify(execFile)(runtimes.pythonExecutable,['-c','from pypdf import PdfReader'],{windowsHide:true,timeout:10000,maxBuffer:4096});pypdfAvailable=true;}catch{/* Unknown and unavailable both block the candidate. */}
-  return {...versions,pypdfAvailable};
+  return {...versions,pypdfAvailable,nodePlatform,nodeArchitecture};
+}
+// This read-only check is deliberately separate from the commercial release
+// gate. Registry registration alone does not establish that the x64 payload is
+// present, so inspect the PE machine type as well.
+async function x64Executable(file){
+  try{
+    const handle=await fs.open(file,'r');
+    try{
+      const header=Buffer.alloc(64);if((await handle.read(header,0,64,0)).bytesRead!==64||header.readUInt16LE(0)!==0x5a4d)return false;
+      const offset=header.readUInt32LE(60);if(offset<64||offset>16*1024*1024)return false;
+      const pe=Buffer.alloc(6);return (await handle.read(pe,0,6,offset)).bytesRead===6&&pe.readUInt32LE(0)===0x4550&&pe.readUInt16LE(4)===0x8664;
+    }finally{await handle.close();}
+  }catch{return false;}
+}
+export async function probeWindowsEnvironment(){
+  if(process.platform!=='win32'||process.arch!=='x64')throw fail('WINDOWS_X64_REQUIRED','需要 Windows x64 和 x64 Node。');
+  const run=promisify(execFile),versions=[];
+  for(const root of ['HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}','HKCU\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}']){
+    try{const {stdout}=await run('reg.exe',['query',root,'/v','pv'],{windowsHide:true,timeout:10000,maxBuffer:4096});const match=/\bpv\s+REG_SZ\s+(\d+\.\d+\.\d+\.\d+)/i.exec(stdout);if(match&&match[1]!=='0.0.0.0')versions.push(match[1]);}catch{/* Missing or inaccessible registration remains unverified. */}
+  }
+  let webView2=null;
+  for(const base of [process.env['ProgramFiles(x86)'],process.env.ProgramFiles,process.env.LOCALAPPDATA].filter(Boolean))for(const version of versions){
+    const file=path.join(base,'Microsoft','EdgeWebView','Application',version,'msedgewebview2.exe');
+    if(await x64Executable(file)){webView2={version,architecture:'x64',executable:file};break;}
+  }
+  let revit2024=null;
+  try{
+    const script="$ErrorActionPreference='Stop'; @(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*' | Where-Object { $_.DisplayName -eq 'Autodesk Revit 2024' -and $_.InstallLocation } | ForEach-Object { $p=Join-Path $_.InstallLocation 'Revit.exe'; if (Test-Path -LiteralPath $p -PathType Leaf) { $i=Get-Item -LiteralPath $p; if ($i.VersionInfo.FileMajorPart -eq 24) { $i.FullName } } }) | ConvertTo-Json -Compress";
+    const encoded=Buffer.from(script,'utf16le').toString('base64');
+    const {stdout}=await run('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',encoded],{windowsHide:true,timeout:15000,maxBuffer:65536});
+    const candidates=JSON.parse(stdout.trim());for(const file of Array.isArray(candidates)?candidates:[candidates])if(typeof file==='string'&&await x64Executable(file)){revit2024={executable:file,architecture:'x64',majorVersion:24};break;}
+  }catch{/* Missing, inaccessible or ambiguous registration remains unverified. */}
+  return {ok:!!webView2&&!!revit2024,webView2,revit2024,limitations:['Requires Revit 2024 uninstall registration','Presence does not verify application launch or WebView loading']};
 }
 export function validateRuntimeVersionOutputs({node,python,codex}){
   const n=/^v(\d+)\.(\d+)\.(\d+)$/.exec(node),p=/^Python (\d+)\.(\d+)\.(\d+)(?:\s.*)?$/i.exec(python);
@@ -327,8 +381,18 @@ export async function applyInstall(options){
 async function main(){
   const [action,...args]=process.argv.slice(2);let result;
   if(action==='--detect'&&args.length===0)result=detectLocalRuntimes();
+  else if(action==='--preflight-environment'&&args.length===0)result=await probeWindowsEnvironment();
   else if(action==='--build-candidate'&&[2,3,4].includes(args.length))result=await buildCandidate({output:args[0],pluginDirectory:args[1],...args[2]?{productVersion:args[2]}:{},...args[3]?{scriptCompilerDirectory:args[3]}:{}});
+  else if(action==='--build-native-readonly-candidate'&&[2,3,4].includes(args.length))result=await buildCandidate({output:args[0],pluginDirectory:args[1],testScope:'native-readonly',...args[2]?{productVersion:args[2]}:{},...args[3]?{scriptCompilerDirectory:args[3]}:{}});
   else if(['--plan','--apply'].includes(action)&&args.length===7){const [packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot]=args;const options={packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot};result=action==='--plan'?await planInstall(options):await applyInstall(options);}
+  else if(['--plan-internal-test','--apply-internal-test'].includes(action)&&args.length===7){
+    const [packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot]=args;
+    if(process.platform!=='win32'||!process.env.APPDATA)throw fail('ADDINS_DIRECTORY_UNVERIFIED','无法确定当前用户的 Revit 2024 Addins 目录。');
+    const expected=path.resolve(process.env.APPDATA,'Autodesk','Revit','Addins','2024');
+    if(!path.isAbsolute(addinDirectory)||path.resolve(addinDirectory).toLowerCase()!==expected.toLowerCase())throw fail('ADDINS_DIRECTORY_INVALID','请选择当前用户的 Revit 2024 Addins 目录：'+expected+'。');
+    if(await absent(expected))throw fail('ADDINS_DIRECTORY_MISSING','当前用户的 Revit 2024 Addins 目录尚不存在：'+expected+'。请先启动一次 Revit 2024，确认目录存在后重新检查。');
+    const options={packageRoot,installRoot,addinDirectory,nodeExecutable,pythonExecutable,codexExecutable,dataRoot,installationScope:'cross-pc-test'};result=action==='--plan-internal-test'?await planInstall(options):await applyInstall(options);
+  }
   else throw fail('ARGUMENTS','用法：--detect；--build-candidate <新组件目录> <已构建插件目录> [版本] [已核验私有编译器目录]；--plan 或 --apply <组件> <新安装目录> <Revit Addins目录> <node.exe> <python.exe> <codex.exe> <新独立数据目录>。');
   process.stdout.write(JSON.stringify(result,null,2)+'\n');
 }

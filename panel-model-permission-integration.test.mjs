@@ -231,6 +231,86 @@ test('automatic receipt checks observe late results and retire them without reru
   assert.match(f.app.snapshot('browser').session.messages.at(-1).text,/自动核实/);
 });
 
+test('visual receipt checks only read and explicit recovery releases writes after verified restoration',async t=>{
+  let restores=0,closes=0;
+  const receiptOwner={
+    inspect:async()=>({ok:true,value:restores===0
+      ?{status:'unconfirmed',terminal:false,requestId:'visual-original',canRestoreVisual:true,evidence:{restorationStatus:'pending',sessionHandle:'owned-view'}}
+      :{status:'received',terminal:true,requestId:'visual-original',evidence:{restorationStatus:'restored',recoveryRequestId:'visual-recovery'}}}),
+    restoreVisual:async shouldContinue=>{assert.equal(shouldContinue(),true);restores++;return {ok:true};},
+    close:async()=>{closes++;return {ok:true,value:{closed:true}};}
+  };
+  const f=await fixture(t,{pollDelays:[60000],invoke:async()=>({ok:false,error:{outcome:'unconfirmed'},receiptOwner})});
+  assert.equal((await choose(f,'automatic')).status,200);
+  assert.equal((await f.post('turn',{message:'检查视图'})).status,202);
+  f.codex.request(1,'revit_inspect_elements',{element_ids:[23]});
+  await wait(()=>Boolean(f.app.snapshot('browser').modelReceipt));
+  const binding={conversationId:f.session,ticket:f.app.snapshot('browser').modelReceipt.ticket};
+  assert.equal((await f.post('model-receipt/check',binding)).status,200);
+  const checked=f.app.snapshot('browser').modelReceipt;
+  assert.equal(checked.check.canRestoreVisual,true);
+  assert.equal(checked.check.evidence.sessionHandle,undefined);
+  assert.equal(checked.autoCheck.active,false);
+  assert.equal(restores,0);
+  const confirmed={...binding,checkRevision:checked.checkRevision,confirmed:true};
+  const restore=(data=confirmed,client='browser')=>f.post('model-receipt/restore-visual',data,client);
+  assert.equal((await restore()).status,409,'the Codex turn is still active');
+  f.codex.emit('notification','turn/completed',{threadId:'thread',turnId:'turn',turn:{id:'turn',status:'completed'}});
+  await wait(()=>!f.app.snapshot('browser').busy);
+
+  const write=()=>f.post('command',{conversationId:f.session,commandId:'revit_move_elements',parameters:{mode:'commit'}});
+  assert.equal((await write()).status,409);
+  assert.equal((await f.post('model-receipt/acknowledge',confirmed)).status,409);
+  assert.equal((await restore({...confirmed,confirmed:false})).status,400);
+  assert.equal((await restore({...confirmed,checkRevision:checked.checkRevision-1})).status,409);
+  assert.equal((await restore(confirmed,'other')).status,409);
+  f.changeDocument({session:'host',path:'C:\\other.rvt',title:'另一模型'});
+  assert.equal((await restore()).status,409);
+  assert.equal(restores,0);
+  f.changeDocument({session:'host',path:'C:\\model.rvt',title:'模型'});
+  assert.equal((await restore()).status,200);
+  assert.equal(f.app.snapshot('browser').modelReceipt,null);
+  assert.equal(restores,1);
+  assert.equal(closes,1);
+  assert.equal((await restore()).status,409);
+  assert.equal(restores,1);
+  assert.equal(f.calls.length,1,'the original inspection was not replayed');
+  assert.equal((await write()).status,202);
+  await wait(()=>f.direct.length===1);
+});
+
+test('manual visual inspection recovers its direct receipt owner instead of replaying the command',async t=>{
+  let restores=0,closes=0,handle='original-owned-view';
+  const owner=Object.freeze({
+    inspect:async()=>({ok:true,value:restores===0
+      ?{status:'unconfirmed',terminal:false,requestId:'manual-original',canRestoreVisual:true,evidence:{restorationStatus:'pending',sessionHandle:handle}}
+      :{status:'failed',terminal:true,requestId:'manual-original',evidence:{restorationStatus:'restored',recoveryRequestId:'manual-recovery'}}}),
+    restoreVisual:async shouldContinue=>{assert.equal(shouldContinue(),true);restores++;return {ok:true};},
+    close:async()=>{closes++;return {ok:true,value:{closed:true}};}
+  });
+  const f=await fixture(t,{pollDelays:[60000],directInvoke:async()=>({ok:false,error:{code:'COMMAND_READ_UNCONFIRMED',outcome:'unconfirmed'},receiptOwner:owner})});
+  assert.equal((await choose(f,'automatic')).status,200);
+  const response=await f.post('command',{conversationId:f.session,commandId:'revit_inspect_elements',parameters:{element_ids:[23]},confirmed:true});
+  assert.equal(response.status,202);
+  await wait(()=>Boolean(f.app.snapshot('browser').modelReceipt));
+  const binding={conversationId:f.session,ticket:f.app.snapshot('browser').modelReceipt.ticket};
+  const check=()=>f.post('model-receipt/check',binding);
+  const restore=()=>f.post('model-receipt/restore-visual',{...binding,checkRevision:f.app.snapshot('browser').modelReceipt.checkRevision,confirmed:true});
+  assert.equal((await check()).status,200);
+  assert.equal(f.app.snapshot('browser').modelReceipt.check.evidence.sessionHandle,undefined);
+  handle='changed-view';
+  assert.equal((await restore()).status,409);
+  assert.equal(restores,0);
+  handle='original-owned-view';
+  assert.equal((await check()).status,200);
+  assert.equal((await restore()).status,200);
+  assert.equal(f.app.snapshot('browser').modelReceipt,null);
+  assert.equal(restores,1);
+  assert.equal(closes,1);
+  assert.equal(f.direct.length,1);
+  assert.equal(f.calls.length,0);
+});
+
 const scriptFailure=()=>({status:'unconfirmed',terminal:false,requestId:'original',recovery:{kind:'script_failure',requiresReview:true,modelRollback:'unknown',externalEffects:'unknown'},evidence:{nativeFailure:{code:'ArgumentNullException',message:'Value cannot be null.',outcome:'failed',phase:'dispatch',started:true,completedUtc:'2026-11-04T10:00:00.000Z',requestId:'original',hostSession:'host'}}});
 test('an ended old C# error can be reviewed and recovered from a new conversation without claiming rollback',async t=>{
   let closes=0,reads=0;

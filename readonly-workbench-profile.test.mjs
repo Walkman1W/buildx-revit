@@ -8,7 +8,7 @@ import {createCodexSessionProfile,createReadonlyWorkbenchSessionProfile,verifyRe
 import {CodexClient} from './lib/codex-client.mjs';
 import {CodexClientCore} from './lib/codex-client-core.mjs';
 import {READONLY_WORKBENCH_TOOL_NAMES,WORKBENCH_TOOLS} from './lib/workbench-client.mjs';
-import {PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
+import {PANEL_WORKBENCH_TOOLS,LEGACY_PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url)),directory=path.join(root,'workbench/validation/20261026-readonly-ai-mcp');
 const names=['revit_workbench_status','revit_get_selection','revit_list_levels','revit_search_elements'];
@@ -80,9 +80,12 @@ async function isolatedEntry(){
   await fs.mkdir(directory,{recursive:true});const fixture=await fs.mkdtemp(path.join(directory,'mcp-gate-'));await fs.mkdir(path.join(fixture,'lib'));
   await fs.copyFile(path.join(root,'workbench-mcp.mjs'),path.join(fixture,'workbench-mcp.mjs'));
   await fs.copyFile(path.join(root,'lib/panel-audit.mjs'),path.join(fixture,'lib/panel-audit.mjs'));
+  await fs.copyFile(path.join(root,'lib/native-readonly-test-scope.mjs'),path.join(fixture,'lib/native-readonly-test-scope.mjs'));
+  await fs.writeFile(path.join(fixture,'lib/native-model-queries.mjs'),'export const isNativeModelQuery=()=>false;\n');
+  await fs.writeFile(path.join(fixture,'lib/native-parameter-queries.mjs'),'export const isNativeParameterQuery=()=>false;\n');
   const marker=JSON.stringify(path.join(fixture,'forwarded.jsonl'));
   await fs.writeFile(path.join(fixture,'lib/workbench-client.mjs'),`import fs from 'node:fs/promises';\nexport const READONLY_WORKBENCH_TOOL_NAMES=${JSON.stringify(names)};\nexport const workbenchFailureEvidence=()=>({outcome:'unconfirmed'});\nexport async function invokeWorkbench(name,args,options={}){options.onTiming?.({code:'phase_timing',source:'workbench',phase:'receipt_received',elapsedMs:12,requestId:'12345678-1234-4234-8234-123456789012',hostSession:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',private:'PRIVATE'});await fs.appendFile(${marker},JSON.stringify({kind:'workbench',name,args})+'\\n');return {request_id:'controlled',name};}\n`);
-  await fs.writeFile(path.join(fixture,'lib/panel-tools.mjs'),`export const PANEL_WORKBENCH_TOOLS=${JSON.stringify(PANEL_WORKBENCH_TOOLS)};\n`);
+  await fs.writeFile(path.join(fixture,'lib/panel-tools.mjs'),`export const PANEL_WORKBENCH_TOOLS=${JSON.stringify(PANEL_WORKBENCH_TOOLS)};\nexport const LEGACY_PANEL_WORKBENCH_TOOLS=${JSON.stringify(LEGACY_PANEL_WORKBENCH_TOOLS)};\n`);
   await fs.writeFile(path.join(fixture,'lib/command-store.mjs'),`import fs from 'node:fs/promises';\nexport const isCommandTool=name=>name.includes('command');\nexport async function invokeCommand(name,args){await fs.appendFile(${marker},JSON.stringify({kind:'command',name,args})+'\\n');return {name};}\n`);
   const invoke=(flags,input)=>spawnSync(process.execPath,[path.join(fixture,'workbench-mcp.mjs'),...flags],{cwd:fixture,windowsHide:true,encoding:'utf8',input:input.map(value=>JSON.stringify({jsonrpc:'2.0',...value})).join('\n')+'\n',timeout:8000,maxBuffer:512*1024});
   const forwarded=async()=>{try{return (await fs.readFile(path.join(fixture,'forwarded.jsonl'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));}catch(error){if(error.code==='ENOENT')return [];throw error;}};
@@ -112,5 +115,18 @@ test('unknown CLI modes fail closed and the unchanged default catalog remains av
   const f=await isolatedEntry();
   for(const flags of [['--all'],['--read-only','--all'],['--read-only','--read-only']]){const result=f.invoke(flags,[{id:1,method:'tools/list'}]);assert.notEqual(result.status,0);assert.equal(result.stdout,'');}
   assert.deepEqual(await f.forwarded(),[]);
-  const legacy=f.invoke([],[{id:1,method:'tools/list'}]);assert.equal(legacy.status,0,legacy.stderr);assert.deepEqual(JSON.parse(legacy.stdout.trim()).result.tools,PANEL_WORKBENCH_TOOLS);
+  const legacy=f.invoke([],[{id:1,method:'tools/list'}]);assert.equal(legacy.status,0,legacy.stderr);assert.deepEqual(JSON.parse(legacy.stdout.trim()).result.tools,LEGACY_PANEL_WORKBENCH_TOOLS);
+});
+
+test('an internal test marker admits the fixed read-only entry only',async()=>{
+  const f=await isolatedEntry(),marker=path.join(f.fixture,'buildx-test-scope.json'),list=[{id:1,method:'tools/list'}];
+  await fs.writeFile(marker,JSON.stringify({schemaVersion:1,scope:'native-readonly'}));
+  for(const flags of [[],['--workspace']]){
+    const result=f.invoke(flags,list);assert.equal(result.status,2);assert.equal(result.stdout,'');
+  }
+  const readonly=f.invoke(['--read-only'],list);assert.equal(readonly.status,0,readonly.stderr);
+  assert.deepEqual(JSON.parse(readonly.stdout.trim()).result.tools.map(tool=>tool.name),names);
+  await fs.writeFile(marker,'{"schemaVersion":1,"scope":"native-readonly","scope":"native-readonly"}');
+  const invalid=f.invoke(['--read-only'],list);assert.notEqual(invalid.status,0);assert.equal(invalid.stdout,'');
+  assert.deepEqual(await f.forwarded(),[]);
 });

@@ -18,6 +18,12 @@ namespace RevitLocalCodex
     internal sealed class WorkbenchHost : IDisposable, IExternalEventHandler
     {
         private const string HostVersion = "0.8.8";
+#if BUILDX_NATIVE_READONLY_TEST
+        private static readonly bool NativeReadonlyTest = true;
+#else
+        private static readonly bool NativeReadonlyTest = false;
+#endif
+        private static readonly string[] TestReadOperations = { "status", "get_selection", "list_levels", "search_elements" };
         internal static readonly string Root = Path.GetFullPath(LocalService.WorkbenchDirectory);
         internal static readonly string PrivateRuntimeRoot = Path.GetFullPath(Path.Combine(LocalService.ServiceDirectory, "private-runtime"));
         private readonly string queue = Path.Combine(Root, "queue");
@@ -51,13 +57,12 @@ namespace RevitLocalCodex
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
-        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" };
+        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data" };
 
         internal string SessionId { get { return session; } }
 
-        // Borrow the thread currently executing a legal Revit API callback.
-        // The window is acquired and checked only inside the current callback;
-        // no HWND or claim that it is Revit's main window survives this method.
+        // Capture the API thread and Revit's main window during a legal API
+        // callback. Revalidate the target on that thread before posting.
         private sealed class CurrentUiWindowWake
         {
             internal struct WindowOwner
@@ -72,33 +77,43 @@ namespace RevitLocalCodex
             private readonly Func<uint> currentProcessId;
             private readonly Func<IntPtr> activeWindow;
             private readonly Func<IntPtr, bool> isWindow;
+            private readonly Func<IntPtr, bool> isWindowEnabled;
+            private readonly Func<IntPtr, bool> isIconic;
             private readonly Func<IntPtr, WindowOwner> windowOwner;
             private readonly Func<IntPtr, bool> postMessage;
             private Thread apiThread;
             private uint apiNativeId;
+            private IntPtr mainWindow;
 
             internal CurrentUiWindowWake()
                 : this(delegate { return Thread.CurrentThread; }, GetCurrentThreadId,
-                    GetCurrentProcessId, GetActiveWindow, IsWindow, ReadWindowOwner,
+                    GetCurrentProcessId, GetActiveWindow, IsWindow, IsWindowEnabled, IsIconic, ReadWindowOwner,
                     delegate(IntPtr window) { return PostMessage(window, 0, IntPtr.Zero, IntPtr.Zero); }) { }
 
             internal CurrentUiWindowWake(Func<Thread> managedThread, Func<uint> nativeId,
                 Func<uint> processId, Func<IntPtr> active, Func<IntPtr, bool> valid,
-                Func<IntPtr, WindowOwner> owner, Func<IntPtr, bool> post)
+                Func<IntPtr, bool> enabled, Func<IntPtr, bool> iconic, Func<IntPtr, WindowOwner> owner,
+                Func<IntPtr, bool> post)
             {
                 currentThread = managedThread; currentNativeId = nativeId; currentProcessId = processId;
-                activeWindow = active; isWindow = valid; windowOwner = owner; postMessage = post;
+                activeWindow = active; isWindow = valid; isWindowEnabled = enabled; isIconic = iconic;
+                windowOwner = owner; postMessage = post;
             }
 
-            internal void Capture()
+            internal void Capture(IntPtr revitMainWindow)
             {
                 Clear();
                 Thread thread = currentThread();
                 uint nativeId = currentNativeId();
-                if (thread != null && nativeId != 0) { apiThread = thread; apiNativeId = nativeId; }
+                if (thread != null && nativeId != 0)
+                {
+                    apiThread = thread;
+                    apiNativeId = nativeId;
+                    mainWindow = revitMainWindow;
+                }
             }
 
-            internal void Clear() { apiThread = null; apiNativeId = 0; }
+            internal void Clear() { apiThread = null; apiNativeId = 0; mainWindow = IntPtr.Zero; }
 
             internal string TryPost(out bool attempted)
             {
@@ -108,11 +123,9 @@ namespace RevitLocalCodex
                     if (apiThread == null || !Object.ReferenceEquals(apiThread, currentThread())
                         || apiNativeId == 0 || apiNativeId != currentNativeId()) return "target_unverified";
                     IntPtr window = activeWindow();
-                    if (window == IntPtr.Zero) return "no_active_window";
+                    if (window == IntPtr.Zero) return TryPostMainWindow(out attempted);
                     if (!isWindow(window)) return "active_window_invalid";
-                    WindowOwner owner = windowOwner(window);
-                    if (owner.ThreadId != apiNativeId || owner.ProcessId == 0
-                        || owner.ProcessId != currentProcessId()) return "active_window_unverified";
+                    if (!IsOwnedByApiThread(window)) return "active_window_unverified";
                     if (activeWindow() != window) return "active_window_changed";
                     attempted = true;
                     // This is the current active window of this same UI thread.
@@ -121,6 +134,27 @@ namespace RevitLocalCodex
                     return postMessage(window) ? "posted" : "post_failed";
                 }
                 catch (Exception error) { return "error_" + error.GetType().Name; }
+            }
+
+            private bool IsOwnedByApiThread(IntPtr window)
+            {
+                WindowOwner owner = windowOwner(window);
+                return owner.ThreadId == apiNativeId && owner.ProcessId != 0 && owner.ProcessId == currentProcessId();
+            }
+
+            private string TryPostMainWindow(out bool attempted)
+            {
+                attempted = false;
+                IntPtr window = mainWindow;
+                if (window == IntPtr.Zero) return "no_active_window";
+                if (!isWindow(window)) return "main_window_invalid";
+                if (!IsOwnedByApiThread(window)) return "main_window_unverified";
+                if (!isWindowEnabled(window)) return "main_window_disabled";
+                if (isIconic(window)) return "main_window_minimized";
+                if (activeWindow() != IntPtr.Zero) return "main_window_skipped_active";
+                // The background fallback posts the same no-input message once.
+                attempted = true;
+                return postMessage(window) ? "main_window_posted" : "main_window_post_failed";
             }
 
             [DllImport("kernel32.dll", ExactSpelling = true)]
@@ -132,6 +166,12 @@ namespace RevitLocalCodex
             [DllImport("user32.dll", ExactSpelling = true)]
             [return: MarshalAs(UnmanagedType.Bool)]
             private static extern bool IsWindow(IntPtr window);
+            [DllImport("user32.dll", ExactSpelling = true)]
+            [return: MarshalAs(UnmanagedType.Bool)]
+            private static extern bool IsWindowEnabled(IntPtr window);
+            [DllImport("user32.dll", ExactSpelling = true)]
+            [return: MarshalAs(UnmanagedType.Bool)]
+            private static extern bool IsIconic(IntPtr window);
             [DllImport("user32.dll", ExactSpelling = true)]
             private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
             private static WindowOwner ReadWindowOwner(IntPtr window)
@@ -151,7 +191,10 @@ namespace RevitLocalCodex
             lock (schedulingGate)
             {
                 if (disposed) return;
-                try { activeWindowWake.Capture(); }
+                IntPtr mainWindow = IntPtr.Zero;
+                try { mainWindow = uiapp.MainWindowHandle; }
+                catch { /* The existing active-window path remains available. */ }
+                try { activeWindowWake.Capture(mainWindow); }
                 catch { activeWindowWake.Clear(); }
             }
         }
@@ -261,7 +304,7 @@ namespace RevitLocalCodex
                 // Constructed from IExternalApplication.OnStartup, in a Revit API context.
                 externalEvent = ExternalEvent.Create(this);
                 queueTimer = new Timer(PollQueue, null, Timeout.Infinite, Timeout.Infinite);
-                AppDomain.CurrentDomain.AssemblyResolve += ResolvePrivateDependency;
+                if (!NativeReadonlyTest) AppDomain.CurrentDomain.AssemblyResolve += ResolvePrivateDependency;
                 controlledApplication = application;
                 controlledApplication.Idling += OnQueueIdling;
                 PublishFamilyApprovalCapability(false);
@@ -275,9 +318,12 @@ namespace RevitLocalCodex
             lock (hostDescriptorGate)
             {
                 if (disposed && ready) throw new InvalidOperationException("Workbench host is stopping.");
-                WriteAtomic(Path.Combine(queue, "host.json"), new { sessionId = session, pid = Process.GetCurrentProcess().Id,
+                WriteAtomic(Path.Combine(queue, "host.json"), NativeReadonlyTest ? (object)new {
+                    sessionId = session, pid = Process.GetCurrentProcess().Id, startedUtc = hostStartedUtc.ToString("o"),
+                    version = HostVersion, dispatcher = "ExternalEvent", atomicReadSnapshot = true, scope = "native-readonly"
+                } : new { sessionId = session, pid = Process.GetCurrentProcess().Id,
                     startedUtc = hostStartedUtc.ToString("o"), version = HostVersion, dispatcher = "ExternalEvent", atomicReadSnapshot = true,
-                    nativeModelQueriesVersion = 1, nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
+                    nativeModelQueriesVersion = 1, nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_pipe_network", "get_revision_sequences", "get_schedule_data" }.Concat(AecPilotQueries.Operations).ToArray(),
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
@@ -288,7 +334,7 @@ namespace RevitLocalCodex
 
         private void InitializeFamilyApprovalObserver(UIApplication uiapp)
         {
-            if (disposed || uiapp == null || familyObserverInitializationAttempted) return;
+            if (NativeReadonlyTest || disposed || uiapp == null || familyObserverInitializationAttempted) return;
             familyObserverInitializationAttempted = true;
             try
             {
@@ -388,8 +434,8 @@ namespace RevitLocalCodex
         }
 
         // Called under schedulingGate, once for this accepted native event.
-        // A WPF UI callback permits one no-input message to its current active
-        // window, owned by the same Revit API thread and process. Whether this
+        // A WPF UI callback permits one no-input message to its active window
+        // or its verified main window, owned by the same API thread and process. Whether this
         // makes Revit enter idle is measured, not assumed.
         // This callback never enters Revit, repeats Raise, or reads a model.
         private void QueueUiWake(SchedulerObservation observation)
@@ -641,6 +687,11 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("Request expired before execution; no operation was run.");
                 }
                 string operation = Text(request, "operation");
+                if (NativeReadonlyTest && !TestReadOperations.Contains(operation))
+                {
+                    rejectionCode = "WORKBENCH_TEST_SCOPE_DENIED";
+                    throw new InvalidOperationException("This test build only runs document status, selection, level and element queries.");
+                }
                 var args = request.ContainsKey("args") ? request["args"] as Dictionary<string, object> : null;
                 bool atomicRead = AtomicReadRequested(request, operation);
                 AccessPolicy.Binding access = AccessPolicy.RequestBinding(request);
@@ -692,9 +743,16 @@ namespace RevitLocalCodex
         private static bool AtomicReadRequested(Dictionary<string, object> request, string operation)
         {
             object value;
-            if (!request.TryGetValue("atomicRead", out value)) return false;
-            if (!(value is bool)) throw new InvalidOperationException("atomicRead must be a boolean.");
-            if (!(bool)value) return false;
+            bool present = request.TryGetValue("atomicRead", out value);
+            if (present && !(value is bool)) throw new InvalidOperationException("atomicRead must be a boolean.");
+            if (!present || !(bool)value)
+            {
+                if (operation == "get_model_preparation")
+                    throw new InvalidOperationException("Model preparation requires an atomic read snapshot.");
+                if (operation == "get_pipe_network")
+                    throw new InvalidOperationException("Pipe network query requires an atomic read snapshot.");
+                return false;
+            }
             if (!AtomicReadOperations.Contains(operation))
                 throw new InvalidOperationException("Atomic snapshots support only named read operations.");
             return true;
@@ -894,9 +952,11 @@ namespace RevitLocalCodex
                     activeViewId = doc.ActiveView == null ? null : (doc.ActiveView.Id.Value > 9007199254740991L ? (object)NativeModelQueries.SignedId(doc.ActiveView.Id) : doc.ActiveView.Id.Value),
                     activeViewType = doc.ActiveView == null ? null : doc.ActiveView.ViewType.ToString(), allowedSample = IsAllowed(doc.PathName), modified = doc.IsModified,
                     access = AccessPolicy.Evaluate(Root, access, doc.PathName, IsAllowed(doc.PathName), doc.IsReadOnly, doc.IsFamilyDocument, doc.IsLinked).Public },
-                capabilities = new { script = File.Exists(ScriptRunner.Compiler), argusCorePresent = File.Exists(core), annotationInferencePresent = File.Exists(inference),
+                capabilities = NativeReadonlyTest ? (object)new { mode = "native-readonly", dispatcher = "ExternalEvent", atomicReadSnapshot = true,
+                    script = false, argusCorePresent = false, annotationInferencePresent = false, supportedOperations = TestReadOperations } :
+                    new { script = File.Exists(ScriptRunner.Compiler), argusCorePresent = File.Exists(core), annotationInferencePresent = File.Exists(inference),
                     mode = "active-document-reads-scoped-writes", dispatcher = "ExternalEvent", runtimeValidated = false, atomicReadSnapshot = true, nativeModelQueriesVersion = 1,
-                    nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry" },
+                    nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_pipe_network", "get_revision_sequences", "get_schedule_data" }.Concat(AecPilotQueries.Operations).ToArray(),
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
@@ -904,7 +964,8 @@ namespace RevitLocalCodex
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }
                         .Concat(WorkbenchActions.ReadOperations).Concat(WorkbenchActions.WriteOperations).Concat(FamilyOperations).Concat(VisualInspection.Operations).ToArray() },
-                executionNotice = "C# runs with Revit user privileges and is not sandboxed. Transactions undo model changes, not filesystem/network side effects. Do not automatically retry unknown outcomes."
+                executionNotice = NativeReadonlyTest ? "This test build only runs named read queries. Do not automatically retry unknown outcomes." :
+                    "C# runs with Revit user privileges and is not sandboxed. Transactions undo model changes, not filesystem/network side effects. Do not automatically retry unknown outcomes."
             };
         }
 
@@ -1000,6 +1061,7 @@ namespace RevitLocalCodex
                 disposed = true;
                 pendingObservation = null;
                 eventPending = false;
+                activeWindowWake.Clear();
                 if (familyWorkflow != null) { familyWorkflow.DisposeApprovalObserver(); familyWorkflow = null; }
                 bool wakeReleased = CancelUiWake(pendingWakeObservation);
                 if (controlledApplication != null) { controlledApplication.Idling -= OnQueueIdling; controlledApplication = null; }

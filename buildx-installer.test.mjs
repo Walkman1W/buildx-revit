@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
 import {buildCandidate,planInstall,applyInstall,inspectDataLayout,validateRuntimeVersionOutputs} from './tools/buildx-installer.mjs';
 const hash=data=>createHash('sha256').update(data).digest('hex');
 const sha=/^[a-f0-9]{64}$/;
@@ -26,6 +27,24 @@ test('sandbox install plans before writing, copies only verified files and publi
   assert.equal(JSON.parse(await fs.readFile(path.join(f.options.dataRoot,'buildx-data-owner.json'),'utf8')).installationId,result.installationId);
   await assert.rejects(fs.stat(path.join(f.options.installRoot,'workbench')),{code:'ENOENT'});
   assert.match(await fs.readFile(result.addin,'utf8'),/LocalCodexRevit\.dll/);await assert.rejects(applyInstall(f.options),{code:'INSTALL_EXISTS'});
+});
+test('internal test requires a hashed native-readonly marker and cannot promote a test fixture',async t=>{
+  const f=await fixture(t),options={...f.options,installationScope:'cross-pc-test',probeEnvironment:async()=>({ok:true,webView2:{},revit2024:{}}),probeRuntimes:async()=>({pypdfAvailable:true})};
+  await assert.rejects(planInstall(options),{code:'TEST_SCOPE_INVALID'});
+  const marker=Buffer.from('{"schemaVersion":1,"scope":"native-readonly"}\n');
+  await fs.writeFile(path.join(f.pkg,'buildx-test-scope.json'),marker);
+  f.manifest.files.push({path:'buildx-test-scope.json',sha256:hash(marker)});
+  await fs.writeFile(path.join(f.pkg,'buildx-package.json'),JSON.stringify(f.manifest));
+  await assert.rejects(planInstall(options),{code:'TEST_HOST_UNVERIFIED'});
+  f.manifest.buildEvidence={dllSha256:f.manifest.files.find(x=>x.path==='revit-addin/bin/LocalCodexRevit.dll').sha256,compilerOptions:['/define:BUILDX_NATIVE_READONLY_TEST']};
+  await fs.writeFile(path.join(f.pkg,'buildx-package.json'),JSON.stringify(f.manifest));
+  assert.equal((await planInstall(options)).readyToApply,false);
+  await fs.writeFile(path.join(f.pkg,'buildx-test-scope.json'),'{}');
+  await assert.rejects(planInstall(options),{code:'PACKAGE_CHANGED'});
+});
+test('internal CLI refuses an Addins directory outside the current Revit user profile', {skip:process.platform!=='win32'},()=>{
+  const result=spawnSync(process.execPath,[path.join(process.cwd(),'tools','buildx-installer.mjs'),'--plan-internal-test','C:\\package','C:\\program','C:\\wrong-addins','C:\\node.exe','C:\\python.exe','C:\\codex.exe','C:\\data'],{encoding:'utf8'});
+  assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stderr).code,'ADDINS_DIRECTORY_INVALID');
 });
 test('data layout inspection is read-only and exposes overlap and unknowns',async t=>{
   const f=await fixture(t),data=path.join(f.base,'existing-project-history');await fs.mkdir(data);const marker=path.join(data,'preserve.txt');await fs.writeFile(marker,'original');

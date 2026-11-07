@@ -19,6 +19,135 @@ namespace RevitLocalCodex
         private const int MaxConnectorReferences = 24000;
         private const double FeetPerMillimetre = 1.0 / 304.8;
 
+        internal static object ReadPipeNetwork(Document doc, Dictionary<string, object> args)
+        {
+            if (doc == null || doc.IsFamilyDocument) throw new InvalidOperationException("Pipe networks require an active Revit project document.");
+            long rootId = NativeModelQueries.ExactId(args, "start_element_id");
+            int maxHops = 6;
+            object hopsValue;
+            if (args.TryGetValue("max_hops", out hopsValue))
+            {
+                if (hopsValue is string) throw new InvalidOperationException("max_hops must be an integer from 1 to 12.");
+                long requestedHops = NativeModelQueries.ExactId(args, "max_hops");
+                if (requestedHops > 12) throw new InvalidOperationException("max_hops must be an integer from 1 to 12.");
+                maxHops = (int)requestedHops;
+            }
+
+            var root = doc.GetElement(new ElementId(rootId)) as FamilyInstance;
+            if (root == null || !Connectors(root).Any(IsPhysicalPipeConnector))
+                throw new InvalidOperationException("Select a family instance with physical piping connectors, such as a pump.");
+
+            var depths = new Dictionary<long, int> { { rootId, 0 } };
+            var nodes = new SortedDictionary<long, object> { { rootId, PipeNetworkNode(root, "root", 0) } };
+            var edges = new SortedDictionary<string, object>(StringComparer.Ordinal);
+            var queue = new Queue<Element>();
+            queue.Enqueue(root);
+            int inspectedConnectors = 0;
+            int inspectedReferences = 0;
+            bool boundaryReached = false;
+
+            while (queue.Count > 0)
+            {
+                Element element = queue.Dequeue();
+                long elementId = element.Id.Value;
+                int hop = depths[elementId];
+                foreach (Connector connector in Connectors(element))
+                {
+                    if (++inspectedConnectors > MaxConnectorReferences)
+                        throw new InvalidOperationException("The pipe network exceeds the connector inspection budget. Request fewer hops.");
+                    if (!IsPhysicalPipeConnector(connector) || !connector.IsConnected) continue;
+
+                    int referenceCount = 0;
+                    foreach (Connector other in connector.AllRefs)
+                    {
+                        if (++referenceCount > MaxReferencesPerConnector || ++inspectedReferences > MaxConnectorReferences)
+                            throw new InvalidOperationException("The pipe network exceeds the connector reference inspection budget. Request fewer hops.");
+                        if (!IsPhysicalPipeConnector(other) || !other.IsConnected || !connector.IsConnectedTo(other) || !other.IsConnectedTo(connector)) continue;
+
+                        Element owner = other.Owner;
+                        if (owner == null || !doc.Equals(owner.Document) || owner.Id.Value <= 0)
+                        {
+                            boundaryReached = true;
+                            continue;
+                        }
+                        long ownerId = owner.Id.Value;
+                        if (ownerId == elementId) continue;
+
+                        if (!depths.ContainsKey(ownerId))
+                        {
+                            if (hop == maxHops)
+                            {
+                                boundaryReached = true;
+                                continue;
+                            }
+                            if (nodes.Count >= SchematicModelRules.MaxNodes)
+                                throw new InvalidOperationException("The pipe network exceeds the node limit. Request fewer hops.");
+
+                            string kind = PipeNetworkKind(owner);
+                            depths.Add(ownerId, hop + 1);
+                            nodes.Add(ownerId, PipeNetworkNode(owner, kind, hop + 1));
+                            if (kind == "equipment_boundary") boundaryReached = true;
+                            else queue.Enqueue(owner);
+                        }
+
+                        bool forward = elementId < ownerId;
+                        long fromId = forward ? elementId : ownerId;
+                        long toId = forward ? ownerId : elementId;
+                        int fromConnector = forward ? connector.Id : other.Id;
+                        int toConnector = forward ? other.Id : connector.Id;
+                        if (fromConnector < 0 || toConnector < 0)
+                            throw new InvalidOperationException("A physical piping connection has no usable connector identity.");
+                        string edgeKey = String.Format(CultureInfo.InvariantCulture, "{0}:{1}:{2}:{3}", fromId, fromConnector, toId, toConnector);
+                        if (edges.ContainsKey(edgeKey)) continue;
+                        if (edges.Count >= SchematicModelRules.MaxEdges)
+                            throw new InvalidOperationException("The pipe network exceeds the edge limit. Request fewer hops.");
+                        edges.Add(edgeKey, new {
+                            from_element_id = fromId.ToString(CultureInfo.InvariantCulture), from_connector_id = fromConnector,
+                            to_element_id = toId.ToString(CultureInfo.InvariantCulture), to_connector_id = toConnector
+                        });
+                    }
+                }
+            }
+
+            return new {
+                schema_version = 1, root_element_id = rootId.ToString(CultureInfo.InvariantCulture), max_hops = maxHops,
+                nodes = nodes.Values.ToArray(), edges = edges.Values.ToArray(), boundary_reached = boundaryReached
+            };
+        }
+
+        private static bool IsPhysicalPipeConnector(Connector connector)
+        {
+            return connector != null && connector.Domain == Domain.DomainPiping &&
+                (connector.ConnectorType == ConnectorType.End || connector.ConnectorType == ConnectorType.Curve || connector.ConnectorType == ConnectorType.Physical);
+        }
+
+        private static string PipeNetworkKind(Element element)
+        {
+            if (element is Pipe) return "pipe";
+            long category = element.Category == null ? 0 : element.Category.Id.Value;
+            if (category == (long)BuiltInCategory.OST_PipeFitting) return "fitting";
+            if (category == (long)BuiltInCategory.OST_PipeAccessory)
+            {
+                var instance = element as FamilyInstance;
+                var fitting = instance == null ? null : instance.MEPModel as MechanicalFitting;
+                if (fitting != null && (fitting.PartType == PartType.ValveNormal || fitting.PartType == PartType.ValveBreaksInto)) return "valve";
+                return "pipe_accessory";
+            }
+            return "equipment_boundary";
+        }
+
+        private static object PipeNetworkNode(Element element, string kind, int hop)
+        {
+            if (String.IsNullOrWhiteSpace(element.UniqueId))
+                throw new InvalidOperationException("A pipe network element has no persistent identity.");
+            var instance = element as FamilyInstance;
+            FamilySymbol symbol = instance == null ? null : instance.Symbol;
+            string family = symbol == null ? null : symbol.FamilyName;
+            string name = String.IsNullOrWhiteSpace(element.Name) ? kind : element.Name;
+            if (!String.IsNullOrWhiteSpace(family) && !String.Equals(family, name, StringComparison.Ordinal)) name = family + " · " + name;
+            return new { id = NativeModelQueries.SignedId(element.Id), unique_id = element.UniqueId, name = Trim(name, 300), kind, hop };
+        }
+
         public static object Preview(UIApplication app, Dictionary<string, object> args)
         {
             Document doc = RequireDocument(app);

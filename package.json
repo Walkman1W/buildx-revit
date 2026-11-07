@@ -7,6 +7,7 @@
     "start:source": "node source-panel.mjs",
     "check": "node --check server.mjs && node --check source-panel.mjs && node --check public/app.js",
     "test:native-queries": "node --test native-model-queries.test.mjs native-model-query-producer.test.mjs native-query-transport.test.mjs native-six-mcp-client.test.mjs atomic-workbench-read.test.mjs model-workspace-registry.test.mjs workbench-client.test.mjs assistant-instructions.test.mjs panel-read-commands.test.mjs command-dispatch-integration.test.mjs model-document-preflight.test.mjs model-operation-contracts.test.mjs native-access-transport.test.mjs live-tool-receipt.test.mjs",
+    "test:aec-pilot": "node --test aec-pilot-mcp.test.mjs",
     "customer:assets": "node customer-assets.mjs",
     "start:customer-chat": "node customer-server.mjs",
     "customer:component": "node customer-chat-package.mjs",

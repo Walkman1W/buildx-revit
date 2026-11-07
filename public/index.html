@@ -53,7 +53,7 @@
       <p class="account-boundary">确认仅适用于这次本机连接，不代表已绑定稳定的 OpenAI 账号或工作区。稳定账号 ID、工作区 ID 均未取得；邮箱和套餐仅为本次观察。</p>
     </div>
   </details>
-  <details class="tools-panel">
+  <details id="tools-directory" class="tools-panel" hidden>
     <summary><span>工具目录</span><span id="tool-count">正在读取目录</span></summary>
     <div class="tools-content"><p id="tool-note" class="tools-note">目录尚未就绪。</p><ul id="tool-list" class="tool-list"></ul><p id="tools-boundary" class="tools-note">目录可见不等于已实机验证。修改模型仍需核对文档和授权，不会自动保存。</p></div>
   </details>
@@ -87,7 +87,7 @@
   <section id="dynamic-approval" class="dynamic-approval" aria-label="操作确认" aria-live="polite" hidden></section>
   <footer>
     <section id="context-panel" class="context-panel" aria-label="附加上下文">
-      <div class="context-actions"><span class="context-label">上下文</span><label class="context-choice"><input id="include-document" type="checkbox"><span>当前模型</span></label><label class="context-choice"><input id="include-selection" type="checkbox"><span>当前选择</span></label><button id="refresh-context" class="text-button" type="button" disabled>刷新</button></div>
+      <div class="context-actions"><span class="context-label">上下文</span><label class="context-choice"><input id="include-document" type="checkbox"><span>当前模型</span></label><label class="context-choice"><input id="include-selection" type="checkbox"><span>当前选择</span></label><details id="selection-inline" class="selection-inline" hidden><summary aria-label="当前选择详情"><span id="selection-inline-summary" aria-live="polite"></span><span class="selection-inline-chevron" aria-hidden="true">⌄</span></summary><div id="selection-inline-content" class="selection-inline-content"></div></details><button id="refresh-context" class="text-button" type="button" disabled>刷新</button></div>
       <details id="context-details"><summary id="context-summary">未附加模型信息</summary><div id="context-content" class="context-content">勾选后可读取上下文，也可随下一条消息附加。</div></details>
     </section>
     <form id="composer">

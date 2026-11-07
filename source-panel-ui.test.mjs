@@ -73,7 +73,7 @@ async function setup(initialStatus = {}) {
     },
     createElement: tag => new Element(tag), createTextNode: text => { const item = new Element('#text'); item.textContent = text; return item; },
     createDocumentFragment: () => new Element('#fragment') };
-  const sandbox = { __chatView: chatView, document, sessionStorage: { getItem: () => null, setItem() {} },
+  const sandbox = { __chatView: chatView, document, window: new Element('window'), AbortController, sessionStorage: { getItem: () => null, setItem() {} },
     crypto: { randomUUID: () => `test-${++identity}` }, Event: UiEvent, EventSource: FakeEventSource,
     navigator: { clipboard: { writeText: async () => {} } }, setTimeout, clearTimeout,
     fetch: async (url, options) => {
@@ -111,6 +111,7 @@ test('known source profile shows the six source contracts, provenance guidance a
   assert.equal(ui.document.title, 'BuildX · 源码工作台');
   assert.equal(ui.get('workspace-name').textContent, '源码工作台');
   assert.equal(ui.get('workspace-subtitle').textContent, 'SOURCE WORKSPACE · CODEX');
+  assert.equal(ui.get('tools-directory').hidden, false);
   assert.equal(ui.get('tool-list').childElementCount, 6);
   assert.equal(ui.get('tool-count').textContent, '已加载 6 / 6 项');
   assert.match(ui.get('welcome-hint').textContent, /原始 SHA256/); assert.match(ui.get('welcome-hint').textContent, /partial/);
@@ -128,8 +129,8 @@ test('switching from model catalog to a count-only source SSE clears stale rows 
   for (const mode of ['snapshot', 'state']) {
     const modelCatalog = Array.from({ length: 31 }, (_, index) => ({ name: `revit_tool_${index}`, description: '模型工具', readOnly: false }));
     const ui = await setup({ workspace: modelWorkspace, toolCount: 31, toolCatalog: modelCatalog });
-    assert.equal(ui.get('tool-list').childElementCount, 31);
-    assert.equal(ui.get('tool-count').textContent, '已加载 31 / 31 项');
+    assert.equal(ui.get('tools-directory').hidden, true);
+    assert.equal(ui.get('tool-list').childElementCount, 0);
     const countOnly = { workspace: sourceWorkspace, ready: true, toolCount: 6 };
     if (mode === 'snapshot') ui.emit('snapshot', { workspace: sourceWorkspace, state: countOnly, busy: false, session: session(1) });
     else ui.emit('state', countOnly);

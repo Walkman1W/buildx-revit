@@ -1,8 +1,13 @@
 import path from 'node:path';
+import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
+import {randomBytes} from 'node:crypto';
+import {spawn} from 'node:child_process';
 import {CodexClient} from './lib/codex-client.mjs';
 import {MODEL_SERVER_PROFILE} from './lib/panel-profile.mjs';
-import {invokeWorkbench,combineWorkbenchTiming} from './lib/workbench-client.mjs';
+import {MODEL_READONLY_SESSION_PROFILE} from './lib/codex-profile.mjs';
+import {invokeWorkbench,invokeAtomicWorkbenchRead,invokeReadonlyPanelCommand,combineWorkbenchTiming,READONLY_WORKBENCH_TOOL_NAMES} from './lib/workbench-client.mjs';
+import {isNativeReadonlyTest} from './lib/native-readonly-test-scope.mjs';
 import {createProjectHistory} from './lib/project-history.mjs';
 import {createProjectKnowledge} from './lib/project-knowledge.mjs';
 import {createProjectFilesComposition} from './lib/project-files-composition.mjs';
@@ -17,9 +22,13 @@ import {createPanelChatStore} from './lib/chat-store.mjs';
 import {readInstallationConfiguration,resolveInstallationRuntimes} from './lib/installation-identity.mjs';
 import {runPanelService} from './lib/server-lifecycle.mjs';
 import {createAccessServices} from './lib/access-services.mjs';
-import {resolveBuildxPaths} from './lib/buildx-paths.mjs';
+import {createModelTerminalService} from './lib/model-terminal-service.mjs';
+import {resolvePythonExecutable} from './lib/local-runtimes.mjs';
+import {resolveBuildxPaths,resolveBuildxPanelPort} from './lib/buildx-paths.mjs';
+import {CHAT_READ_RECEIPT_KEY_ENV,CHAT_READ_RECEIPT_PORT_ENV} from './lib/chat-read-receipts.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
+const nativeReadonlyTest=await isNativeReadonlyTest(ROOT);
 const configuration=buildxRuntimeConfig();
 const installation=await readInstallationConfiguration(ROOT);
 const paths=resolveBuildxPaths(ROOT,installation);
@@ -33,11 +42,32 @@ if(projectHistoryRoot!==undefined&&(!path.isAbsolute(projectHistoryRoot)||!proje
 const contains=(parent,child)=>{const relative=path.relative(path.resolve(parent),path.resolve(child));return relative===''||relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);};
 if(projectHistoryRoot!==undefined&&(contains(ROOT,projectHistoryRoot)||contains(projectHistoryRoot,ROOT)))throw new Error('项目历史目录不能与程序目录重叠。');
 const projectHistoryFactory=projectHistoryRoot===undefined?null:accountId=>createProjectHistory({stateDirectory:projectHistoryRoot,accountId});
-const profile=MODEL_SERVER_PROFILE;
+const profile=nativeReadonlyTest?MODEL_READONLY_SESSION_PROFILE:MODEL_SERVER_PROFILE;
+const port=resolveBuildxPanelPort(installation),chatReadReceiptKey=randomBytes(32).toString('hex');
 const onTiming=data=>lifecycle.audit('phase-timing.jsonl',data,true);
 const timingControl=(control={})=>({...control,root:paths.workbenchRoot,onTiming:combineWorkbenchTiming(onTiming,control.onTiming)});
-const familyCapabilityOwner=createFamilyCapabilityOwner();
-const accessServices=createAccessServices({root:paths.dataRoot,programRoot:paths.programRoot,stateDirectory:path.join(paths.historyDirectory,'access-permissions')});
-const runtimeDependencies={skillCatalogMode:configuration.mode,familyCapabilityOwner,...installation?{resolveRuntimes:()=>resolveInstallationRuntimes(installation)}:{}};
-const app=createPanelServer({root:ROOT,dataRoot:paths.dataRoot,profile,codex:new CodexClient(ROOT,{profile},runtimeDependencies),accessServices,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
+const toolControl=(name,control)=>{
+  if(nativeReadonlyTest&&!READONLY_WORKBENCH_TOOL_NAMES.includes(name))throw new Error('内部测试包只提供四项只读模型查询。');
+  return timingControl(control);
+};
+const familyCapabilityOwner=nativeReadonlyTest?null:createFamilyCapabilityOwner();
+const terminalWorkRoot=path.join(homedir(),'AppData','Local','BuildXTerminalWork');
+const accessServices=nativeReadonlyTest?null:createAccessServices({root:paths.dataRoot,programRoot:paths.programRoot,stateDirectory:path.join(paths.historyDirectory,'access-permissions'),terminalWorkRoot});
+let terminalPython=installation?.pythonExecutable;
+if(!installation&&process.platform==='win32')try{terminalPython=resolvePythonExecutable();}catch{}
+const modelTerminal=nativeReadonlyTest?null:createModelTerminalService({dataRoot:paths.dataRoot,workRoot:terminalWorkRoot,
+  helperPath:path.join(paths.privateRuntimeDirectory,'terminal','BuildXTerminalHost.exe'),
+  pythonExecutable:terminalPython,
+  powershellExecutable:process.platform==='win32'&&process.env.SystemRoot?path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'):undefined});
+const terminalAvailability=await modelTerminal?.availability()??null;
+const runtimeDependencies={skillCatalogMode:configuration.mode,...familyCapabilityOwner?{familyCapabilityOwner}:{},
+  spawn:(file,args,options)=>spawn(file,args,{...options,env:{...options.env,[CHAT_READ_RECEIPT_KEY_ENV]:chatReadReceiptKey,[CHAT_READ_RECEIPT_PORT_ENV]:String(port)}}),
+  ...installation?{resolveRuntimes:()=>resolveInstallationRuntimes(installation)}:{}};
+const dispatchCommand=nativeReadonlyTest?invokeReadonlyPanelCommand:invokeModelCommand;
+const app=createPanelServer({root:ROOT,dataRoot:paths.dataRoot,port,profile,nativeReadonlyTest,chatReadReceiptKey,
+  codex:new CodexClient(ROOT,{profile,...nativeReadonlyTest?{}:{modelTerminal:terminalAvailability?.available===true}},runtimeDependencies),accessServices,modelTerminal,terminalAvailability,
+  invokeWorkbench:(name,args,control)=>invokeWorkbench(name,args,toolControl(name,control)),
+  invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,toolControl(name,control)),
+  invokeReadonlyCommand:(command,parameters,control)=>dispatchCommand(command,parameters,timingControl(control)),
+  modelPermissionServices:nativeReadonlyTest?null:createModelPermissionServices({timingControl}),familyCapabilityOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
 await runPanelService({app,lifecycle,root:ROOT,runtimeDirectory:paths.runtimeDirectory});

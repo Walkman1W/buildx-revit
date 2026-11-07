@@ -1,4 +1,4 @@
-param([string]$EvidenceDirectory)
+param([string]$EvidenceDirectory,[switch]$NativeReadonlyTest)
 $ErrorActionPreference='Stop'
 $panelRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if(-not $EvidenceDirectory){$EvidenceDirectory=Join-Path $panelRoot ('artifacts\native-model-query-host\managed-'+[Guid]::NewGuid().ToString('N').Substring(0,8))}
@@ -33,6 +33,7 @@ $methods=[ordered]@{
  ORIGINAL_DOCUMENT_SOURCE_THREAD=(Read-Producer 'private void RequireCapturedThread()' 'public ProjectDocumentFacts Inspect(' $documentSource)
  ORIGINAL_DOCUMENT_SOURCE_IDENTITY=$documentIdentity
  ORIGINAL_ATOMIC_OPERATIONS=(Read-Producer 'private static readonly string[] AtomicReadOperations' 'internal string SessionId')
+ ORIGINAL_TEST_SCOPE=(Read-Producer '#if BUILDX_NATIVE_READONLY_TEST' 'internal static readonly string Root')
  ORIGINAL_OPERATION_CLASSIFICATION=(Read-Producer 'internal static readonly string[] ReadOperations' 'internal static object Read(' $actionsSource)
  ORIGINAL_DOCUMENT_VALIDATION=(Read-Producer 'private static void RequireDocument(' 'internal static string Text(')
  ORIGINAL_TIMING_OWNER=(Read-Producer 'private sealed class SchedulerObservation' 'internal WorkbenchHost(')
@@ -53,11 +54,13 @@ $template=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'workspace-host-checks
 foreach($entry in $methods.GetEnumerator()){$template=$template.Replace('// '+$entry.Key,$entry.Value)}
 $generated=Join-Path $evidence 'host.generated.cs';[IO.File]::WriteAllText($generated,$template,[Text.UTF8Encoding]::new($false))
 $framework='C:\Windows\Microsoft.NET\Framework64\v4.0.30319';$program=Join-Path $evidence 'host-check.exe'
-& (Join-Path $framework 'csc.exe') /nologo /target:exe /platform:x64 /langversion:5 /utf8output ('/out:'+$program) ('/reference:'+(Join-Path $framework 'System.Web.Extensions.dll')) ('/reference:'+(Join-Path $framework 'System.Core.dll')) $generated $accessPolicyPath 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'compile.log')
+$defines=@();if($NativeReadonlyTest){$defines+='/define:BUILDX_NATIVE_READONLY_TEST'}
+& (Join-Path $framework 'csc.exe') /nologo /target:exe /platform:x64 /langversion:5 /utf8output @defines ('/out:'+$program) ('/reference:'+(Join-Path $framework 'System.Web.Extensions.dll')) ('/reference:'+(Join-Path $framework 'System.Core.dll')) $generated $accessPolicyPath 2>&1 | Tee-Object -FilePath (Join-Path $evidence 'compile.log')
 if($LASTEXITCODE-ne 0){throw 'Managed verifier compilation failed.'}
 & $program (Join-Path $evidence 'receipts') | Set-Content -LiteralPath (Join-Path $evidence 'results.json') -Encoding utf8
 if($LASTEXITCODE-ne 0){throw 'Managed verification failed.'}
 $result=Get-Content -LiteralPath (Join-Path $evidence 'results.json') -Raw|ConvertFrom-Json
-if($result.checks-ne 80 -or @($result.results|Where-Object {-not $_.passed}).Count){throw 'Managed checks are incomplete.'}
+$expectedChecks=if($NativeReadonlyTest){8}else{102}
+if($result.checks-ne $expectedChecks -or @($result.results|Where-Object {-not $_.passed}).Count){throw 'Managed checks are incomplete.'}
 [ordered]@{source=$hostPath;sourceSha256=(Get-FileHash -LiteralPath $hostPath -Algorithm SHA256).Hash.ToLowerInvariant();documentIdentitySource=$documentSourcePath;documentIdentitySha256=(Get-FileHash -LiteralPath $documentSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();accessPolicySource=$accessPolicyPath;accessPolicySha256=(Get-FileHash -LiteralPath $accessPolicyPath -Algorithm SHA256).Hash.ToLowerInvariant();operationClassificationSource=$actionsSourcePath;operationClassificationSha256=(Get-FileHash -LiteralPath $actionsSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();checks=$result.checks;scope='Exact scheduler, request/access validation and native document identity owners with controlled Revit/business peers; not a real Revit run.';methods=@($methods.Keys)}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $evidence 'source-proof.json') -Encoding utf8
 Write-Output ('Managed checks passed: '+$result.checks+'; evidence: '+$evidence)

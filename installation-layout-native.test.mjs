@@ -16,6 +16,7 @@ test('actual C# installation owner separates configured data and rejects ambiguo
     const result=await run(config);assert.equal(result.ok,true);assert.equal(result.root,produce.root);assert.equal(result.dataRoot,produce.root);assert.equal(result.workbenchRoot,path.join(produce.root,'workbench'));
     assert.equal(result.schemaVersion,1);assert.equal(result.developmentMode,false);assert.equal(result.matchesSelf,true);assert.equal(result.matchesMissing,false);assert.equal(result.matchesOther,false);
     assert.equal(result.webViewUserDataFolder,path.join(process.env.LOCALAPPDATA,'RevitLocalCodex','WebView2'));
+    assert.equal(result.panelPort,41873);assert.equal(result.panelAddress,'http://127.0.0.1:41873/');
   });
   await t.test('schema 2 binds owned program, data, queue and browser roots without creating state',async()=>{
     const dataRoot=path.join(produce.directory,'data'),marker=path.join(dataRoot,'buildx-data-owner.json');
@@ -23,6 +24,27 @@ test('actual C# installation owner separates configured data and rejects ambiguo
     const before=await fs.readFile(marker),result=await run({...config,schemaVersion:2,dataRoot});
     assert.equal(result.ok,true);assert.equal(result.root,produce.root);assert.equal(result.dataRoot,dataRoot);assert.equal(result.workbenchRoot,path.join(dataRoot,'workbench'));assert.equal(result.webViewUserDataFolder,path.join(dataRoot,'WebView2'));assert.equal(result.schemaVersion,2);
     assert.deepEqual(await fs.readdir(dataRoot),['buildx-data-owner.json']);assert.deepEqual(await fs.readFile(marker),before);assert.equal(result.nodeExecutable,config.nodeExecutable);assert.equal(result.pythonExecutable,config.pythonExecutable);assert.equal(result.codexExecutable,config.codexExecutable);
+    assert.equal(result.panelPort,41873);assert.equal(result.panelAddress,'http://127.0.0.1:41873/');
+  });
+  await t.test('schema 2 accepts only bounded JSON integer ports and keeps one address owner',async()=>{
+    const dataRoot=path.join(produce.directory,'data');
+    for(const panelPort of [1024,41873,41874,65535]){
+      const result=await run({...config,schemaVersion:2,dataRoot,panelPort});assert.equal(result.ok,true,JSON.stringify({panelPort,result}));assert.equal(result.panelPort,panelPort);assert.equal(result.panelAddress,`http://127.0.0.1:${panelPort}/`);
+    }
+    for(const numericLiteral of ['41874.0','41874e0']){
+      const text=JSON.stringify({...config,schemaVersion:2,dataRoot,panelPort:41874}).replace('"panelPort":41874','"panelPort":'+numericLiteral),result=await produce({configurationText:text});assert.equal(result.ok,true,numericLiteral);assert.equal(result.panelPort,41874);
+    }
+    for(const panelPort of [null,'41874',true,false,0,-1,80,1023,65536,41874.25,{},[],9007199254740991]){
+      const result=await run({...config,schemaVersion:2,dataRoot,panelPort});assert.equal(result.ok,false,JSON.stringify(panelPort));
+    }
+    for(const panelPort of [null,41873,41874,'41873'])assert.equal((await run({...config,panelPort})).ok,false,'schema1 '+JSON.stringify(panelPort));
+    const duplicate=JSON.stringify({...config,schemaVersion:2,dataRoot,panelPort:41874}).replace('"panelPort":41874','"panelPort":41874,"panelPort":41873');assert.equal((await produce({configurationText:duplicate})).ok,false);
+    assert.deepEqual(await fs.readdir(dataRoot),['buildx-data-owner.json']);
+  });
+  await t.test('configured navigation retains the exact loopback scheme, host, port and user-info boundary',async()=>{
+    const dataRoot=path.join(produce.directory,'data'),navigation=['http://127.0.0.1:41874/','http://127.0.0.1:41874/path?x=1#section','http://127.0.0.1:41873/','http://127.0.0.1:41875/','https://127.0.0.1:41874/','http://localhost:41874/','http://127.0.0.2:41874/','http://[::1]:41874/','http://127.0.0.1.evil.invalid:41874/','http://user@127.0.0.1:41874/','http://user:password@127.0.0.1:41874/','file:///C:/test','//127.0.0.1:41874/','invalid',null];
+    const result=await produce({configurationText:JSON.stringify({...config,schemaVersion:2,dataRoot,panelPort:41874}),navigation});assert.equal(result.ok,true);assert.deepEqual(result.navigation,[true,true,...navigation.slice(2).map(()=>false)]);
+    const legacy=await produce({configurationText:JSON.stringify(config),navigation:['http://127.0.0.1:41873/','http://127.0.0.1:41874/']});assert.equal(legacy.ok,true);assert.deepEqual(legacy.navigation,[true,false]);
   });
   await t.test('missing, foreign and malformed data ownership never creates a queue or alters the marker',async()=>{
     const absentRoot=path.join(produce.directory,'absent-data');assert.equal((await run({...config,schemaVersion:2,dataRoot:absentRoot})).ok,false);await assert.rejects(fs.stat(absentRoot),{code:'ENOENT'});

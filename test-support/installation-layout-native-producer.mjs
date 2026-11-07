@@ -28,7 +28,9 @@ internal static class Program {
   try {
    string assembly=Path.Combine(root,"revit-addin","bin","LocalCodexRevit.dll");
    var value=BuildXInstallation.FromAssemblyLocation(assembly);
-   Console.WriteLine(json.Serialize(new {ok=true,root=value.Root,dataRoot=value.DataRoot,workbenchRoot=value.WorkbenchRoot,webViewUserDataFolder=value.WebViewUserDataFolder,schemaVersion=value.SchemaVersion,developmentMode=value.DevelopmentMode,installationId=value.InstallationId,nodeExecutable=value.NodeExecutable,pythonExecutable=value.PythonExecutable,codexExecutable=value.CodexExecutable,matchesSelf=value.MatchesService("revit-local-codex",value.InstallationId),matchesMissing=value.MatchesService("revit-local-codex",null),matchesOther=value.MatchesService("other",value.InstallationId)}));
+   var navigation=new List<bool>();object addresses;
+   if(input.TryGetValue("navigation",out addresses))foreach(object address in (System.Collections.IEnumerable)addresses)navigation.Add(value.AllowsPanelNavigation(address as string));
+   Console.WriteLine(json.Serialize(new {ok=true,root=value.Root,dataRoot=value.DataRoot,workbenchRoot=value.WorkbenchRoot,webViewUserDataFolder=value.WebViewUserDataFolder,schemaVersion=value.SchemaVersion,panelPort=value.PanelPort,panelAddress=value.PanelAddress,navigation,developmentMode=value.DevelopmentMode,installationId=value.InstallationId,nodeExecutable=value.NodeExecutable,pythonExecutable=value.PythonExecutable,codexExecutable=value.CodexExecutable,matchesSelf=value.MatchesService("revit-local-codex",value.InstallationId),matchesMissing=value.MatchesService("revit-local-codex",null),matchesOther=value.MatchesService("other",value.InstallationId)}));
   } catch(Exception error) {Console.WriteLine(json.Serialize(new {ok=false,error=error.GetType().Name}));}
  }
 }}`;
@@ -43,6 +45,6 @@ internal static class Program {
     child.once('close',code=>{clearTimeout(timer);if(code!==0)return reject(new Error('Native installation producer exited '+code+': '+stderr));try{resolve(JSON.parse(stdout.replace(/^\uFEFF/,'')));}catch(error){reject(error);}});
     child.stdin.end(JSON.stringify(input));
   });
-  produce.root=root;produce.directory=directory;produce.sourceEvidence={source:'revit-addin/LocalCodexRevit.cs',ownerSha256:createHash('sha256').update(owner).digest('hex'),scope:'Actual C# installation parser and layout owner; filesystem fixtures only, no Revit or service starts'};
+  produce.root=root;produce.directory=directory;produce.sourceEvidence={source:'revit-addin/LocalCodexRevit.cs',sourceSha256:createHash('sha256').update(source).digest('hex'),ownerSha256:createHash('sha256').update(owner).digest('hex'),scope:'Actual C# installation parser, layout, configured panel address and navigation owner; filesystem fixtures only, no Revit or service starts'};
   return produce;
 }

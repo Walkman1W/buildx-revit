@@ -99,7 +99,7 @@ test('timeout and explicit native failure/expiry never replay an impact read or 
 
 test('workspace MCP advertises the read-only schema and validates the complete structured preview',async t=>{
   const f=await typeParameterImpactFixture(t),{client,stderr}=await f.connect(),listed=await client.listTools();
-  assert.equal(listed.tools.length,23);const matches=listed.tools.filter(tool=>tool.name===IMPACT_TOOL);assert.equal(matches.length,1);
+  assert.equal(listed.tools.length,34);const matches=listed.tools.filter(tool=>tool.name===IMPACT_TOOL);assert.equal(matches.length,1);
   assert.ok(matches[0].outputSchema);assert.equal(matches[0].annotations.readOnlyHint,true);assert.equal(listed.tools.some(tool=>tool.name==='revit_set_type_parameter'),false);
   const result=await client.callTool({name:IMPACT_TOOL,arguments:impactArguments()},{timeout:7000});assert.equal(result.isError,false,JSON.stringify(result));
   assert.deepEqual(JSON.parse(result.content[0].text),result.structuredContent);assert.equal(schema()(result.structuredContent),true);

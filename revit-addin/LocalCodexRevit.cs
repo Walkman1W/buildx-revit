@@ -34,7 +34,7 @@ namespace RevitLocalCodex
 {
     public sealed class App : IExternalApplication
     {
-        internal const string PanelAddress = "http://127.0.0.1:41873/";
+        internal static string PanelAddress { get { return LocalService.PanelAddress; } }
         internal static readonly DockablePaneId PaneId = new DockablePaneId(
             new Guid("f3df6cf1-bb52-459d-aee4-788716f3ea59"));
         internal static CodexPane Pane;
@@ -458,12 +458,7 @@ namespace RevitLocalCodex
             core.Settings.IsStatusBarEnabled = false;
             core.NavigationStarting += delegate(object sender, CoreWebView2NavigationStartingEventArgs args)
             {
-                Uri target;
-                bool allowed = Uri.TryCreate(args.Uri, UriKind.Absolute, out target)
-                    && target.Scheme == Uri.UriSchemeHttp
-                    && target.Host == "127.0.0.1"
-                    && target.Port == 41873
-                    && String.IsNullOrEmpty(target.UserInfo);
+                bool allowed = LocalService.AllowsPanelNavigation(args.Uri);
                 if (!allowed)
                 {
                     args.Cancel = true;
@@ -616,10 +611,22 @@ namespace RevitLocalCodex
         internal readonly string PythonExecutable;
         internal readonly string CodexExecutable;
         internal readonly int SchemaVersion;
+        internal const int DefaultPanelPort = 41873;
+        internal readonly int PanelPort;
         // Compatibility for the schema-1 identity reader; no production
         // configuration can enable the former development-mode exception.
         internal readonly bool DevelopmentMode = false;
         internal string WorkbenchRoot { get { return Path.Combine(DataRoot, "workbench"); } }
+        internal string PanelAddress { get { return "http://127.0.0.1:" + PanelPort.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/"; } }
+        internal bool AllowsPanelNavigation(string address)
+        {
+            Uri target;
+            return Uri.TryCreate(address, UriKind.Absolute, out target)
+                && target.Scheme == Uri.UriSchemeHttp
+                && target.Host == "127.0.0.1"
+                && target.Port == PanelPort
+                && String.IsNullOrEmpty(target.UserInfo);
+        }
         internal string WebViewUserDataFolder { get { return SchemaVersion == 1
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitLocalCodex", "WebView2")
             : Path.Combine(DataRoot, "WebView2"); } }
@@ -633,6 +640,7 @@ namespace RevitLocalCodex
             [DataMember(Name = "pythonExecutable")] public string PythonExecutable { get; set; }
             [DataMember(Name = "codexExecutable")] public string CodexExecutable { get; set; }
             [DataMember(Name = "dataRoot")] public string DataRoot { get; set; }
+            [DataMember(Name = "panelPort")] public object PanelPort { get; set; }
         }
 
         [DataContract]
@@ -642,10 +650,27 @@ namespace RevitLocalCodex
             [DataMember(Name = "installationId", IsRequired = true)] public string InstallationId { get; set; }
         }
 
-        private BuildXInstallation(string root, string dataRoot, string id, string node, string python, string codex, int schemaVersion)
+        private BuildXInstallation(string root, string dataRoot, string id, string node, string python, string codex, int schemaVersion, int panelPort)
         {
             Root = root; DataRoot = dataRoot; InstallationId = id; NodeExecutable = node;
-            PythonExecutable = python; CodexExecutable = codex; SchemaVersion = schemaVersion;
+            PythonExecutable = python; CodexExecutable = codex; SchemaVersion = schemaVersion; PanelPort = panelPort;
+        }
+
+        private static int ResolvePanelPort(int schemaVersion, byte[] configurationBytes)
+        {
+            string text = new System.Text.UTF8Encoding(false, true).GetString(configurationBytes).TrimStart('\uFEFF');
+            var fields = new System.Web.Script.Serialization.JavaScriptSerializer().DeserializeObject(text)
+                as System.Collections.Generic.Dictionary<string, object>;
+            if (fields == null) throw new BuildXInstallationException();
+            object raw;
+            if (!fields.TryGetValue("panelPort", out raw)) return DefaultPanelPort;
+            if (schemaVersion != 2 || !(raw is int || raw is long || raw is decimal || raw is double)) throw new BuildXInstallationException();
+            // Match JSON-number integer semantics: 41874, 41874.0 and 41874e0
+            // represent the same integer; strings, null and fractions do not.
+            double value = Convert.ToDouble(raw, System.Globalization.CultureInfo.InvariantCulture);
+            if (Double.IsNaN(value) || Double.IsInfinity(value) || value < 1024 || value > 65535 || Math.Truncate(value) != value)
+                throw new BuildXInstallationException();
+            return (int)value;
         }
 
         private static bool ValidExecutable(string value, string name)
@@ -747,22 +772,27 @@ namespace RevitLocalCodex
                 FileAttributes configurationAttributes = File.GetAttributes(file);
                 if ((configurationAttributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0) throw new BuildXInstallationException();
                 Configuration configuration;
+                byte[] configurationBytes;
                 using (FileStream stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     if (stream.Length == 0 || stream.Length > 4096) throw new BuildXInstallationException();
-                    configuration = new DataContractJsonSerializer(typeof(Configuration)).ReadObject(stream) as Configuration;
+                    using (var buffer = new MemoryStream()) { stream.CopyTo(buffer); configurationBytes = buffer.ToArray(); }
                 }
+                if (configurationBytes.Length == 0 || configurationBytes.Length > 4096) throw new BuildXInstallationException();
+                using (var buffer = new MemoryStream(configurationBytes))
+                    configuration = new DataContractJsonSerializer(typeof(Configuration)).ReadObject(buffer) as Configuration;
                 if (configuration == null || (configuration.SchemaVersion != 1 && configuration.SchemaVersion != 2) || !ValidInstallationId(configuration.InstallationId) ||
                     !ValidExecutable(configuration.NodeExecutable, "node.exe") || !ValidExecutable(configuration.PythonExecutable, "python.exe") ||
                     !ValidExecutable(configuration.CodexExecutable, "codex.exe")) throw new BuildXInstallationException();
                 if (configuration.SchemaVersion == 1 && configuration.DataRoot != null ||
                     configuration.SchemaVersion == 2 && !ValidDataRoot(configuration.DataRoot, root)) throw new BuildXInstallationException();
                 if (configuration.SchemaVersion == 2) RequireDataOwnership(configuration.DataRoot, configuration.InstallationId);
+                int panelPort = ResolvePanelPort(configuration.SchemaVersion, configurationBytes);
                 // A schema-1 configuration retains its original state paths.
                 // Upgrading the format never silently relocates old receipts.
                 return new BuildXInstallation(root, configuration.SchemaVersion == 1 ? root : configuration.DataRoot,
                     configuration.InstallationId, configuration.NodeExecutable, configuration.PythonExecutable,
-                    configuration.CodexExecutable, configuration.SchemaVersion);
+                    configuration.CodexExecutable, configuration.SchemaVersion, panelPort);
             }
             catch (BuildXInstallationException) { throw; }
             catch (Exception) { throw new BuildXInstallationException(); }
@@ -791,6 +821,8 @@ namespace RevitLocalCodex
         internal static string DataDirectory { get { return Installation.DataRoot; } }
         internal static string WorkbenchDirectory { get { return Installation.WorkbenchRoot; } }
         internal static string WebViewUserDataFolder { get { return Installation.WebViewUserDataFolder; } }
+        internal static string PanelAddress { get { return Installation.PanelAddress; } }
+        internal static bool AllowsPanelNavigation(string address) { return Installation.AllowsPanelNavigation(address); }
         private static ServiceStartupProcess launchedProcess;
 
         [DataContract]
@@ -857,8 +889,8 @@ namespace RevitLocalCodex
             if (result == ProbeResult.TimedOut)
                 return "本地服务检查超时（5 秒），尚不能确认端口状态，请稍后点击“重试”。";
             if (result == ProbeResult.UnexpectedService)
-                return "端口 41873 已响应，但未通过本地 Codex 服务身份检查，请检查服务后重试。";
-            return "无法确认端口 41873 的连接状态，请检查本地服务后重试。";
+                return "端口 " + Installation.PanelPort.ToString(System.Globalization.CultureInfo.InvariantCulture) + " 已响应，但未通过本地 Codex 服务身份检查，请检查服务后重试。";
+            return "无法确认端口 " + Installation.PanelPort.ToString(System.Globalization.CultureInfo.InvariantCulture) + " 的连接状态，请检查本地服务后重试。";
         }
 
         internal static async Task<string> EnsureAvailableAsync(bool allowStart, Action onServiceAbsent)

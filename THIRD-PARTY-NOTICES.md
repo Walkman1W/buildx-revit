@@ -4,6 +4,34 @@ Generated 2026-11-05 from the existing package-lock.json and its locked npm inst
 
 An optional internal candidate may include the pinned C# compiler selected by `manifests/script-compiler-5.0.0.json`: Microsoft.Net.Compilers.Toolset 5.0.0 from official NuGet, package SHA-256 `e3f0207e7a8caf2cf79ad8f276eb20b2b880b3a7bb0e8ad27b4d3183d0a81627`. Its original MIT nuspec, `ThirdPartyNotices.rtf`, and the corresponding official Roslyn commit's `License.txt` must accompany the selected payload under `private-runtime/script-compiler/`. The source repository stores the fixed contract and license text; generated binaries remain local artifacts. This records provenance and notice retention, not customer acceptance or a general distribution approval.
 
+## AEC Model Bridge v1.0.2
+
+License: MIT. BuildX adapted thirteen read-only handlers, including the warning and two Revit link queries, from `packages/revit-bridge-addin/src/Bridge/BridgeCommandFactory.cs` at commit `1aae8a2f184048107da55f925a351cef83ac2801`, source Git blob `c9fcca0b675904d170f61de189c703f02f109a12`. The adaptation is in `revit-addin/AecPilotQueries.cs`. The original license below is from the same commit, Git blob `60e394205bb243ccd5d37a5054e39d83a3fe132b`. [Pinned source](https://github.com/Sam-AEC/aec-model-bridge/blob/1aae8a2f184048107da55f925a351cef83ac2801/packages/revit-bridge-addin/src/Bridge/BridgeCommandFactory.cs) · [Pinned license](https://raw.githubusercontent.com/Sam-AEC/aec-model-bridge/1aae8a2f184048107da55f925a351cef83ac2801/LICENSE)
+
+~~~text
+MIT License
+
+Copyright (c) 2025-2026 AEC Model Bridge Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+~~~
+
 ## @modelcontextprotocol/client 2.3.1
 
 License: Apache-2.0. Package source: https://registry.npmjs.org/@modelcontextprotocol/client/-/client-2.3.1.tgz

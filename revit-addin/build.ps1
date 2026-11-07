@@ -2,7 +2,8 @@ param(
     [string]$RevitDirectory,
     [Parameter(Mandatory=$true)][string]$WebView2PackageDirectory,
     [string]$OutputDirectory = (Join-Path $PSScriptRoot 'bin-workbench'),
-    [switch]$IsolatedBuild
+    [switch]$IsolatedBuild,
+    [switch]$NativeReadonlyTest
 )
 
 $ErrorActionPreference = 'Stop'
@@ -107,6 +108,12 @@ $compileArguments = @(
     '/utf8output', '/optimize+', '/debug-',
     ('/out:' + (Join-Path $outputDirectory 'LocalCodexRevit.dll'))
 )
+$recordedCompilerOptions = @('/target:library','/platform:x64','/langversion:5','/optimize+','/debug-')
+if ($NativeReadonlyTest) {
+    if (-not $IsolatedBuild) { throw 'NativeReadonlyTest requires IsolatedBuild.' }
+    $compileArguments += '/define:BUILDX_NATIVE_READONLY_TEST'
+    $recordedCompilerOptions += '/define:BUILDX_NATIVE_READONLY_TEST'
+}
 $compileArguments += @($references | ForEach-Object { '/reference:' + $_ })
 $compileArguments += '/resource:' + (Join-Path $PSScriptRoot '..\public\bim-x-logo.png') + ',RevitLocalCodex.BimXLogo'
 $familyCoreDirectory = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\family-core'))
@@ -155,7 +162,7 @@ $dependencyRecords = @($inputs | ForEach-Object {
 })
 $record = [ordered]@{
     compiler_exit_code = $compilerExit
-    compiler_options = @('/target:library','/platform:x64','/langversion:5','/optimize+','/debug-')
+    compiler_options = $recordedCompilerOptions
     compiled_utc = [DateTime]::UtcNow.ToString('o')
     output = $assemblyPath
     output_sha256 = (Get-FileHash -LiteralPath $assemblyPath -Algorithm SHA256).Hash.ToLowerInvariant()
