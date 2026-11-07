@@ -1,0 +1,4 @@
+import fs from 'node:fs';import path from 'node:path';import {captureRecovery} from '../lib/research-recovery-adapter.mjs';import {createResearchScopeOwner} from '../lib/research-scope-owner.mjs';
+const [root,id]=process.argv.slice(2),q=path.join(root,'queue'),payload=fs.readFileSync(path.join(q,'inbox',id+'.tmp')),host=JSON.parse(fs.readFileSync(path.join(q,'host.json'))),source=JSON.parse(fs.readFileSync(path.join(root,'source.json')));
+await createResearchScopeOwner(root,async()=>false).reserve({document:source.path,operation:'set_type_parameter'},id,payload);
+captureRecovery({queue:q,preparedPath:path.join(q,'inbox',id+'.tmp'),id,host,operation:'set_type_parameter',version:1,recordPath:path.join(root,'record.json'),sourceDocument:source});fs.renameSync(path.join(q,'inbox',id+'.tmp'),path.join(q,'inbox',id+'.json'));process.send('published');setInterval(()=>{},1000);
