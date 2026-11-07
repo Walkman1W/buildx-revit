@@ -744,6 +744,8 @@ namespace RevitLocalCodex
             if (!present || !(bool)value)
             {
                 if (operation == "preview_batch_parameter_filter") throw new InvalidOperationException("Batch parameter preview requires an atomic read snapshot.");
+                if (operation == "preview_project_parameter_binding")
+                    throw new InvalidOperationException("Project binding preview requires an atomic read snapshot.");
                 if (operation == "get_snapshot_delta")
                     throw new InvalidOperationException("Snapshot delta requires an atomic read snapshot.");
                 if (operation == "get_model_preparation")
@@ -894,6 +896,12 @@ namespace RevitLocalCodex
                         diagnostic = error.GetType().Name,
                         note = "Inspect this request and the existing family job; do not replay creation/save/load automatically." } };
                 }
+            }
+            if (operation == "preview_project_parameter_binding")
+            {
+                RequireDocument(doc, ExpectedDocument(args));
+                object preview = ProjectInstanceBindingPreparation.Read(doc, args, session);
+                return FreezeResult(new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = preview, modifiedByOperation = false });
             }
             if (CadGeometryQueries.IsRead(operation))
             {
