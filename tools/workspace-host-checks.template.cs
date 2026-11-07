@@ -81,7 +81,7 @@ namespace RevitLocalCodex {
         internal static int BatchPreviewCalls;
         internal static object PreviewBatchParameterFilter(Document doc,string category,long? typeId,long? levelId,long parameterId){BatchPreviewCalls++;if(doc==null||category!="OST_Walls"||parameterId!=-100)throw new InvalidOperationException("Invalid batch preview facts");return new { schema_version=1, scope="exact_category_type_level_instances", category=category, type_id=(string)null, level_id=(string)null, parameter_id="-100", complete=true,total=1,items=new[]{new { element_id="101",unique_id="u101",parameter_id="-100",storage_type="String",has_value=true,value_internal="old",data_type="text" }},write_authorization="not_granted" };}
         internal static int BatchWriteCalls;
-        internal static object ExecuteBatchFilterCandidate(Document doc,string category,long? typeId,long? levelId,long parameterId,string storage,string unit,object target,string mode,object snapshot){BatchWriteCalls++;return new { simulated=true };}
+        internal static object ExecuteBatchFilterCandidate(Document doc,string category,long? typeId,long? levelId,long parameterId,string storage,string unit,object target,string mode,object snapshot,Action verifyCommitPermission){BatchWriteCalls++;return new { simulated=true };}
         // Type-write business behavior is tested by the separate actual
         // book/writer producer. Scheduler checks must never approve it here.
         internal sealed class TypeWritePlan { internal long TypeId,ParameterId; internal string ExpectedDocument; }

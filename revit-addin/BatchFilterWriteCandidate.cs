@@ -12,9 +12,10 @@ namespace RevitLocalCodex
         // native preparation and request receipt before any production route exists.
         // This owns a transaction group and never saves the document.
         internal static object ExecuteBatchFilterCandidate(Document doc, string category, long? typeId, long? levelId,
-            long parameterId, string storage, string unit, object target, string mode, object approvedSnapshot)
+            long parameterId, string storage, string unit, object target, string mode, object approvedSnapshot, Action verifyCommitPermission)
         {
-            if (doc == null || (mode != "commit" && mode != "rollback")) throw new InvalidOperationException("Saved project and explicit mode required.");
+            if (doc == null || verifyCommitPermission == null || (mode != "commit" && mode != "rollback")) throw new InvalidOperationException("Saved project and explicit mode required.");
+            verifyCommitPermission();
             var phases = new BatchFilterWritePhases(approvedSnapshot, storage, unit, target);
             Func<object> capture = () => PreviewBatchParameterFilter(doc, category, typeId, levelId, parameterId);
             var serializer = new JavaScriptSerializer { MaxJsonLength = 180000, RecursionLimit = 16 };
@@ -44,6 +45,7 @@ namespace RevitLocalCodex
                     // Fail before the outer group finishes if the evidence is not serializable.
                     var evidence = new { before = approvedSnapshot, after = after };
                     if (serializer.Serialize(evidence).Length > 180000) throw new InvalidOperationException("Batch result evidence exceeds budget.");
+                    if (mode == "commit") verifyCommitPermission();
                     TransactionStatus finish = mode == "commit" ? group.Assimilate() : group.RollBack();
                     if (finish != (mode == "commit" ? TransactionStatus.Committed : TransactionStatus.RolledBack)) throw new InvalidOperationException("Group completion not confirmed.");
                     groupStarted = false;

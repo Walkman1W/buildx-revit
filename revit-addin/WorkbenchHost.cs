@@ -894,7 +894,7 @@ namespace RevitLocalCodex
             object current = WorkbenchActions.PreviewBatchParameterFilter(doc, (string)category, typeId, levelId, parameterId);
             if (batchFilterPreparations == null) throw new InvalidOperationException("Native batch preparation missing.");
             batchFilterPreparations.Consume((string)token, doc, current, (string)storage, unit, target, (string)mode);
-            return WorkbenchActions.ExecuteBatchFilterCandidate(doc, (string)category, typeId, levelId, parameterId, (string)storage, unit, target, (string)mode, current);
+            return WorkbenchActions.ExecuteBatchFilterCandidate(doc, (string)category, typeId, levelId, parameterId, (string)storage, unit, target, (string)mode, current, () => RequireProjectEdit(doc, (string)document, access));
         }
         private TypeParameterWriteApproval TypeParameterApprovals()
         {
@@ -986,11 +986,21 @@ namespace RevitLocalCodex
                 object selected = FreezeResult(operation == "set_selection" ? WorkbenchActions.SetSelection(uiapp, args) : WorkbenchActions.SelectByUniqueIds(uiapp, args));
                 return new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = selected, effect = "ui_selection" };
             }
-            // Deliberately fail closed in this build. The private candidate is
-            // not a dispatch capability until durable claim/receipt ownership
-            // and the panel decision path are integrated and verified.
+            // This switch exists only for explicitly compiled isolated peer tests.
+            // Production builds must never define BUILDX_BATCH_FIXTURE: durable
+            // request ownership is not yet safe against directory replacement races.
             if (operation == "batch_set_parameters_by_filter")
-                throw new InvalidOperationException("Batch filter writes are disabled until durable request ownership and approval are available.");            if (operation == "set_type_parameter")
+            {
+#if BUILDX_BATCH_FIXTURE
+                string batchMode = Text(args, "mode", "rollback");
+                object batchValue = FreezeResult(DispatchClosedBatchWriteCandidate(doc, args, access));
+                return new { operation, mode = batchMode, committed = batchMode == "commit", document = doc.Title, value = batchValue,
+                    note = batchMode == "rollback" ? "Model changes rolled back." : "Changes are in memory; model has not been saved." };
+#else
+                throw new InvalidOperationException("Batch filter writes are disabled until durable request ownership and approval are available.");
+#endif
+            }
+            if (operation == "set_type_parameter")
             {
                 RequireProjectEdit(doc, ExpectedDocument(args), access);
                 args = BindTypeWritePermit(doc, args);
