@@ -21,7 +21,7 @@ export function writeValue(args){
 }
 export function writeEnvelope(request,{value=writeValue(request.args),failure}={}){
   const stamp=new Date().toISOString(),mode=request.args.mode??'rollback';
-  return {id:request.id,hostSession:SOURCE_DOCUMENT.session,ok:!failure,completedUtc:stamp,
+  return {id:request.id,...failure?{hostSession:SOURCE_DOCUMENT.session}:{},ok:!failure,completedUtc:stamp,
     timing:{schemaVersion:1,requestId:request.id,hostSession:SOURCE_DOCUMENT.session,schedulerCorrelation:'unmatched',executeEnteredUtc:stamp,claimedUtc:stamp,responsePreparedUtc:stamp,
       observedUtc:null,raiseReturnedUtc:null,dispatchStartedUtc:stamp,dispatchFinishedUtc:stamp,observedToExecuteMs:null,dispatchMs:0,validationMs:0,hostWorkMs:0,raiseResult:null},
     ...failure?{error:failure.error,execution:failure.execution}:{result:{operation:WRITE_OPERATION,mode,committed:mode==='commit',document:SOURCE_DOCUMENT.title,value,note:'Controlled queue peer; no model is accessed.'}},
