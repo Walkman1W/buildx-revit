@@ -1,0 +1,31 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {createUnregisteredFileStore,createUnregisteredReceiptOwner} from './lib/unregistered-receipt-state-prototype.mjs';
+const id={request_id:'bd1a1650-691b-4525-8310-f45093178eb9',request_sha256:'a'.repeat(64),host_session:'b'.repeat(32),document_sha256:'c'.repeat(64)};
+async function fixture(t){const root=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-receipt-owner-'));t.after(async()=>{assert.equal(path.dirname(root),os.tmpdir());assert.ok(path.basename(root).startsWith('buildx-receipt-owner-'));await fs.rm(root,{recursive:true,force:true});});const store=createUnregisteredFileStore(root),proofs=new WeakMap(),permit={};const owner=createUnregisteredReceiptOwner({store,verifyEvidence:proof=>proofs.get(proof)??null,authorizePublication:value=>value===permit});const evidence=facts=>{const proof={};proofs.set(proof,{...id,receipt_sha256:'e'.repeat(64),...facts});return proof;};return {root,store,owner,evidence,permit};}
+test('only verified original receipt can classify a published request',async t=>{const f=await fixture(t);assert.equal((await f.owner.reserve(id)).status,'reserved');let sends=0;assert.equal((await f.owner.publish(id,async()=>{sends++;},f.permit)).status,'published');assert.equal(sends,1);
+ assert.equal((await f.owner.acceptOriginalReceipt(id,{...id,status:'committed',readback_verified:true,side_effects_verified:true})).status,'unknown');
+ assert.equal((await f.owner.acceptOriginalReceipt(id,f.evidence({status:'committed',readback_verified:false,side_effects_verified:true}))).status,'unknown');
+ assert.equal((await f.owner.acceptOriginalReceipt(id,f.evidence({status:'committed',readback_verified:true,side_effects_verified:false}))).status,'unknown');
+ assert.equal((await f.owner.acceptOriginalReceipt(id,f.evidence({status:'committed',readback_verified:true,side_effects_verified:true}))).status,'committed');
+ assert.equal((await f.owner.inspect(id)).status,'committed');assert.equal((await f.owner.publish(id,async()=>sends++,f.permit)).status,'unknown');assert.equal(sends,1);
+});
+test('rejected and verified rollback remain distinct',async t=>{for(const [n,facts] of [['declined',{status:'declined'}],['rolled_back',{status:'rolled_back',rollback_verified:true,side_effects_verified:true}]])await t.test(n,async t=>{const f=await fixture(t);await f.owner.reserve(id);await f.owner.publish(id,async()=>{},f.permit);assert.equal((await f.owner.acceptOriginalReceipt(id,f.evidence(facts))).status,n);assert.equal((await f.owner.inspect(id)).terminal,true);});});
+test('unknown, disconnect and late original receipt never republish',async t=>{const f=await fixture(t);await f.owner.reserve(id);let sends=0;assert.equal((await f.owner.publish(id,async()=>{sends++;throw new Error('disconnected');},f.permit)).status,'unknown');
+ const restarted=createUnregisteredReceiptOwner({store:f.store,verifyEvidence:proof=>proof===token?{...id,receipt_sha256:'e'.repeat(64),status:'rolled_back',rollback_verified:true,side_effects_verified:true}:null}),token={};
+ assert.equal((await restarted.inspect(id)).status,'unknown');assert.equal((await restarted.publish(id,async()=>sends++,f.permit)).status,'unknown');assert.equal((await restarted.acceptOriginalReceipt(id,token)).status,'rolled_back');assert.equal(sends,1);
+});
+test('concurrent original publications execute only one sender',async t=>{const f=await fixture(t);await f.owner.reserve(id);let release;const wait=new Promise(resolve=>release=resolve);let sends=0;const first=f.owner.publish(id,async()=>{sends++;await wait;},f.permit);
+ while(sends===0)await new Promise(r=>setTimeout(r,2));const second=await f.owner.publish(id,async()=>sends++,f.permit);release();assert.equal((await first).status,'published');assert.equal(second.status,'unknown');assert.equal(sends,1);});
+test('persistence failures are unknown and never invite replay',async t=>{const f=await fixture(t);await f.owner.reserve(id);let sends=0;
+ const failedStore={...f.store,locked:(request,fn)=>f.store.locked(request,(records,append)=>fn(records,async record=>{if(record.state==='published')throw new Error('injected write failure');return append(record);}))};
+ const interrupted=createUnregisteredReceiptOwner({store:failedStore,authorizePublication:value=>value===f.permit});assert.equal((await interrupted.publish(id,async()=>sends++,f.permit)).status,'unknown');assert.equal((await f.owner.inspect(id)).status,'unknown');assert.equal((await f.owner.publish(id,async()=>sends++,f.permit)).status,'unknown');assert.equal(sends,1);
+});
+test('identity drift, stale lock, and absent verifier fail closed',async t=>{const f=await fixture(t);await f.owner.reserve(id);assert.equal((await f.owner.inspect({...id,host_session:'d'.repeat(32)})).status,'unknown');await fs.mkdir(path.join(f.root,id.request_id,'lock'));assert.equal((await f.owner.publish(id,async()=>assert.fail())).status,'unknown');await fs.rmdir(path.join(f.root,id.request_id,'lock'));
+ const noVerifier=createUnregisteredReceiptOwner({store:f.store});assert.equal((await noVerifier.publish(id,async()=>assert.fail(),{approved:true})).status,'not_started');await f.owner.publish(id,async()=>{},f.permit);assert.equal((await noVerifier.acceptOriginalReceipt(id,{...id,status:'declined'})).status,'unknown');
+});
+
+test('verified proof tied to another original request cannot settle this one',async t=>{const f=await fixture(t);await f.owner.reserve(id);await f.owner.publish(id,async()=>{},f.permit);const other=f.evidence({host_session:'d'.repeat(32),status:'committed',readback_verified:true,side_effects_verified:true});assert.equal((await f.owner.acceptOriginalReceipt(id,other)).status,'unknown');assert.equal((await f.owner.inspect(id)).status,'published');});
