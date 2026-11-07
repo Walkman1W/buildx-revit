@@ -27,3 +27,5 @@
 回执检查器续批收窄 UTC 格式和 unmatched 零时长时序字段；共享夹具新增 commit、rollback 两个正例及日期、宿主 session、时序缺失关联等反例，共 10 例一致，1 项测试通过。仍未完成完整参数契约、可信宿主来源、所有日期/数值边界及 Node 完整时序语义等价；C# 是受限研究检查，candidate 不可触发释放。
 
 参数续批补充 GUID、正定义 ID、类别 ID、数据类型和 session 形态等收窄检查；四个非法参数与 Node 预览契约均拒绝。修正数值字段不能把字符串或布尔转成数字。共享测试也明确两个有意不等价例：Node 接受 matched 和合法非零时序，而 C# 当前返回 unknown。1 项测试通过。尚未对完整 recovery adapter（含持久原请求和宿主来源）做共享比较，参数契约也非完整；仍不可释放。
+
+时序续批支持 matched/unmatched、非零验证和 dispatch 时间，检查数值非负有限、work 与 validation/dispatch 关系及可选时间字段一致性。此前两个 Node 接受而 C# 拒绝的共享样例现均接受；现有反例通过（1 项测试）。仍未完成完整 recovery adapter 端到端对照、可信 host/request 绑定和完整参数/日期边界，不能认定等价，不允许释放。
