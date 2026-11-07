@@ -62,7 +62,10 @@
         "verification": "AEC-HIGH-FREQUENCY-BATCH-20261107.zh-CN.md",
         "workspaceToolCount": 105,
         "readQueryCount": 46,
-        "extraBuildxReadOnlyCandidates": ["revit_preview_batch_parameter_filter", "revit_preview_project_parameter_binding"],
+        "extraBuildxReadOnlyCandidates": [
+          "revit_preview_batch_parameter_filter",
+          "revit_preview_project_parameter_binding"
+        ],
         "newNamedCandidates": 22,
         "aecNamesWithoutCandidate": 9,
         "previouslyDeferred": 9,
@@ -136,7 +139,9 @@
       "browserWithSyntheticReceiptsVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-024",
@@ -155,7 +160,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-023",
@@ -175,7 +182,9 @@
       "realCodexSyntheticHostVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-window-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-window-20261107"
+      }
     },
     {
       "id": "BX-017",
@@ -193,7 +202,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-022",
@@ -212,7 +223,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-021",
@@ -230,7 +243,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-020",
@@ -248,7 +263,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-019",
@@ -266,7 +283,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-018",
@@ -284,7 +303,9 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
     },
     {
       "id": "BX-016",
@@ -302,7 +323,19 @@
       "revit2024ApiCompileVerified": true,
       "realRevitModelExecutionVerified": false,
       "realRevitWebViewVerified": false,
-      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+      "publication": {
+        "privateBranch": "codex/aec-workspace-20261107"
+      }
+    },
+    {
+      "id": "BX-PROJECT-BINDING-APPROVAL-PREP",
+      "title": "项目实例绑定审批准备原语",
+      "status": "in_progress",
+      "acceptance": "可信原回执、人类逐次决定、宿主身份、事务与防重完整闭环后才开放写入",
+      "evidence": "PROJECT-BINDING-APPROVAL-PREPARATION.zh-CN.md; Node controlled 3/3; C# controlled preview 20/20",
+      "validationScope": "isolated synthetic verifier and controlled API peers only",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
     }
   ]
 }
