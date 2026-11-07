@@ -296,3 +296,9 @@ test('room mention and manual XY controls require confirmation and preserve para
  assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',level_id:3,point_xy_mm:{x:100,y:-200},name:'Office',number:'101'});
  await ui.respond(ui.requests[0],{ok:true,executionId:'room-write'});
 });
+
+test('group is searchable and manual exact member input requires confirmation',async t=>{
+ const name='revit_create_group';for(const query of [name,'create_group','创建模型组'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(tool=>tool.name===name&&tool.readOnly===false));const ui=await setup(t,PANEL_TOOL_CATALOG);ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();ui.get('model-command-'+name+'-name').value='模型组 A';ui.get('model-command-'+name+'-element_ids-list').value='9007199254740993, 9007199254740994';
+ const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'模型组 A',element_ids:['9007199254740993','9007199254740994']});await ui.respond(ui.requests[0],{ok:true,executionId:'group-write'});
+});

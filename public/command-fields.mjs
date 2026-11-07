@@ -62,7 +62,7 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
   };
   const initial=value === undefined ? has(rule,'default') ? rule.default : '' : value;
   const exactId=isExactIdRule(rule),complex=!exactId&&(rule.type === 'array' || rule.type === 'object' || rule.anyOf || rule.oneOf);
-  const isPoint=pointRule(rule),isIds=rule.type === 'array' && rule.items?.type === 'integer';
+  const isPoint=pointRule(rule),isIds=rule.type === 'array' && (rule.items?.type === 'integer'||isExactIdRule(rule.items));
   const multilineText=multiline&&rule.type==='string';
   const element=make(isPoint ? 'div' : 'label','command-field'+(isPoint?' command-field-point':isIds?' command-field-ids':''));
   const title=make('span','command-field-label',label);
@@ -121,15 +121,15 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
         const raw=control.value.trim();if(raw==='')return '';
         if(raw==='[]')return rule.minItems>0?'![]':'[]';
         const tokens=raw.split(/[\s,，;；]+/u);
-        if(tokens.some(token=>! /^-?\d+$/.test(token) || !Number.isSafeInteger(Number(token))))return '!'+raw;
-        const ids=tokens.map(Number),item=rule.items;
+        let ids;try {ids=isExactIdRule(rule.items)?tokens.map(token=>parseExactIdValue(rule.items,token)):tokens.map(token=>{if(!/^-?\d+$/.test(token)||!Number.isSafeInteger(Number(token)))throw new Error();return Number(token);});}catch{return '!'+raw;}
+        const item=rule.items;
         if(ids.some(entry=>item.minimum !== undefined && entry<item.minimum || item.maximum !== undefined && entry>item.maximum) ||
           rule.minItems !== undefined && ids.length<rule.minItems || rule.maxItems !== undefined && ids.length>rule.maxItems ||
-          rule.uniqueItems === true && new Set(ids).size!==ids.length)return '!'+raw;
+          rule.uniqueItems === true && new Set(ids.map(String)).size!==ids.length)return '!'+raw;
         return JSON.stringify(ids);
       };
       write=next=>{
-        const display=entries=>!entries.length?'[]':entries.every(entry=>typeof entry==='number' && Number.isSafeInteger(entry))?entries.join(', '):JSON.stringify(entries);
+        const display=entries=>!entries.length?'[]':entries.every(entry=>typeof entry==='number' && Number.isSafeInteger(entry)||isExactIdRule(rule.items)&&typeof entry==='string'&&/^[1-9]\d*$/.test(entry))?entries.join(', '):JSON.stringify(entries);
         if(Array.isArray(next)){control.value=display(next);return;}
         const raw=textValue(next);
         try {const parsed=JSON.parse(raw);if(Array.isArray(parsed)){control.value=display(parsed);return;}}catch {}

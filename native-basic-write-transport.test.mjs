@@ -344,3 +344,12 @@ test('room requires named host and preserves exact receipt, phase facts and unkn
  await assert.rejects(invokeWorkbench('revit_create_room',args(input),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
  assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
 });
+
+test('group checks exact members and original receipt without replay',async t=>{
+ const tool='revit_create_group',operation='create_group',all=[...operations,operation],parameters={name:'Group A',element_ids:['9007199254740993','9007199254740994']},value={element_id:'3',name:'Group A',element_ids:parameters.element_ids};
+ const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});await assert.rejects(invokeWorkbench(tool,args(parameters),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
+ const fixture=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{name:' Bad'},{element_ids:['1']},{element_ids:[1,'1']},{element_ids:[9007199254740992,2]},{element_ids:['9223372036854775808','2']},{element_ids:['1','2'],extra:true}])await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),fixture.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(fixture.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),fixture.options());fixture.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(fixture.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
+ for(const change of [{element_ids:['9007199254740993','5']},{element_ids:['9007199254740993','9007199254740993']},{name:'other'}]){const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>{const x=workbenchFailureEvidence(e);owner=f.remember(x.receiptOwner);return x.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);}
+});
