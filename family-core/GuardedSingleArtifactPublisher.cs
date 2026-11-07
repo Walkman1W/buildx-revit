@@ -58,6 +58,57 @@ namespace BuildX.FilePreparation
             catch {h.Dispose();throw;}
         }
         private static void Close(List<SafeFileHandle> handles){for(int i=handles.Count-1;i>=0;i--)handles[i].Dispose();}
+        internal sealed class JournalRoot { internal readonly string Directory; internal readonly Entry[] Chain; internal JournalRoot(string d,Entry[] c){Directory=d;Chain=c;} }
+        internal sealed class JournalRecord { internal readonly string RequestId,Path,Sha256,Identity; internal readonly int Revision; internal readonly long Bytes; internal JournalRecord(string r,string p,string h,string i,int n,long b){RequestId=r;Path=p;Sha256=h;Identity=i;Revision=n;Bytes=b;} }
+        internal sealed class JournalReadResult { internal readonly JournalRecord Record; internal readonly byte[] Contents; internal JournalReadResult(JournalRecord r,byte[] b){Record=r;Contents=b;} }
+        private static string JournalPath(JournalRoot root,string requestId,int revision)
+        {
+            Require(root!=null && Regex.IsMatch(requestId??"",@"^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$") && revision>=0 && revision<=99999999);
+            return Local(Path.Combine(root.Directory,requestId+"."+revision.ToString("D8")+".json"));
+        }
+        internal static JournalRoot CaptureJournalRoot(string directory)
+        {
+            string path=Local(directory);var handles=new List<SafeFileHandle>();try{return new JournalRoot(path,LockDirectories(path,null,handles));}finally{Close(handles);}
+        }
+        internal static JournalReadResult ReadJournal(JournalRoot root,string requestId,int revision)
+        {
+            string path=JournalPath(root,requestId,revision);var handles=new List<SafeFileHandle>();
+            try
+            {
+                LockDirectories(root.Directory,root.Chain,handles);
+                using(var f=LockFile(path,null,handles))
+                {
+                    Require(f.Length>0&&f.Length<=262144);Info i=Observe(f.SafeFileHandle);byte[] bytes=new byte[(int)f.Length];int used=0;
+                    while(used<bytes.Length){int n=f.Read(bytes,used,bytes.Length-used);Require(n>0);used+=n;}Require(f.ReadByte()==-1);
+                    string hash;using(var sha=SHA256.Create())hash=BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","").ToLowerInvariant();
+                    return new JournalReadResult(new JournalRecord(requestId,path,hash,Identity(i),revision,bytes.Length),bytes);
+                }
+            }
+            finally{Close(handles);}
+        }
+        internal static JournalRecord InspectJournal(JournalRoot root,string requestId,int revision){return ReadJournal(root,requestId,revision).Record;}
+        internal static JournalRecord AppendJournal(JournalRoot root,string requestId,int revision,JournalRecord previous,byte[] bytes)
+        {
+            string path=JournalPath(root,requestId,revision);Require(bytes!=null&&bytes.Length>0&&bytes.Length<=262144);
+            Require(revision==0?previous==null:previous!=null && previous.RequestId==requestId && previous.Revision==revision-1 && previous.Bytes>0 && previous.Bytes<=262144 && Regex.IsMatch(previous.Sha256??"",@"^[a-f0-9]{64}$") && Same(previous.Path,JournalPath(root,requestId,revision-1)));
+            var handles=new List<SafeFileHandle>();bool created=false;FileStream prior=null;
+            try
+            {
+                LockDirectories(root.Directory,root.Chain,handles);
+                if(previous!=null){prior=LockFile(previous.Path,previous.Identity,handles);Require(prior.Length==previous.Bytes&&Digest(prior)==previous.Sha256);}
+                var h=CreateFile(path,ReadWrite,0,IntPtr.Zero,CreateNew,OpenReparse,IntPtr.Zero);
+                if(h.IsInvalid){h.Dispose();throw new IOException("Journal revision already exists or is unavailable.");}created=true;
+                using(var target=new FileStream(h,FileAccess.ReadWrite))
+                {
+                    Info initial=Observe(target.SafeFileHandle);Regular(initial,262144);Require(Same(Final(target.SafeFileHandle),path));target.Write(bytes,0,bytes.Length);target.Flush(true);
+                    string hash;using(var sha=SHA256.Create())hash=BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-","").ToLowerInvariant();
+                    Require(target.Length==bytes.Length && Digest(target)==hash);Info final=Observe(target.SafeFileHandle);Regular(final,262144);Require(Identity(final)==Identity(initial));
+                    return new JournalRecord(requestId,path,hash,Identity(final),revision,bytes.Length);
+                }
+            }
+            catch(Exception error){throw new PublicationFailure(created,error);}
+            finally{if(prior!=null)prior.Dispose();Close(handles);}
+        }
         internal static Plan Prepare(string source,string destinationDirectory,string destinationName)
         {
             source=Local(source);string directory=Local(destinationDirectory);
