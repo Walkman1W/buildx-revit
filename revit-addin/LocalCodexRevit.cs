@@ -25,6 +25,7 @@ using Color = System.Windows.Media.Color;
 using WpfVisibility = System.Windows.Visibility;
 
 [assembly: AssemblyTitle("BuildX")]
+[assembly: AssemblyCompany("buildbrain \u5efa\u7b51\u667a\u8111\u516c\u53f8")]
 [assembly: AssemblyDescription("BuildX workspace for Revit 2024")]
 [assembly: AssemblyVersion("0.8.8.0")]
 [assembly: AssemblyFileVersion("0.8.8.0")]

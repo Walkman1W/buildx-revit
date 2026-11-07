@@ -130,6 +130,8 @@ foreach ($sourceRecord in $sourceRecords) {
 
 $assemblyPath = Join-Path $outputDirectory 'LocalCodexRevit.dll'
 $escapedAssemblyPath = [Security.SecurityElement]::Escape($assemblyPath)
+# ASCII-only code points keep this script compatible with Windows PowerShell 5.1.
+$vendorDescription = 'buildbrain ' + (-join (0x5efa, 0x7b51, 0x667a, 0x8111, 0x516c, 0x53f8 | ForEach-Object { [char]$_ }))
 $manifest = @"
 <?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
@@ -139,7 +141,7 @@ $manifest = @"
     <AddInId>62680901-6718-4cbc-a115-9383f35b782c</AddInId>
     <FullClassName>RevitLocalCodex.App</FullClassName>
     <VendorId>LCLX</VendorId>
-    <VendorDescription>Independent local Codex panel</VendorDescription>
+    <VendorDescription>$vendorDescription</VendorDescription>
   </AddIn>
 </RevitAddIns>
 "@

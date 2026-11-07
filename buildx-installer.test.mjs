@@ -25,7 +25,7 @@ test('sandbox install plans before writing, copies only verified files and publi
   const config=JSON.parse(await fs.readFile(path.join(f.options.installRoot,'buildx-installation.json'),'utf8'));assert.equal(config.schemaVersion,2);assert.equal(config.dataRoot,f.options.dataRoot);assert.equal(config.installationId,result.installationId);assert.equal(config.nodeExecutable,f.options.nodeExecutable);assert.equal(config.pythonExecutable,f.options.pythonExecutable);assert.equal(config.codexExecutable,f.options.codexExecutable);
   assert.equal(JSON.parse(await fs.readFile(path.join(f.options.dataRoot,'buildx-data-owner.json'),'utf8')).installationId,result.installationId);
   await assert.rejects(fs.stat(path.join(f.options.installRoot,'workbench')),{code:'ENOENT'});
-  assert.match(await fs.readFile(result.addin,'utf8'),/LocalCodexRevit\.dll/);await assert.rejects(applyInstall(f.options),{code:'INSTALL_EXISTS'});
+  const addinXml=await fs.readFile(result.addin,'utf8');assert.match(addinXml,/LocalCodexRevit\.dll/);assert.match(addinXml,/<VendorDescription>buildbrain 建筑智脑公司<\/VendorDescription>/);assert.match(addinXml,/<VendorId>LCLX<\/VendorId>/);assert.match(addinXml,/<AddInId>62680901-6718-4cbc-a115-9383f35b782c<\/AddInId>/);await assert.rejects(applyInstall(f.options),{code:'INSTALL_EXISTS'});
 });
 test('data layout inspection is read-only and exposes overlap and unknowns',async t=>{
   const f=await fixture(t),data=path.join(f.base,'existing-project-history');await fs.mkdir(data);const marker=path.join(data,'preserve.txt');await fs.writeFile(marker,'original');

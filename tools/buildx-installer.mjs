@@ -308,7 +308,7 @@ export async function applyInstall(options){
     if(await (options.checkRevit??windowsRevitCheck)())throw fail('REVIT_RUNNING','Revit 在安装期间启动；未发布插件清单。');
     await verify();await assertNoBuildxManifest(path.dirname(plan.addin),plan.addin);await verify();
     const assembly=path.join(plan.installRoot,'revit-addin','bin','LocalCodexRevit.dll');
-    const body='<?xml version="1.0" encoding="utf-8"?>\n<RevitAddIns><AddIn Type="Application"><Name>BuildX</Name><Assembly>'+xml(assembly)+'</Assembly><AddInId>62680901-6718-4cbc-a115-9383f35b782c</AddInId><FullClassName>RevitLocalCodex.App</FullClassName><VendorId>LCLX</VendorId><VendorDescription>BuildX</VendorDescription></AddIn></RevitAddIns>\n';
+    const body='<?xml version="1.0" encoding="utf-8"?>\n<RevitAddIns><AddIn Type="Application"><Name>BuildX</Name><Assembly>'+xml(assembly)+'</Assembly><AddInId>62680901-6718-4cbc-a115-9383f35b782c</AddInId><FullClassName>RevitLocalCodex.App</FullClassName><VendorId>LCLX</VendorId><VendorDescription>buildbrain 建筑智脑公司</VendorDescription></AddIn></RevitAddIns>\n';
     temp=path.join(path.dirname(plan.addin),'.buildx-'+randomUUID()+'.tmp');await write(temp,body);
     tempIdentity=await fs.lstat(temp,{bigint:true});if(!tempIdentity.isFile()||tempIdentity.isSymbolicLink()||tempIdentity.ino===0n)throw fail('INSTALL_DIRECTORY_CHANGED','插件清单临时文件身份已变化。');
     await verify();await fs.link(temp,plan.addin);published=true;await verify();
