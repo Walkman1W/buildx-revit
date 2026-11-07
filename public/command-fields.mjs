@@ -167,3 +167,34 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
   input.value=textValue(initial);element.append(input);
   return {element,input,controls};
 }
+
+// Explicit sheet IDs and numbers are entered as rows; the shared schema remains
+// the validation owner and the hidden input is only the form adapter.
+export function createSheetRenumberField({document,Event=globalThis.Event,id,rule,value,onChange=()=>{}}){
+  const make=(tag,text)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node;};
+  const element=make('div');element.className='model-command-field model-command-field-wide';
+  const title=make('span','逐行填写图纸 ID、原编号和新编号');title.className='command-field-label';
+  const input=make('input');input.type='hidden';input.id=id;input.dataset.defaultValue='';
+  const list=make('div'),add=make('button','添加图纸');add.type='button';add.id=id+'-add';
+  const rows=[],controls=[input,add],idRule=rule.items.properties.sheet_id;let serial=0;
+  const changed=()=>{input.dispatchEvent(new Event('input',{bubbles:true}));onChange();};
+  function appendRow(data={}){
+    if(rows.length>=50)return;
+    const node=make('div');node.className='parameter-change-step';const fields={},rowId=serial++;
+    for(const [key,label] of [['sheet_id','图纸 ID'],['expected_number','原编号'],['new_number','新编号']]){
+      const wrap=make('label',label),field=make('input');field.type='text';field.id=id+'-'+rowId+'-'+key;field.value=data[key]===undefined?'':String(data[key]);field.setAttribute('aria-label',label);wrap.append(field);node.append(wrap);fields[key]=field;controls.push(field);
+      for(const event of ['input','change'])field.addEventListener(event,changed);
+    }
+    const remove=make('button','删除');remove.type='button';node.append(remove);controls.push(remove);
+    const row={node,fields};rows.push(row);remove.addEventListener('click',()=>{if(rows.length===1){for(const field of Object.values(fields))field.value='';}else{rows.splice(rows.indexOf(row),1);node.remove();}changed();});list.append(node);
+  }
+  add.addEventListener('click',()=>{appendRow();changed();});
+  Object.defineProperty(input,'value',{configurable:true,get(){
+    try{return JSON.stringify(rows.map(row=>({sheet_id:parseExactIdValue(idRule,row.fields.sheet_id.value),expected_number:row.fields.expected_number.value,new_number:row.fields.new_number.value})));}catch{return '!invalid';}
+  },set(raw){
+    let parsed=raw;try{if(typeof raw==='string')parsed=JSON.parse(raw);}catch{parsed=[];}
+    rows.length=0;list.replaceChildren();if(Array.isArray(parsed)&&parsed.length&&parsed.length<=50)for(const row of parsed)appendRow(row);else appendRow();
+  }});
+  input.focus=()=>rows[0]?.fields.sheet_id.focus();element.append(title,input,list,add);input.value=value??'';
+  return {element,input,controls};
+}

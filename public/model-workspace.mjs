@@ -1,4 +1,4 @@
-import {createCommandField,COMMAND_PARAMETER_LABELS,isExactIdRule,parseExactIdValue} from './command-fields.mjs';
+import {createCommandField,createSheetRenumberField,COMMAND_PARAMETER_LABELS,isExactIdRule,parseExactIdValue} from './command-fields.mjs';
 import {createCommandChoiceField} from './command-choice-field.mjs';
 import {createParameterChangeField} from './parameter-change-field.mjs';
 import {createPersonalCommandFields} from './personal-command-fields.mjs';
@@ -587,7 +587,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
           if(key==='depth_mm')label='远裁剪距离（mm）';
         }
         const options={document,Event,id,key,rule,label,required:required.has(key),value:draft?.values[key],multiline:command.tool==='revit_create_text_note'&&key==='text',onChange:invalidate,onCommand};
-        const field=command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
+        const field=command.tool==='revit_renumber_sheets' && key==='sheets'?createSheetRenumberField(options):command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
           (rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);
         const input=field.input;inputs[key]=input;formFields.push(field);
         for(const control of field.controls){control.dataset.commandEnabled=String(command.enabled !== false);parameterInputs.push(control);}

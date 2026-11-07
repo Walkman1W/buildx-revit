@@ -64,6 +64,9 @@ namespace RevitLocalCodex {
   private sealed class SheetDuplicationExpectation {}
         private static SheetDuplicationExpectation DuplicateEmptySheet(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope sheet duplicate peer.");}
         private static object VerifyDuplicatedSheet(Document d, Dictionary<string,object> a, SheetDuplicationExpectation e){throw new InvalidOperationException("Out of scope sheet duplicate peer.");}
+        private sealed class SheetRenumberExpectation {}
+        private static List<SheetRenumberExpectation> RenumberSheets(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope sheet renumber peer.");}
+        private static object VerifyRenumberSheets(Document d, List<SheetRenumberExpectation> e){throw new InvalidOperationException("Out of scope sheet renumber peer.");}
         private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
