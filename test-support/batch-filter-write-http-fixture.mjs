@@ -9,6 +9,7 @@ import {createModelPermissionServices} from '../lib/model-permission-services.mj
 import {capturePreparedTypeWrite,consumeApprovedTypeWrite} from '../lib/type-parameter-write-approval.mjs';
 import {invokeWorkbench as queueInvoke} from '../lib/workbench-client.mjs';
 import {singleParameterWriteFixture,writeEnvelope} from './native-single-parameter-write-fixtures.mjs';
+import {initializeResearchRoot} from '../lib/research-scope-owner.mjs';
 
 export const TYPE_WRITE_TOOL='revit_batch_set_parameters_by_filter';
 export {SOURCE_DOCUMENT as TYPE_WRITE_DOCUMENT} from './native-single-parameter-write-fixtures.mjs';
@@ -43,7 +44,7 @@ export async function typeWriteHttpFixture(t,{prepare,invoke,expiryMs=110000,wri
   const value={schema_version:1,scope:'exact_category_type_level_instances',category:'OST_Walls',type_id:null,level_id:null,parameter_id:'-100',scanned:1,complete:true,total:1,items:[{element_id:'101',unique_id:'u1',parameter_id:'-100',storage_type:'Integer',has_value:true,value_internal:1,data_type:'number'}],write_authorization:'not_granted'};
   const queue=await singleParameterWriteFixture(t,{hostPatch:{version:'0.8.9',atomicReadSnapshot:true,nativeBatchFilterPreviewVersion:1,nativeBatchFilterPreviewOperations:['preview_batch_parameter_filter'],nativeBatchFilterPreparationVersion:1,nativeBatchFilterFixtureVersion:1},operations:['preview_batch_parameter_filter','batch_set_parameters_by_filter'],respondEnvelope:r=>{const e=writeEnvelope(r,{value:r.operation==='batch_set_parameters_by_filter'?{count:writeReceiptCorrupt?2:1,mode:r.args.mode,saved:false,transaction_status:r.args.mode==='commit'?'Committed':'RolledBack',before:value,after:{...value,items:value.items.map(item=>({...item,value_internal:r.args.value}))}}:value});
     if(r.operation==='preview_batch_parameter_filter'){const doc={title:TYPE_WRITE_DOCUMENT.title,path:TYPE_WRITE_DOCUMENT.path,activeViewId:12,activeViewType:'ThreeD',modified:false};e.result={operation:r.operation,hostSession:TYPE_WRITE_DOCUMENT.session,atomicReadSnapshot:true,snapshot:{hostSession:TYPE_WRITE_DOCUMENT.session,hostVersion:'0.8.9',document:doc,capabilities:{atomicReadSnapshot:true,nativeBatchFilterPreviewVersion:1,nativeBatchFilterPreviewOperations:[r.operation],nativeBatchFilterPreparationVersion:1}},value:{operation:r.operation,hostSession:TYPE_WRITE_DOCUMENT.session,document:{title:doc.title,path:doc.path},modifiedByOperation:false,value},batch_write_preparation:{schema_version:1,token:TYPE_WRITE_NATIVE_TOKEN,expires_utc:new Date(Date.now()+60000).toISOString()}};}else e.result.operation=r.operation;return e;}});
-  const recoveryRoot=path.join(queue.options().root,'batch-recovery');for(const dir of ['scopes','requests','archive','records'])await fs.mkdir(path.join(recoveryRoot,dir),{recursive:true});
+  const recoveryRoot=path.join(queue.options().root,'batch-recovery');for(const dir of ['scopes','requests','archive','records'])await fs.mkdir(path.join(recoveryRoot,dir),{recursive:true});await initializeResearchRoot(recoveryRoot);
   const services=createModelPermissionServices({observe:async(name,args,control)=>{
     observations.push({name,args,control});
     if(name==='revit_workbench_status')return {hostSession:document.session,document:{title:document.title,path:document.path,allowedSample:true}};
@@ -64,6 +65,7 @@ export async function typeWriteHttpFixture(t,{prepare,invoke,expiryMs=110000,wri
   const decide=(value,decision='accept',patch={},options={})=>post('dynamic-approval',{conversationId:session,requestId:value.id,digest:value.digest,decision,...patch},options);
   return {app,codex,writes,preparations,direct,observations,receiptSnapshots,queue,services,origin,post,session,choose,begin,preview,decide,changeDocument:patch=>{document={...document,...patch};}};
 }
+
 
 
 

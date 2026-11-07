@@ -299,6 +299,7 @@
   "lib/research-scope-owner.mjs",
   "lib/research-durable-claim.mjs",
   "lib/research-batch-recovery-adapter.mjs",
+  "lib/research-batch-recovery-service.mjs",
   "lib/batch-filter-write-approval.mjs",
   "lib/batch-filter-write-review.mjs",
   "public/type-parameter-write-review.mjs",
@@ -321,5 +322,6 @@
   "test-support/native-type-parameter-write-manual-transport-fixtures.mjs",
   "test-support/native-type-parameter-write-manual-http-fixtures.mjs"
 ]
+
 
 
