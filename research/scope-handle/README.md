@@ -29,3 +29,5 @@
 参数续批补充 GUID、正定义 ID、类别 ID、数据类型和 session 形态等收窄检查；四个非法参数与 Node 预览契约均拒绝。修正数值字段不能把字符串或布尔转成数字。共享测试也明确两个有意不等价例：Node 接受 matched 和合法非零时序，而 C# 当前返回 unknown。1 项测试通过。尚未对完整 recovery adapter（含持久原请求和宿主来源）做共享比较，参数契约也非完整；仍不可释放。
 
 时序续批支持 matched/unmatched、非零验证和 dispatch 时间，检查数值非负有限、work 与 validation/dispatch 关系及可选时间字段一致性。此前两个 Node 接受而 C# 拒绝的共享样例现均接受；现有反例通过（1 项测试）。仍未完成完整 recovery adapter 端到端对照、可信 host/request 绑定和完整参数/日期边界，不能认定等价，不允许释放。
+
+新增共享恢复 adapter 对照：使用真实 `captureRecovery` 捕获原请求并模拟发布，后续将相同原始数据交给 `recoverOriginal` 与 C# 研究检查器；1 项测试覆盖有效回滚、错误日期、回执宿主、准备 ID、宿主文件和请求字节篡改。原生侧比较 host/request 摘要由测试 JS 完成，不是 C# 持有句柄或生产接线；未比较所有文件身份/重解析点、ACL、参数及 crash 场景，不能声称端到端等价或授权释放。
