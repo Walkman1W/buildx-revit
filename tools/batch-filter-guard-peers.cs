@@ -1,0 +1,11 @@
+using System;
+using RevitLocalCodex;
+class Program {
+ static int count; static void Ok(bool value,string label){if(!value)throw new Exception(label);count++;Console.WriteLine("PASS " + label);} static void Fail(Action a,string label){try{a();}catch(InvalidOperationException){count++;Console.WriteLine("PASS " + label);return;}throw new Exception("Expected rejection: " + label);}
+ static object Facts(string uid="u1",int state=1){return new {schema_version=1,category="OST_Walls",parameter_id="-100",complete=true,total=1,write_authorization="not_granted",items=new[]{new {element_id="101",unique_id=uid,has_value=true,value_internal=state}}};}
+ static void Main(){try{Run();}catch(Exception e){Console.WriteLine(e.GetType().FullName+": "+e.Message);Environment.Exit(1);}}
+ static void Run(){var doc=new object();var g=BatchFilterFactsGuard.Create("host",doc,Facts(),"Integer",null,2);g.Compare("host",doc,Facts(),"Integer",null,2);Ok(true,"matching complete producer facts");
+  Fail(()=>g.Compare("host",doc,Facts("other"),"Integer",null,2),"unique identity drift rejected");Fail(()=>g.Compare("host",doc,Facts("u1",3),"Integer",null,2),"raw prior value drift rejected");Fail(()=>g.Compare("host",doc,Facts(),"Integer",null,3),"target drift rejected");Fail(()=>g.Compare("other",doc,Facts(),"Integer",null,2),"host mismatch rejected");Fail(()=>g.Compare("host",new object(),Facts(),"Integer",null,2),"document mismatch rejected");
+  Fail(()=>BatchFilterFactsGuard.Create("host",doc,Facts(),"Double",null,2),"double units explicit");Fail(()=>BatchFilterFactsGuard.Create("host",doc,Facts(),"Double","internal",Double.NaN),"nonfinite rejected");Fail(()=>BatchFilterFactsGuard.Create("host",doc,Facts(),"Integer",null,1.5),"fractional integer rejected");Fail(()=>BatchFilterFactsGuard.Create("host",doc,Facts(),"String",null,new string('x',4001)),"oversize string rejected");Fail(()=>BatchFilterFactsGuard.Create("host",doc,null,"Integer",null,2),"missing snapshot rejected");Fail(()=>BatchFilterFactsGuard.Create("host",doc,new {schema_version=1,complete=false,total=0,write_authorization="not_granted",items=new object[0]},"Integer",null,2),"incomplete snapshot rejected");Console.WriteLine("PASS total="+count);
+ }
+}
