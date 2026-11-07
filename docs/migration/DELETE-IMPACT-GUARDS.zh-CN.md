@@ -17,3 +17,9 @@
 `WorkbenchHost` 中的内部候选路由与未知结果的原 outbox 映射仅在编译符号 `BUILDX_DELETE_REVIEW_CANDIDATE` 启用时存在；标准构建未定义该符号，菜单、MCP 与默认队列入口均未注册。候选路由调用现有 `ProcessOne` 单次 claimed 请求与原 outbox，不发第二次请求；异常的 `RollbackUnknownException` 映射为 `DELETE_REVIEW_OUTCOME_UNKNOWN`。测试中的队列文件和 TaskDialog 均为受控 peers，不等于生产队列端到端验收。
 
 仍缺真实 Revit ExternalEvent 模态对话和 20 项清单完整可读性验证；Node 生产原回执 owner 尚无这个内部候选的专用解释器、审批会话和取消发布接线。工作共享、真实访问撤销、对话框期间取消、宿主关闭和迟到回执均未在实际设备上验证。启用编译符号的 DLL 只能作为隔离候选，不能安装或声称此功能可用。
+
+## 默认不发布的 Node 原回执传输
+
+`delete-review-candidate-transport.mjs` 是孤立候选模块，未登记为工具，也不在运行包和安装器白名单中。它从绑定的文档、宿主描述与 access policy 创建单个内部候选请求，不接受 `confirmed`，发布前固定原始临时文件身份和摘要并取得现有 receipt owner。取消只写该原请求、原 session 的标记；原请求与响应不匹配、宿主变化、发布不明、取消或执行后回滚未知均保留原 owner，不自动重发。候选宿主能力标识只在 `BUILDX_DELETE_REVIEW_CANDIDATE` 编译条件下出现。
+
+宿主候选在事务组合并成功后再次回查所有级联 ID 是否缺席及当前文档/权限；若回读失败或元素重新出现，结果为 unknown。Node 将 preview_declined、delete_declined 和 rollback 预览标记为未提交，只有收到并验证 committed 事实才标记已提交。隔离队列往返测试使用受控 C# host adapter peer 和模拟 TaskDialog，不等于真实 Revit 宿主或真实人类决定。原请求文件/响应的身份核查不能抵御对同一用户共享队列有写权限的恶意进程伪造响应；实际队列保护与威胁模型仍待验。此模块和候选符号尚未接面板审批会话、生产取消联动或公开入口，真实 ExternalEvent 和完整清单可读性也未验收。

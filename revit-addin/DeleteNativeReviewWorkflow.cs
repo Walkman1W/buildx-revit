@@ -116,6 +116,11 @@ namespace RevitLocalCodex
                         throw new InvalidOperationException("Delete did not complete; group rollback was confirmed.", failure);
                     }
                 }
+                // Assimilation may trigger updaters or change the document after
+                // inner commit. A failed readback can no longer be rolled back;
+                // it must never be reported as a confirmed successful deletion.
+                try { RequireCurrent(current); DeleteImpactGuard.VerifyAbsent(doc, preview); }
+                catch (Exception e) { throw new DeleteRollbackPreview.RollbackUnknownException(e); }
                 return new Result { Status = "committed", Preview = preview };
             }
             finally { Interlocked.Exchange(ref inProgress, 0); }

@@ -327,6 +327,9 @@ namespace RevitLocalCodex
                     nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
+#if BUILDX_DELETE_REVIEW_CANDIDATE
+                    nativeDeleteReviewCandidateVersion = 1,
+#endif
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
@@ -1009,6 +1012,9 @@ namespace RevitLocalCodex
                     nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
+#if BUILDX_DELETE_REVIEW_CANDIDATE
+                    nativeDeleteReviewCandidateVersion = 1,
+#endif
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }
