@@ -2,7 +2,7 @@
 // own validation and execution; controls only collect explicit user choices.
 export const COMMAND_PARAMETER_LABELS = Object.freeze({
   keyword:'关键词',category:'类别',category1:'第一类别',category2:'第二类别',name_contains:'名称包含',limit:'每页数量',offset:'起始位置',
-  element_uids:'构件 UniqueId 列表（JSON 数组）',element_id:'构件',element_ids:'构件',type_id:'类型 ID',target_type_id:'目标类型 ID',old_type_id:'原族类型 ID',new_type_id:'新族类型 ID',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
+  element_uids:'构件 UniqueId（每行一个）',element_id:'构件',element_ids:'构件',type_id:'类型 ID',target_type_id:'目标类型 ID',old_type_id:'原族类型 ID',new_type_id:'新族类型 ID',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
   name:'名称',description:'说明',parameters:'参数定义',parameter_labels:'输入项名称',parameter_options:'下拉选项与模型来源',steps:'只读步骤',source_request_id:'关联执行请求 ID',
   revision:'命令版本',job_handle:'族作业标识',level_id:'标高',base_level_id:'底部标高 ID',top_level_id:'顶部标高 ID',wall_type_id:'墙类型',pipe_type_id:'管类型',conduit_type_id:'导管类型 ID',duct_type_id:'风管类型 ID',
   floor_type_id:'楼板类型',roof_type_id:'屋顶类型 ID',origin_xy_mm:'矩形原点 XY（mm）',symbol_id:'族类型',system_type_id:'系统类型',width_mm:'宽度（mm）',
@@ -64,7 +64,7 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
   };
   const initial=value === undefined ? has(rule,'default') ? rule.default : '' : value;
   const exactId=isExactIdRule(rule),complex=!exactId&&(rule.type === 'array' || rule.type === 'object' || rule.anyOf || rule.oneOf);
-  const isPoint=pointRule(rule),isIds=rule.type === 'array' && (rule.items?.type === 'integer'||isExactIdRule(rule.items));
+  const isPoint=pointRule(rule),isStringIds=key==='element_uids'&&rule.type==='array'&&rule.items?.type==='string',isIds=rule.type === 'array' && (rule.items?.type === 'integer'||isExactIdRule(rule.items)||isStringIds);
   const multilineText=multiline&&rule.type==='string';
   const element=make(isPoint ? 'div' : 'label','command-field'+(isPoint?' command-field-point':isIds?' command-field-ids':''));
   const title=make('span','command-field-label',label);
@@ -115,14 +115,15 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
       };
       focus=()=>axes.x.focus();
     }else {
-      const control=make('input','command-element-ids');control.id=id+'-list';control.type='text';
-      control.inputMode='numeric';control.placeholder='例如：123, 456';control.setAttribute('aria-label',label);
+      const control=make(isStringIds?'textarea':'input','command-element-ids');control.id=id+'-list';if(!isStringIds)control.type='text';
+      if(!isStringIds)control.inputMode='numeric';control.placeholder=isStringIds?'每行粘贴一个 UniqueId':'例如：123, 456';control.setAttribute('aria-label',label);
       element.htmlFor=control.id;element.append(control);controls.push(control);
-      const help=make('small','command-field-help','多个构件编号用逗号分隔');element.append(help);
+      const help=make('small','command-field-help',isStringIds?'每行一个完整 UniqueId':'多个构件编号用逗号分隔');element.append(help);
       read=()=>{
         const raw=control.value.trim();if(raw==='')return '';
         if(raw==='[]')return rule.minItems>0?'![]':'[]';
-        const tokens=raw.split(/[\s,，;；]+/u);
+        const tokens=isStringIds?raw.split(/\r?\n/u):raw.split(/[\s,，;；]+/u);
+        if(isStringIds){if(tokens.some(token=>!token||token!==token.trim()||/[\u0000-\u001f\u007f]/u.test(token)||rule.items.minLength!==undefined&&token.length<rule.items.minLength||rule.items.maxLength!==undefined&&token.length>rule.items.maxLength)||rule.minItems!==undefined&&tokens.length<rule.minItems||rule.maxItems!==undefined&&tokens.length>rule.maxItems||rule.uniqueItems===true&&new Set(tokens).size!==tokens.length)return '!'+raw;return JSON.stringify(tokens);}
         let ids;try {ids=isExactIdRule(rule.items)?tokens.map(token=>parseExactIdValue(rule.items,token)):tokens.map(token=>{if(!/^-?\d+$/.test(token)||!Number.isSafeInteger(Number(token)))throw new Error();return Number(token);});}catch{return '!'+raw;}
         const item=rule.items;
         if(ids.some(entry=>item.minimum !== undefined && entry<item.minimum || item.maximum !== undefined && entry>item.maximum) ||
@@ -131,7 +132,7 @@ export function createCommandField({document,Event=globalThis.Event,id,key,rule,
         return JSON.stringify(ids);
       };
       write=next=>{
-        const display=entries=>!entries.length?'[]':entries.every(entry=>typeof entry==='number' && Number.isSafeInteger(entry)||isExactIdRule(rule.items)&&typeof entry==='string'&&/^[1-9]\d*$/.test(entry))?entries.join(', '):JSON.stringify(entries);
+        const display=entries=>isStringIds?entries.join('\n'):!entries.length?'[]':entries.every(entry=>typeof entry==='number' && Number.isSafeInteger(entry)||isExactIdRule(rule.items)&&typeof entry==='string'&&/^[1-9]\d*$/.test(entry))?entries.join(', '):JSON.stringify(entries);
         if(Array.isArray(next)){control.value=display(next);return;}
         const raw=textValue(next);
         try {const parsed=JSON.parse(raw);if(Array.isArray(parsed)){control.value=display(parsed);return;}}catch {}
