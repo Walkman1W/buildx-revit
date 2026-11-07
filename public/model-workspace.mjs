@@ -36,7 +36,7 @@ export function modelCommandParameters(id, parameters = {}) {
 // The server owns the available operations and their schemas. This projection
 // adds no execution authority and keeps old four-command servers compatible.
 export function modelCommandCatalog(value) {
-  if (!Array.isArray(value) || value.length > 128) return [];
+  if (!Array.isArray(value) || value.length > 1024) return [];
   const ids = new Set();
   return value.filter(item => {
     if (!item || typeof item.id !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,159}$/.test(item.id) || ids.has(item.id) ||

@@ -12,7 +12,7 @@ import {invokeCommand} from './lib/command-store.mjs';
 import {FAMILY_PANEL_CONFIRMATION_ONLY} from './lib/family-tools.mjs';
 import {NATIVE_PARAMETER_WRITE_NAMES} from './lib/native-parameter-writes.mjs';
 import {isNativeTypeParameterWrite} from './lib/native-type-parameter-writes.mjs';
-import {isAecPilotQuery,isAecDrawingQuery,MODEL_PREPARATION_QUERY_NAME,PIPE_NETWORK_QUERY_NAME} from './lib/native-model-queries.mjs';
+import {isAecPilotQuery,isAecDrawingQuery,MODEL_PREPARATION_QUERY_NAME,PIPE_NETWORK_QUERY_NAME,PROJECT_BINDING_PREVIEW_NAME} from './lib/native-model-queries.mjs';
 import {LEGACY_PANEL_TOOL_NAMES} from './lib/panel-tools.mjs';
 
 test('mutating contracts validate ids, mode and UTF8 bounds',()=>{
@@ -35,7 +35,7 @@ test('legacy MCP lists its complete tool catalog and connection status derives i
     const advertised=tools.find(value=>value.name===tool.name);
     const excluded=FAMILY_PANEL_CONFIRMATION_ONLY.includes(tool.name)||NATIVE_PARAMETER_WRITE_NAMES.includes(tool.name)||
       isNativeTypeParameterWrite(tool.name)||isAecPilotQuery(tool.name)||isAecDrawingQuery(tool.name)||scopedNativeWrites.includes(tool.name)||
-      tool.name==='revit_preview_batch_parameter_filter'||tool.name==='revit_get_snapshot_delta'||tool.name===MODEL_PREPARATION_QUERY_NAME||tool.name===PIPE_NETWORK_QUERY_NAME;
+      tool.name==='revit_preview_batch_parameter_filter'||tool.name==='revit_get_snapshot_delta'||tool.name===MODEL_PREPARATION_QUERY_NAME||tool.name===PIPE_NETWORK_QUERY_NAME||tool.name===PROJECT_BINDING_PREVIEW_NAME;
     if(excluded)assert.equal(advertised,undefined);
     else assert.deepEqual(advertised,tool);
   }

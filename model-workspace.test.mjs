@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MODEL_COMMANDS,modelCommandParameters,modelCommandPresentation,modelToolCatalog,modelMentionQuery,modelMentionParts,modelMentionMatches} from './public/model-workspace.mjs';
+import {MODEL_COMMANDS,modelCommandCatalog,modelCommandParameters,modelCommandPresentation,modelToolCatalog,modelMentionQuery,modelMentionParts,modelMentionMatches} from './public/model-workspace.mjs';
 
 test('model command intents are fixed structured parameters and contain no natural-language turn',() => {
   assert.equal(MODEL_COMMANDS.length,4);
@@ -52,6 +52,11 @@ test('mention suggestions accept only bounded real catalog names and preserve so
   assert.deepEqual(catalog,before); assert.deepEqual(modelToolCatalog(null),[]);
   assert.equal(modelToolCatalog(Array.from({length:300},(_,index)=>({name:'tool_'+index}))).length,300);
   assert.equal(modelToolCatalog(Array.from({length:1200},(_,index)=>({name:'tool_'+index}))).length,1024);
+});
+test('the command catalog retains more than 128 tools while keeping a finite input bound',()=>{
+  const catalog=Array.from({length:129},(_,index)=>({id:'tool_'+index,tool:'tool_'+index,enabled:true,readOnly:true}));
+  assert.equal(modelCommandCatalog(catalog).length,129);
+  assert.deepEqual(modelCommandCatalog(Array.from({length:1025},(_,index)=>({id:'tool_'+index,tool:'tool_'+index}))),[]);
 });
 test('mention query supports caret-local matching without treating email or earlier text as a token',() => {
   assert.deepEqual(modelMentionQuery('@',1),{start:0,end:1,query:''});
