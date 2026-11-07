@@ -39,3 +39,18 @@ test('late start receipt is inspected on original request and never replayed',as
  await assert.rejects(invokeWorkbench(name,args({action:'start'}),f.options({timeout:350})),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
  assert.equal(f.requests.length,1);assert.ok(owner);assert.equal(owner.inspect().value.status,'pending');await f.publish(f.requests[0]);const observed=owner.inspect();assert.equal(observed.ok,true);assert.equal(observed.value.status,'received');assert.equal(f.requests.length,1);
 });
+
+test('published snapshot source-title drift retains standard original failure evidence',async t=>{
+ const {createModelToolDispatcher}=await import('./lib/model-tool-dispatch.mjs');
+ const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:[operation],respondEnvelope:r=>{const e=envelope(r);e.result=structuredClone(e.result);e.result.snapshot.document.title='Changed';e.result.value.document.title='Changed';return e;}});
+ let retained;await assert.rejects(createModelToolDispatcher().invokeTool(name,{action:'status'},f.options()),e=>{
+  const facts=workbenchFailureEvidence(e);retained=f.remember(facts.receiptOwner);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(retained);return true;
+ });
+ assert.equal(f.requests.length,1);assert.equal(retained.inspect().value.status,'received');assert.equal(f.requests.length,1);
+});
+
+test('faulted snapshot status returns explicit start recovery instruction without replay',async t=>{
+ const message='快照变更事件连续性已失效；请显式执行 action=start 重新建立完整基线，旧 token 不再有效。';
+ const f=await singleParameterWriteFixture(t,{hostPatch:host,operations:[operation],respondEnvelope:r=>({id:r.id,ok:false,hostSession:SOURCE_DOCUMENT.session,completedUtc:new Date().toISOString(),execution:{started:true,phase:'dispatch',reason:null},error:{code:'InvalidOperationException',message}})});
+ await assert.rejects(invokeWorkbench(name,args({action:'status'}),f.options()),e=>{const facts=workbenchFailureEvidence(e);assert.equal(facts.outcome,'failed');assert.match(e.message,/action=start/);return true;});assert.equal(f.requests.length,1);
+});
