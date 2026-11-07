@@ -18,6 +18,11 @@ namespace Autodesk.Revit.DB {
  public class FilteredElementCollector:IDisposable,IEnumerable<Element> { readonly Document doc;long category;public FilteredElementCollector(Document d){doc=d;}public FilteredElementCollector OfCategoryId(ElementId id){category=id.Value;return this;}public FilteredElementCollector WhereElementIsNotElementType(){return this;}public IEnumerator<Element> GetEnumerator(){return doc.Elements.Where(e=>e.Category!=null&&e.Category.Id.Value==category&&!(e is ElementType)).GetEnumerator();}IEnumerator IEnumerable.GetEnumerator(){return GetEnumerator();}public void Dispose(){} }
 }
 namespace RevitLocalCodex {
+ static class NativeModelQueries {
+  public static void Fields(Dictionary<string,object> args,params string[] allowed){foreach(var key in args.Keys)if(!allowed.Contains(key))throw new InvalidOperationException();}
+  public static long ExactId(Dictionary<string,object> args,string key){long x;if(!(args[key] is string)||!long.TryParse((string)args[key],out x)||x<=0)throw new InvalidOperationException();return x;}
+  public static long ExactSignedId(Dictionary<string,object> args,string key){long x;if(!(args[key] is string)||!long.TryParse((string)args[key],out x)||x==0||x==-1)throw new InvalidOperationException();return x;}
+ }
  class Program {
   static void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);}
   static void Fail(Action a,string message){try{a();}catch(InvalidOperationException){Console.WriteLine("PASS "+message);return;}throw new Exception(message);}
@@ -25,6 +30,8 @@ namespace RevitLocalCodex {
   static void Main(){var guid=Guid.Parse("f173029f-a81a-48c3-a5af-7c7b9a857b4a");var d=new Document();var walls=new Category{Id=new ElementId(-2000011),Name="Walls",AllowsBoundParameters=true};var floors=new Category{Id=new ElementId(-2000032),Name="Floors",AllowsBoundParameters=true};d.Settings.Categories.Add(walls);d.Settings.Categories.Add(floors);
    d.Shared=new SharedParameterElement{Document=d,GuidValue=guid,Id=new ElementId(100),Definition=new InternalDefinition{Id=new ElementId(100),Name="P",DataType="text"}};
    d.Elements.Add(new Element{Id=new ElementId(5),Document=d,Category=walls,UniqueId="element-5"});d.Elements.Add(new Element{Id=new ElementId(2),Document=d,Category=floors,UniqueId="element-2"});
+   var wire=new Dictionary<string,object>{{"expected_document",d.PathName},{"definition_guid",guid.ToString("D")},{"definition_id","100"},{"data_type","text"},{"category_ids",new string[]{"-2000011","-2000032"}}};
+   var direct=ProjectInstanceBindingPreparation.Read(d,wire);Check((int)Prop(direct,"instance_count")==2,"native request path captures impact");wire["category_ids"]=new string[]{"-2000011","-2000011"};Fail(()=>ProjectInstanceBindingPreparation.Read(d,wire),"native duplicate request refused");
    var snapshot=ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,floors.Id.Value});var dto=ProjectInstanceBindingPreparation.Describe(snapshot);
    Check(snapshot.Instances.Length==2&&snapshot.Instances[0].Id==2&&snapshot.Instances[1].Id==5&&(string)Prop(dto,"authorization")=="not_granted"&&!(bool)Prop(dto,"binding_attempted")&&d.ParameterBindings.InsertCalls==0,"complete sorted impact grants no authority");
    ProjectInstanceBindingPreparation.Revalidate(d,snapshot);Check(true,"unchanged impact revalidated");

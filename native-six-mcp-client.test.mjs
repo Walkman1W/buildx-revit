@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {Client} from '@modelcontextprotocol/client';
 import {StdioClientTransport} from '@modelcontextprotocol/client/stdio';
-import {NATIVE_MODEL_QUERY_NAMES,NATIVE_MODEL_QUERY_OPERATION_BY_TOOL,MODEL_PREPARATION_QUERY_NAME,MODEL_PREPARATION_OPERATION,ALL_NATIVE_MODEL_QUERY_OPERATION_BY_TOOL} from './lib/native-model-queries.mjs';
+import {NATIVE_MODEL_QUERY_NAMES,NATIVE_MODEL_QUERY_OPERATION_BY_TOOL,MODEL_PREPARATION_QUERY_NAME,MODEL_PREPARATION_OPERATION,ALL_NATIVE_MODEL_QUERY_OPERATION_BY_TOOL,PROJECT_BINDING_PREVIEW_NAME,PROJECT_BINDING_PREVIEW_OPERATION} from './lib/native-model-queries.mjs';
 
 // Exercise the unchanged production stdio entry and transport with the installed
 // MCP SDK. Only the queue's Revit peer and business DTOs are controlled here;
@@ -31,7 +31,10 @@ const preparation={name:MODEL_PREPARATION_QUERY_NAME,args:{expected_document:''}
   levels:[{element_id:'31',name:'L1',elevation_mm:-100,project_elevation_mm:0}]
 }};
 
-async function fixture(t,{corrupt,hostPatch={},noDocument=false,includePreparation=false}={}){
+const previewDocument={...document,path:'D:\\samples\\synthetic.rvt'};
+const preview={name:PROJECT_BINDING_PREVIEW_NAME,args:{expected_document:previewDocument.path,definition_guid:'d6c25563-54cb-43e7-8003-e7cf8df36916',definition_id:'45',data_type:'text',category_ids:['-2000011']},value:{schema_version:1,definition_guid:'d6c25563-54cb-43e7-8003-e7cf8df36916',definition_id:'45',data_type:'text',definition_name:'Test',document_title:previewDocument.title,document_path:previewDocument.path,binding_before:'unbound',proposed_binding:'instance',category_ids:['-2000011'],instance_count:1,instances:[{element_id:'9007199254740993',category_id:'-2000011',unique_id:'synthetic'}],coverage:'complete_current_document_instances',future_instances_affected:true,authorization:'not_granted',host_session_bound:false,human_decision:false,binding_attempted:false,external_file_accessed:false}};
+
+async function fixture(t,{corrupt,hostPatch={},noDocument=false,includePreparation=false,includePreview=false}={}){
   await fs.mkdir(artifacts,{recursive:true});
   const stage=await fs.mkdtemp(path.join(artifacts,'native-six-mcp-'));
   const queue=path.join(stage,'workbench','queue');
@@ -56,19 +59,20 @@ async function fixture(t,{corrupt,hostPatch={},noDocument=false,includePreparati
   for(const directory of ['inbox','processing','outbox'])await fs.mkdir(path.join(queue,directory),{recursive:true});
   const operations=Object.values(NATIVE_MODEL_QUERY_OPERATION_BY_TOOL);
   if(includePreparation)operations.push(MODEL_PREPARATION_OPERATION);
-  const identity={sessionId:session,pid:process.pid,version:'0.8.1',atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:operations,...hostPatch};
+  if(includePreview)operations.push(PROJECT_BINDING_PREVIEW_OPERATION);
+  const identity={sessionId:session,pid:process.pid,version:'0.8.1',atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:operations,...includePreview?{projectBindingPreviewVersion:1}:{},...hostPatch};
   await fs.writeFile(path.join(queue,'host.json'),JSON.stringify(identity));
   pump=(async()=>{while(!stopped){
     for(const filename of (await fs.readdir(path.join(queue,'inbox'))).filter(name=>name.endsWith('.json'))){
       const processing=path.join(queue,'processing',filename);
       await fs.rename(path.join(queue,'inbox',filename),processing);
       const request=JSON.parse(await fs.readFile(processing,'utf8'));requests.push(request);
-      const descriptor=[...calls,...(includePreparation?[preparation]:[])].find(item=>ALL_NATIVE_MODEL_QUERY_OPERATION_BY_TOOL[item.name]===request.operation);
+      const descriptor=[...calls,...(includePreparation?[preparation]:[]),...(includePreview?[preview]:[])].find(item=>ALL_NATIVE_MODEL_QUERY_OPERATION_BY_TOOL[item.name]===request.operation);
       assert.ok(descriptor,'unexpected operation reached the controlled queue');
-      const current=noDocument?null:document;
+      const current=noDocument?null:includePreview?previewDocument:document;
       const body=noDocument?{schema_version:1,status:'no_document',document_open:false}:structuredClone(descriptor.value);
       const result={operation:request.operation,hostSession:session,atomicReadSnapshot:true,
-        snapshot:{hostSession:session,hostVersion:identity.version,document:current,capabilities:{atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:operations}},
+        snapshot:{hostSession:session,hostVersion:identity.version,document:current,capabilities:{atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:operations,...includePreview?{projectBindingPreviewVersion:1}:{}}},
         value:{operation:request.operation,hostSession:session,document:current===null?null:{title:current.title,path:current.path},modifiedByOperation:false,value:body}};
       corrupt?.(result,descriptor);
       const temporary=path.join(queue,'outbox',filename+'.tmp');
@@ -189,4 +193,11 @@ test('production native health supports no active document and keeps explicit do
   assert.equal(selected.isError,true);
   assert.equal(selected.structuredContent.buildxToolOutcome.outcome,'unconfirmed');
   assert.equal(f.requests.length,2);
+});
+
+test('project binding preview is a named read over the installed MCP transport',async t=>{
+ const f=await fixture(t,{includePreview:true}),{client}=await f.connect(['--workspace']);
+ const listed=await client.listTools();assert.equal(listed.tools.find(x=>x.name===PROJECT_BINDING_PREVIEW_NAME)?.annotations.readOnlyHint,true);
+ const result=await client.callTool({name:preview.name,arguments:preview.args},{timeout:7000});
+ assert.equal(result.isError,false,JSON.stringify(result));assert.deepEqual(result.structuredContent.value,preview.value);assert.equal(f.requests.length,1);assert.equal(f.requests[0].atomicRead,true);
 });
