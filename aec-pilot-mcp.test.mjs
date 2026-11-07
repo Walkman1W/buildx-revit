@@ -262,27 +262,31 @@ test('DWG preflight checks one exact view and setup through the atomic read queu
   assert.equal(corrupt.requests.size,1);
 });
 
-test('NWC preflight reads a bound 3D view without exporting and verifies the original receipt',async t=>{
-  const operation='preview_nwc_export',name='revit_preview_nwc_export';
-  const descriptor={name,operation,args:{view_id:sheetId},value:{
-    schema_version:1,view_id:sheetId,view_status:'printable_3d',exporter_available:false}};
-  const f=await fixture(t,{extraCalls:[descriptor]});
-  assert.ok((await f.client.listTools()).tools.some(tool=>tool.name===name&&tool.outputSchema&&tool.annotations.readOnlyHint));
-  for(const args of [{view_id:'9223372036854775808'},{view_id:sheetId,folder:'should-not-accept'}]){
-    assert.equal((await toolCall(f.client,{name,args})).isError,true);
-  }
-  assert.equal(f.requests.size,0);
-  await measuredCall(f,descriptor);
-  assert.equal(f.requests.size,1);
+for(const [format,viewFacts] of [
+  ['nwc',{view_status:'printable_3d',exporter_available:false}],
+  ['ifc',{view_status:'non_template_view',exporter_available:true,document_read_only:true}],
+]){
+  test(format.toUpperCase()+' preflight validates the bound view and preserves the original read receipt',async t=>{
+    const operation='preview_'+format+'_export',name='revit_'+operation;
+    const descriptor={name,operation,args:{view_id:sheetId},value:{schema_version:1,view_id:sheetId,...viewFacts}};
+    const f=await fixture(t,{extraCalls:[descriptor]});
+    assert.ok((await f.client.listTools()).tools.some(tool=>tool.name===name&&tool.outputSchema&&tool.annotations.readOnlyHint));
+    for(const args of [{view_id:'9223372036854775808'},{view_id:sheetId,folder:'should-not-accept'}]){
+      assert.equal((await toolCall(f.client,{name,args})).isError,true);
+    }
+    assert.equal(f.requests.size,0);
+    await measuredCall(f,descriptor);
+    assert.equal(f.requests.size,1);
 
-  const old=await fixture(t,{extraCalls:[descriptor],missingOperations:new Set([operation])});
-  assert.equal((await toolCall(old.client,descriptor)).structuredContent.buildxToolOutcome.outcome,'not_started');
-  assert.equal(old.requests.size,0);
+    const old=await fixture(t,{extraCalls:[descriptor],missingOperations:new Set([operation])});
+    assert.equal((await toolCall(old.client,descriptor)).structuredContent.buildxToolOutcome.outcome,'not_started');
+    assert.equal(old.requests.size,0);
 
-  const corrupt=await fixture(t,{extraCalls:[descriptor],corrupt:result=>{result.value.value.view_id='42';}});
-  assert.equal((await toolCall(corrupt.client,descriptor)).structuredContent.buildxToolOutcome.outcome,'unconfirmed');
-  assert.equal(corrupt.requests.size,1);
-});
+    const corrupt=await fixture(t,{extraCalls:[descriptor],corrupt:result=>{result.value.value.view_id='42';}});
+    assert.equal((await toolCall(corrupt.client,descriptor)).structuredContent.buildxToolOutcome.outcome,'unconfirmed');
+    assert.equal(corrupt.requests.size,1);
+  });
+}
 
 test('an installed first-wave host can still read phases and refuses all three new operations before enqueueing',async t=>{
   const f=await fixture(t,{missingOperations:wave2Operations});

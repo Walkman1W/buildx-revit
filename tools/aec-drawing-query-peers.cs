@@ -7,7 +7,7 @@ namespace Autodesk.Revit.DB {
  public class ElementId { public long Value; public ElementId(long v){Value=v;} }
  public class Element { public ElementId Id; public string Name; }
  public class Revision : Element { public string RevisionDate, Description; public int SequenceNumber; public bool Issued; }
- public class Document { public bool IsFamilyDocument; public List<Element> Elements = new List<Element>(); public Element GetElement(ElementId id){return Elements.FirstOrDefault(e=>e.Id.Value==id.Value);} }
+ public class Document { public bool IsFamilyDocument, IsLinked, IsReadOnly; public List<Element> Elements = new List<Element>(); public Element GetElement(ElementId id){return Elements.FirstOrDefault(e=>e.Id.Value==id.Value);} }
  public class FilteredElementCollector : IEnumerable, IDisposable { Document d; Type t; public FilteredElementCollector(Document doc){d=doc;} public FilteredElementCollector OfClass(Type type){t=type;return this;} public IEnumerator GetEnumerator(){return d.Elements.Where(e=>t.IsInstanceOfType(e)).GetEnumerator();} public void Dispose(){} }
  public enum SectionType { Body }
  public class TableSectionData { public int NumberOfRows, NumberOfColumns, FirstRowNumber, FirstColumnNumber; }
@@ -15,7 +15,7 @@ namespace Autodesk.Revit.DB {
  public class View : Element { public bool IsTemplate; public bool CanBePrinted; }
  public class View3D : View { }
  public class ViewSheet : View { public bool IsPlaceholder; }
- public static class OptionalFunctionalityUtils { public static bool Available=true, NwcAvailable=true, NwcThrows=false; public static bool IsDWGExportAvailable(){return Available;} public static bool IsNavisworksExporterAvailable(){if(NwcThrows)throw new InvalidOperationException("exporter failure");return NwcAvailable;} }
+ public static class OptionalFunctionalityUtils { public static bool Available=true, NwcAvailable=true, NwcThrows=false, IfcAvailable=true, IfcThrows=false; public static bool IsIFCAvailable(){if(IfcThrows)throw new InvalidOperationException("exporter failure");return IfcAvailable;} public static bool IsDWGExportAvailable(){return Available;} public static bool IsNavisworksExporterAvailable(){if(NwcThrows)throw new InvalidOperationException("exporter failure");return NwcAvailable;} }
  public static class BaseExportOptions { public static List<string> Names=new List<string>(); public static IList<string> GetPredefinedSetupNames(Document d){return Names;} }
  public class ViewSchedule : View { public TableData Data; public TableData GetTableData(){return Data;} public string GetCellText(SectionType t,int row,int col){return row+":"+col;} }
 }
@@ -51,7 +51,15 @@ namespace RevitLocalCodex {
    OptionalFunctionalityUtils.NwcAvailable=false;result=AecDrawingQueries.Read(d,"preview_nwc_export",q);Check(!(bool)P(result,"exporter_available"));OptionalFunctionalityUtils.NwcThrows=true;rejected=false;try{AecDrawingQueries.Read(d,"preview_nwc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);OptionalFunctionalityUtils.NwcThrows=false;
    foreach(object bad in new object[]{null,0, "0","-1","1.0","01"," 20","9223372036854775808"}){q["view_id"]=bad;rejected=false;try{AecDrawingQueries.Read(d,"preview_nwc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);}q.Remove("view_id");rejected=false;try{AecDrawingQueries.Read(d,"preview_nwc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);
    q["view_id"]="20";q["setup_name"]="x";rejected=false;try{AecDrawingQueries.Read(d,"preview_nwc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);q.Remove("setup_name");d.IsFamilyDocument=true;rejected=false;try{AecDrawingQueries.Read(d,"preview_nwc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);
-   Console.WriteLine("drawing peer checks passed, including NWC preview");
+   d.IsFamilyDocument=false; Check(AecDrawingQueries.IsRead("preview_ifc_export")); q.Clear();q["expected_document"]=new object();
+   string[] ifcIds={"10","11","12","13","999","9"}; string[] ifcStatuses={"non_template_view","template","non_template_view","non_template_view","missing_or_not_view","missing_or_not_view"};
+   for(int i=0;i<ifcIds.Length;i++){q["view_id"]=ifcIds[i];result=AecDrawingQueries.Read(d,"preview_ifc_export",q);Check((int)P(result,"schema_version")==1 && (string)P(result,"view_id")==ifcIds[i] && (string)P(result,"view_status")==ifcStatuses[i] && (bool)P(result,"exporter_available") && !(bool)P(result,"document_read_only") && result.GetType().GetProperties().Length==5);}
+   d.IsReadOnly=true;OptionalFunctionalityUtils.IfcAvailable=false;result=AecDrawingQueries.Read(d,"preview_ifc_export",q);Check((bool)P(result,"document_read_only") && !(bool)P(result,"exporter_available"));
+   OptionalFunctionalityUtils.IfcThrows=true;rejected=false;try{AecDrawingQueries.Read(d,"preview_ifc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);OptionalFunctionalityUtils.IfcThrows=false;
+   foreach(object bad in new object[]{null,0,"0","-1","1.0","01"," 20","9223372036854775808"}){q["view_id"]=bad;rejected=false;try{AecDrawingQueries.Read(d,"preview_ifc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);}q.Remove("view_id");rejected=false;try{AecDrawingQueries.Read(d,"preview_ifc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);
+   q["view_id"]="10";q["setup_name"]="x";rejected=false;try{AecDrawingQueries.Read(d,"preview_ifc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);q.Remove("setup_name");
+   d.IsFamilyDocument=true;rejected=false;try{AecDrawingQueries.Read(d,"preview_ifc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);d.IsFamilyDocument=false;d.IsLinked=true;rejected=false;try{AecDrawingQueries.Read(d,"preview_ifc_export",q);}catch(InvalidOperationException){rejected=true;}Check(rejected);
+   Console.WriteLine("drawing peer checks passed, including IFC preview");
   }
  }
 }

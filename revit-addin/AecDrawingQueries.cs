@@ -10,12 +10,22 @@ namespace RevitLocalCodex
     {
         internal static bool IsRead(string operation)
         {
-            return operation == "get_revision_sequences" || operation == "get_schedule_data" || operation == "preview_dwg_export" || operation == "preview_nwc_export";
+            return operation == "get_revision_sequences" || operation == "get_schedule_data" || operation == "preview_dwg_export" || operation == "preview_nwc_export" || operation == "preview_ifc_export";
         }
 
         internal static object Read(Document doc, string operation, Dictionary<string, object> args)
         {
             if (doc == null) throw new InvalidOperationException("Open a Revit document before this query.");
+            if (operation == "preview_ifc_export")
+            {
+                NativeModelQueries.Fields(args, "expected_document", "view_id");
+                if (doc.IsFamilyDocument || doc.IsLinked) throw new InvalidOperationException("IFC preview requires a non-linked project document.");
+                long id = NativeModelQueries.ExactId(args, "view_id");
+                var view = doc.GetElement(new ElementId(id)) as View;
+                string status = view == null ? "missing_or_not_view" : view.IsTemplate ? "template" : "non_template_view";
+                return new { schema_version = 1, view_id = id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    view_status = status, exporter_available = OptionalFunctionalityUtils.IsIFCAvailable(), document_read_only = doc.IsReadOnly };
+            }
             if (operation == "preview_nwc_export")
             {
                 NativeModelQueries.Fields(args, "expected_document", "view_id");

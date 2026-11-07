@@ -14,6 +14,8 @@
 
 ## 已核对与待验
 
+- IFC 只读条件核查新增候选。按精确视图 ID 查询视图状态、文档只读状态和 IFC 功能可用性。候选目录 108 项、49 项只读，AEC 仍有 9 项无具名入口。Node 136/136、受控宿主 109/109、C# 图纸夹具和 57 份 Revit 2024 API 引用编译通过。真实 Revit 和 WebView 待验。[核查记录](AEC-IFC-PREFLIGHT.zh-CN.md)
+
 - NWC 只读条件核查新增候选。按精确视图 ID 返回三维视图可打印状态及 Navisworks 导出器可用性。候选目录 107 项、48 项只读，9 项 AEC 仍无具名入口。Node 134/134、受控宿主 109/109、C# 图纸夹具和 57 份 Revit 2024 API 引用编译通过。真实 Revit 与 WebView 待验。[核查记录](AEC-NWC-PREFLIGHT.zh-CN.md)
 
 - DWG 只读条件核查新增候选。可按精确视图 ID 查询可打印状态、导出器可用性和可选设置名。工作区候选 106 项、47 项只读，AEC 尚无具名入口仍为 9 项。Node 132/132、受控宿主 109/109、C# 图纸夹具及 57 份 Revit 2024 API 引用编译通过。真实 WebView 与 DWG 文件导出待验。[核查记录](AEC-DWG-PREFLIGHT.zh-CN.md)

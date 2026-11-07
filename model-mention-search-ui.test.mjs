@@ -73,27 +73,29 @@ test('DWG preflight is searchable and its command reads the exact view without w
   await ui.respond(ui.requests[0],{ok:true,executionId:'dwg-preflight-read'});
 });
 
-test('NWC preflight can be found and run as a read from the model command bar',async t=>{
-  const name='revit_preview_nwc_export';
-  for(const query of [name,'preview_nwc_export','pne','核查 NWC 导出条件']){
-    assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name&&item.readOnly),query);
-  }
-  const ui=await setup(t,PANEL_TOOL_CATALOG);
-  ui.input('@pne');
-  const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));
-  assert.ok(option);option.click();assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
-  ui.document.body.querySelectorAll('.model-tab')[1].click();
-  ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
-  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);
-  assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
-  ui.get('model-command-'+name+'-view_id').value='9007199254740993';
-  assert.equal(row.querySelectorAll('.model-command-confirm').length,0);
-  row.querySelectorAll('.model-command-run')[0].click();await flush();
-  assert.equal(ui.requests.length,1);
-  assert.equal(ui.requests[0].body.commandId,name);
-  assert.deepEqual(ui.requests[0].body.parameters,{view_id:'9007199254740993'});
-  await ui.respond(ui.requests[0],{ok:true,executionId:'nwc-preflight-read'});
-});
+for(const [format,initials] of [['NWC','pne'],['IFC','pie']]){
+  test(format+' preflight can be found and run as a read from the model command bar',async t=>{
+    const operation='preview_'+format.toLowerCase()+'_export',name='revit_'+operation;
+    for(const query of [name,operation,initials,'核查 '+format+' 导出条件']){
+      assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name&&item.readOnly),query);
+    }
+    const ui=await setup(t,PANEL_TOOL_CATALOG);
+    ui.input('@'+initials);
+    const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));
+    assert.ok(option);option.click();assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+    ui.document.body.querySelectorAll('.model-tab')[1].click();
+    ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+    const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);
+    assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+    ui.get('model-command-'+name+'-view_id').value='9007199254740993';
+    assert.equal(row.querySelectorAll('.model-command-confirm').length,0);
+    row.querySelectorAll('.model-command-run')[0].click();await flush();
+    assert.equal(ui.requests.length,1);
+    assert.equal(ui.requests[0].body.commandId,name);
+    assert.deepEqual(ui.requests[0].body.parameters,{view_id:'9007199254740993'});
+    await ui.respond(ui.requests[0],{ok:true,executionId:operation});
+  });
+}
 
 test('group members can be found by English name, initials and label and manually read once',async t=>{
  const tool=PANEL_TOOL_CATALOG.find(item=>item.name==='revit_get_group_members');
