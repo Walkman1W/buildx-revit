@@ -9,4 +9,3 @@ test('replaced recovery root rejects new claim and cannot clear unknown',async t
  await assert.rejects(replacement.reserve(scope,'22222222-2222-4222-8222-222222222222',Buffer.from('new request')));
  assert.deepEqual(await first.pending(scope),{state:'unknown'});await assert.rejects(initializeResearchRoot(root),{code:'EEXIST'});
 });
-

@@ -9,5 +9,3 @@ $framework=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319'; $exe=Jo
 if ($LASTEXITCODE -ne 0) { throw 'Peer compile failed.' }
 & $exe | Tee-Object -FilePath (Join-Path $out 'result.txt')
 if ($LASTEXITCODE -ne 0) { throw 'Peer checks failed.' }
-
-

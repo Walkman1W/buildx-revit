@@ -65,8 +65,3 @@ export async function typeWriteHttpFixture(t,{prepare,invoke,expiryMs=110000,wri
   const decide=(value,decision='accept',patch={},options={})=>post('dynamic-approval',{conversationId:session,requestId:value.id,digest:value.digest,decision,...patch},options);
   return {app,codex,writes,preparations,direct,observations,receiptSnapshots,queue,services,origin,post,session,choose,begin,preview,decide,changeDocument:patch=>{document={...document,...patch};}};
 }
-
-
-
-
-

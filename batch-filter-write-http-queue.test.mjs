@@ -6,4 +6,3 @@ test('closed fixture: conversation to prepare, HTTP decision, one write and orig
  await waitTypeWrite(()=>Boolean(f.preview()));const p=f.preview();assert.equal(JSON.parse(p.batchFilterWriteReview).total,1);assert.equal(f.writes.length,0);assert.equal((await f.decide(p)).status,200);assert.equal((await f.decide(p)).status,409);
  await waitTypeWrite(()=>f.codex.answers.length===1);assert.equal(f.writes.length,1);assert.equal(f.queue.requests.length,2);assert.equal(f.queue.requests[1].operation,'batch_set_parameters_by_filter');assert.equal(f.codex.answers[0].success,true);assert.equal(f.receiptSnapshots[0].status,'received');assert.equal(f.receiptSnapshots[0].requestId,f.queue.requests[1].id);
 });
-

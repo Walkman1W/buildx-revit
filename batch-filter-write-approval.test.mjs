@@ -38,5 +38,3 @@ test('mismatched batch write receipt stays unknown with original owner and no re
  const recoveryRoot=path.join(f.options().root,'batch-recovery');for(const dir of ['scopes','requests','archive','records'])await fs.mkdir(path.join(recoveryRoot,dir),{recursive:true});await initializeResearchRoot(recoveryRoot);
  let original;await assert.rejects(invokeWorkbench('revit_batch_set_parameters_by_filter',scoped,f.options({batchFixtureTesting:true,batchRecoveryTesting:true,batchRecoveryRoot:recoveryRoot,approvedBatchWrite:permit})),e=>{const facts=workbenchFailureEvidence(e);original=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed'&&facts.requestIds[0]===f.requests[0].id;});assert.equal(original.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);await assert.rejects(invokeWorkbench('revit_batch_set_parameters_by_filter',scoped,f.options({batchFixtureTesting:true,batchRecoveryTesting:true,batchRecoveryRoot:recoveryRoot,approvedBatchWrite:permit})));assert.equal(f.requests.length,1);
 });
-
-

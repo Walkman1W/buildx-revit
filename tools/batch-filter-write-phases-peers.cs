@@ -18,5 +18,3 @@ class Program {
  Console.WriteLine("PASS total="+count);
  }
 }
-
-

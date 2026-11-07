@@ -1174,9 +1174,3 @@ namespace RevitLocalCodex
         }
     }
 }
-
-
-
-
-
-

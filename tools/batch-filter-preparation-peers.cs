@@ -12,4 +12,3 @@ class Program {
  var capacity=new BatchFilterPreparationBook("host",()=>ticks,1);for(int i=0;i<128;i++)capacity.Issue(doc,Facts(),"Integer",null,2,"rollback");Fail(()=>capacity.Issue(doc,Facts(),"Integer",null,2,"rollback"),"capacity fails closed");ticks=120;capacity.Issue(doc,Facts(),"Integer",null,2,"rollback");Ok(true,"expired entries reclaimed");t=b.Issue(doc,Facts(),"Integer",null,2,"rollback");Fail(()=>b.Consume(t,doc,Facts(),"Integer",null,2,"commit"),"mode drift rejected");Console.WriteLine("PASS total="+count);
  }
 }
-

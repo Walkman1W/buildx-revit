@@ -1765,5 +1765,3 @@ if (typeof window !== 'undefined') {
   window.addEventListener('buildx-project-attach',event=>{if(typeof event.detail?.resolve==='function')void addLibraryAttachment(event.detail.value,event.detail.binding).then(event.detail.resolve);});
   window.addEventListener('buildx-attachments-remove',event => { removeAttachment(event.detail?.id); });
 }
-
-
