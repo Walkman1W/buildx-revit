@@ -519,19 +519,19 @@ namespace RevitLocalCodex
             }
             if (operation == "create_material")
             {
-                Fields(args, "expected_document", "mode", "name", "red", "green", "blue", "transparency");
+                Fields(args, "expected_document", "mode", "name", "red", "green", "blue", "transparency", "shininess", "smoothness");
                 if (doc.IsFamilyDocument) throw new InvalidOperationException("Materials require a project document.");
                 string name = SheetText(args, "name");
                 using (var collector = new FilteredElementCollector(doc).OfClass(typeof(Material)))
                     if (collector.ToElements().Any(e => String.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase)))
                         throw new InvalidOperationException("A material with this name already exists.");
                 int red = MaterialInteger(args, "red", 255), green = MaterialInteger(args, "green", 255), blue = MaterialInteger(args, "blue", 255);
-                int transparency = MaterialInteger(args, "transparency", 100);
+                int transparency = MaterialInteger(args, "transparency", 100), shininess = MaterialOptionalInteger(args, "shininess", 128), smoothness = MaterialOptionalInteger(args, "smoothness", 100);
                 ElementId id = Material.Create(doc, name);
                 Material material = RequiredElement(doc, id.Value) as Material;
                 if (material == null || !material.IsValidObject) throw new InvalidOperationException("Material creation failed.");
                 material.Color = new Autodesk.Revit.DB.Color((byte)red, (byte)green, (byte)blue);
-                material.Transparency = transparency;
+                material.Transparency = transparency; material.Shininess = shininess; material.Smoothness = smoothness;
                 created.Id = id; doc.Regenerate();
                 return ReadBasicCreated(doc, operation, args, id);
             }
@@ -737,10 +737,10 @@ namespace RevitLocalCodex
                 if (material == null || !material.IsValidObject || !String.Equals(material.Name, SheetText(args, "name"), StringComparison.Ordinal))
                     throw new InvalidOperationException("Created material identity changed.");
                 Autodesk.Revit.DB.Color color = material.Color;
-                int red = MaterialInteger(args, "red", 255), green = MaterialInteger(args, "green", 255), blue = MaterialInteger(args, "blue", 255), transparency = MaterialInteger(args, "transparency", 100);
-                if (color == null || color.Red != red || color.Green != green || color.Blue != blue || material.Transparency != transparency)
+                int red = MaterialInteger(args, "red", 255), green = MaterialInteger(args, "green", 255), blue = MaterialInteger(args, "blue", 255), transparency = MaterialInteger(args, "transparency", 100), shininess = MaterialOptionalInteger(args, "shininess", 128), smoothness = MaterialOptionalInteger(args, "smoothness", 100);
+                if (color == null || color.Red != red || color.Green != green || color.Blue != blue || material.Transparency != transparency || material.Shininess != shininess || material.Smoothness != smoothness)
                     throw new InvalidOperationException("Created material graphics properties changed.");
-                return new { element_id = DescribedId(material.Id), name = material.Name, red = (int)color.Red, green = (int)color.Green, blue = (int)color.Blue, transparency = material.Transparency };
+                return new { element_id = DescribedId(material.Id), name = material.Name, red = (int)color.Red, green = (int)color.Green, blue = (int)color.Blue, transparency = material.Transparency, shininess = material.Shininess, smoothness = material.Smoothness };
             }
             if (operation == "create_section_view")
             {
@@ -933,6 +933,11 @@ namespace RevitLocalCodex
             double mm = FiniteNumber(Required(args, key), key);
             if (mm < 100 || mm > 1000000) throw new InvalidOperationException(key + " must be in [100, 1000000] mm.");
             return Feet(mm);
+        }
+
+        private static int MaterialOptionalInteger(Dictionary<string, object> args, string key, int max)
+        {
+            return args.ContainsKey(key) ? MaterialInteger(args, key, max) : 50;
         }
 
         private static int MaterialInteger(Dictionary<string, object> args, string key, int max)

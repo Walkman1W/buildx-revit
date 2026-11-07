@@ -271,6 +271,6 @@ test('material is searchable and manual submission needs confirmation',async t=>
  for(const [key,value] of Object.entries({name:'Test material',red:'12',green:'34',blue:'56',transparency:'25'}))ui.get('model-command-'+name+'-'+key).value=value;
  row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
  row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
- assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'Test material',red:12,green:34,blue:56,transparency:25});
+ assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'Test material',red:12,green:34,blue:56,transparency:25,shininess:50,smoothness:50});
  await ui.respond(ui.requests[0],{ok:true,executionId:'material-write'});
 });
