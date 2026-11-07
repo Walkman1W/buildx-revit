@@ -61,8 +61,10 @@ namespace RevitLocalCodex
                 throw new InvalidOperationException("Exact candidate identity and mode are required.");
             Guard(guard);
             string display=ReviewText(doc,expected,mode);
-            if(!decide(display))return Receipt(requestId,hostSession,"not_started","human_decision","declined");
-            Guard(guard);ProjectInstanceBindingPreparation.Revalidate(doc,expected);
+            bool accepted=decide(display);
+            Guard(guard);
+            if(!accepted)return Receipt(requestId,hostSession,"not_started","human_decision","declined");
+            ProjectInstanceBindingPreparation.Revalidate(doc,expected);
             bool groupStarted=false,groupCommitted=false;string stage="before_group";
             using(var group=new TransactionGroup(doc,"BuildX: project instance binding"))
             {

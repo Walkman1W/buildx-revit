@@ -32,6 +32,10 @@ namespace RevitLocalCodex {
   public static long ExactId(Dictionary<string,object> args,string key){long x;if(!(args[key] is string)||!long.TryParse((string)args[key],out x)||x<=0)throw new InvalidOperationException();return x;}
   public static long ExactSignedId(Dictionary<string,object> args,string key){long x;if(!(args[key] is string)||!long.TryParse((string)args[key],out x)||x==0||x==-1)throw new InvalidOperationException();return x;}
  }
+ class QueuePeer {
+  readonly HashSet<string> seen=new HashSet<string>();
+  public object Submit(string id,Func<object> work){if(!seen.Add(id))return null;return work();}
+ }
  class Program {
   static void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);}
   static void Fail(Action a,string message){try{a();}catch(InvalidOperationException){Console.WriteLine("PASS "+message);return;}throw new Exception(message);}
@@ -88,6 +92,22 @@ namespace RevitLocalCodex {
    int guardCalls=0;Action revoked=()=>{if(++guardCalls==5)throw new InvalidOperationException("controlled revocation");};
    var revokedAfterCommit=ProjectInstanceBindingWorkflow.ExecuteForTest(d,candidate,"synthetic-session",req,"commit",revoked,accept);Check((string)Prop(revokedAfterCommit,"outcome")=="unknown"&&d.ParameterBindings.InsertCalls==7,"guard failure after commit remains unknown");
    Check(decisions==7&&guards>0,"decision and guard counts bounded");
+   d.ParameterBindings.Bound=false;foreach(var item in d.Elements)item.HasParameter=false;
+   string currentSession="synthetic-session";Document active=d;bool cancelled=false,claimed=true;DateTime now=DateTime.UtcNow;int policyChecks=0;
+   var context=new ProjectInstanceBindingHostAdapter.Context(req,currentSession,d,now.AddMinutes(1),()=>currentSession,()=>active,(a,b)=>Object.ReferenceEquals(a,b),()=>{policyChecks++;},()=>cancelled,()=>now);
+   var closed=ProjectInstanceBindingHostAdapter.Execute(context,candidate,"commit");Check((string)Prop(closed,"outcome")=="not_started"&&(string)Prop(closed,"reason")=="trusted_request_handle_unavailable"&&d.ParameterBindings.InsertCalls==7,"production adapter always closes without trusted channel");
+   claimed=false;var noClaim=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{throw new Exception("unexpected dialog");});Check((string)Prop(noClaim,"outcome")=="not_started"&&d.ParameterBindings.InsertCalls==7,"missing claimed request never displays dialog or inserts");claimed=true;
+   cancelled=true;var cancelledResult=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{throw new Exception("unexpected dialog");});Check((string)Prop(cancelledResult,"outcome")=="not_started"&&d.ParameterBindings.InsertCalls==7,"cancelled original request cannot start");cancelled=false;
+   currentSession="other";var wrongSession=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{throw new Exception("unexpected dialog");});Check((string)Prop(wrongSession,"outcome")=="not_started","host session drift refused");currentSession="synthetic-session";
+   active=new Document();var wrongDoc=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{throw new Exception("unexpected dialog");});Check((string)Prop(wrongDoc,"outcome")=="not_started","active document identity drift refused");active=d;
+   now=now.AddMinutes(2);var expired=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{throw new Exception("unexpected dialog");});Check((string)Prop(expired,"outcome")=="not_started","expired request refused");now=now.AddMinutes(-2);
+   var deniedContext=new ProjectInstanceBindingHostAdapter.Context(req,currentSession,d,now.AddMinutes(1),()=>currentSession,()=>active,(a,b)=>Object.ReferenceEquals(a,b),()=>{throw new InvalidOperationException("access denied");},()=>cancelled,()=>now);
+   var denied=ProjectInstanceBindingHostAdapter.ExecuteForTest(deniedContext,candidate,"commit",()=>claimed,message=>{throw new Exception("unexpected dialog");});Check((string)Prop(denied,"outcome")=="not_started"&&d.ParameterBindings.InsertCalls==7,"access policy rejection cannot start");
+   var cancelDuringDialog=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{cancelled=true;return true;});cancelled=false;Check((string)Prop(cancelDuringDialog,"outcome")=="unknown"&&d.ParameterBindings.InsertCalls==7,"cancel during dialog cannot insert");
+   var revokedDuringDialog=ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>{claimed=false;return true;});claimed=true;Check((string)Prop(revokedDuringDialog,"outcome")=="unknown"&&d.ParameterBindings.InsertCalls==7,"lost claimed handle after dialog cannot insert");
+   var queue=new QueuePeer();Func<object> original=()=>ProjectInstanceBindingHostAdapter.ExecuteForTest(context,candidate,"commit",()=>claimed,message=>true);
+   var confirmed=queue.Submit(req,original);Check((string)Prop(confirmed,"outcome")=="committed_verified"&&(string)Prop(confirmed,"request_id")==req&&d.ParameterBindings.InsertCalls==8&&policyChecks>0,"synthetic owner binds exact request and verifies one insert");
+   Check(queue.Submit(req,original)==null&&d.ParameterBindings.InsertCalls==8,"synthetic queue duplicate does not replay original request");
   }
  }
 }
