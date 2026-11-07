@@ -98,7 +98,11 @@ namespace RevitLocalCodex {
   private static object ReadFoundation(Document d, Dictionary<string,object> a, ElementId id) { throw new InvalidOperationException("Foundation is covered by its dedicated peer fixture."); }
   private static object CreateColumn(Document d, Dictionary<string,object> a, BasicCreatedExpectation c) { throw new InvalidOperationException("Column is covered by its dedicated peer fixture."); }
   private static object ReadColumn(Document d, Dictionary<string,object> a, ElementId id) { throw new InvalidOperationException("Column is covered by its dedicated peer fixture."); }
-  private sealed class MaterialAssignmentExpectation {}
+  private sealed class TitleblockWriteExpectation {}
+        private static TitleblockWriteExpectation PrepareTitleblockWrite(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope titleblock peer.");}
+        private static object WriteTitleblockParameters(Document d, Dictionary<string,object> a, TitleblockWriteExpectation e, List<ParameterWriteExpectation> w){throw new InvalidOperationException("Out of scope titleblock peer.");}
+        private static void VerifyTitleblockOwner(Document d, TitleblockWriteExpectation e){throw new InvalidOperationException("Out of scope titleblock peer.");}
+        private sealed class MaterialAssignmentExpectation {}
   private static object SetElementMaterial(Document doc, Dictionary<string,object> args, out MaterialAssignmentExpectation expectation){expectation=null;throw new InvalidOperationException("Out of scope material assignment peer.");}
   private static void VerifyElementMaterial(Document doc, MaterialAssignmentExpectation expectation){throw new InvalidOperationException("Out of scope material assignment peer.");}
 
