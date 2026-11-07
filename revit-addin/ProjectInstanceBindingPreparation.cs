@@ -127,6 +127,15 @@ namespace RevitLocalCodex
                 using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(bytes.ToArray())).Replace("-","").ToLowerInvariant();
             }
         }
+        // Full bounded facts must be in the same original atomic receipt as the native token.
+        internal static object DescribeComplete(Snapshot snapshot, string hostSession)
+        {
+            if(snapshot==null)throw new InvalidOperationException("Complete project binding snapshot required.");
+            return new { schema_version=1, definition_guid=snapshot.Guid.ToString("D"), definition_id=snapshot.DefinitionId.ToString(CultureInfo.InvariantCulture), data_type=snapshot.DataType, definition_name=snapshot.DefinitionName,
+                document_title=snapshot.DocumentTitle, document_path=snapshot.DocumentPath, category_ids=snapshot.CategoryIds.Select(id=>id.ToString(CultureInfo.InvariantCulture)).ToArray(),
+                instance_count=snapshot.Instances.Length, instances=snapshot.Instances.Select(item=>new {element_id=item.Id.ToString(CultureInfo.InvariantCulture),category_id=item.CategoryId.ToString(CultureInfo.InvariantCulture),unique_id=item.UniqueId}).ToArray(),
+                snapshot_id=Fingerprint(snapshot,hostSession), coverage="complete_current_document_instances", future_instances_affected=true, authorization="not_granted", binding_attempted=false, external_file_accessed=false };
+        }
         internal static object Describe(Snapshot snapshot,int offset,int limit,string expectedSnapshot,string hostSession)
         {
             if(snapshot==null || offset<0 || offset>snapshot.Instances.Length || limit<1 || limit>50) throw new InvalidOperationException("Invalid preview page.");

@@ -103,6 +103,7 @@ namespace RevitLocalCodex {
     internal static class ProjectInstanceBindingPreparation {
         internal sealed class Snapshot { }
         internal static object Describe(Snapshot s,int offset,int limit,string expected,string session){throw new NotSupportedException();}
+        internal static object DescribeComplete(Snapshot s,string session){throw new NotSupportedException();}
     }
     internal static class ProjectBindingCandidate {
         internal sealed class Plan { internal string Document,Scope; }

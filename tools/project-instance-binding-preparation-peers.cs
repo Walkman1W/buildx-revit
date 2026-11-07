@@ -41,6 +41,7 @@ namespace RevitLocalCodex {
    var snapshot=ProjectInstanceBindingPreparation.Capture(d,guid,100,"text",new long[]{walls.Id.Value,floors.Id.Value});var dto=ProjectInstanceBindingPreparation.Describe(snapshot,0,50,null,"synthetic-session");
    Check(snapshot.Instances.Length==2&&snapshot.Instances[0].Id==2&&snapshot.Instances[1].Id==5&&(string)Prop(dto,"authorization")=="not_granted"&&!(bool)Prop(dto,"binding_attempted")&&d.ParameterBindings.InsertCalls==0,"complete sorted impact grants no authority");
    string fingerprint=ProjectInstanceBindingPreparation.Fingerprint(snapshot,"synthetic-session");
+   var complete=ProjectInstanceBindingPreparation.DescribeComplete(snapshot,"synthetic-session");Check((int)Prop(complete,"instance_count")==2&&(string)Prop(complete,"snapshot_id")==fingerprint&&((IEnumerable)Prop(complete,"instances")).Cast<object>().Count()==2,"atomic review includes complete token-bound facts");
    var first=ProjectInstanceBindingPreparation.Describe(snapshot,0,1,null,"synthetic-session");Check((bool)Prop(first,"has_more") && (string)Prop(first,"snapshot_id")==fingerprint,"first page reports full-set identity");
    Fail(()=>ProjectInstanceBindingPreparation.Describe(snapshot,1,1,fingerprint,"other-session"),"different host session snapshot refused");
    var second=ProjectInstanceBindingPreparation.Describe(snapshot,1,1,fingerprint,"synthetic-session");Check(!(bool)Prop(second,"has_more"),"second page requires matching full-set identity");

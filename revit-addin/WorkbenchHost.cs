@@ -852,6 +852,7 @@ namespace RevitLocalCodex
                 throw new InvalidOperationException("Active view changed during the read; snapshot was not published.");
             if (projectSnapshot != null)
                 return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true,
+                    project_binding_review = ProjectInstanceBindingPreparation.DescribeComplete(projectSnapshot, session),
                     project_binding_preparation = ProjectBindingApprovals().Issue(doc, projectSnapshot, projectPlan.Scope, id) });
             if (preparation != null)
                 return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true,
