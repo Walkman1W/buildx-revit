@@ -7,7 +7,7 @@ if (!$out.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) -or (Test-Pa
 [IO.Directory]::CreateDirectory($out) | Out-Null
 $s=Get-Content -Raw (Join-Path $root 'revit-addin/WorkbenchActions.cs')
 $a=$s.IndexOf('        internal static object Write('); $b=$s.IndexOf('        private static object SetParameters(', $a)
-$c=$s.IndexOf('        private static XYZ WindowFacing('); $d=$s.IndexOf('        private static object DescribedId(', $c)
+$c=$s.IndexOf('        private static XYZ WindowFacing('); $d=$s.IndexOf('        private static void SetColumnParameter(', $c)
 if ($a -lt 0 -or $b -le $a -or $c -lt 0 -or $d -le $c) { throw 'Source extraction markers missing.' }
 $extracted='using System; using System.Linq; using System.Collections.Generic; using Autodesk.Revit.DB; using Autodesk.Revit.DB.Electrical; using Autodesk.Revit.DB.Mechanical; using Autodesk.Revit.UI; namespace RevitLocalCodex { internal static partial class WorkbenchActions {' + "`n" + $s.Substring($a,$b-$a) + $s.Substring($c,$d-$c) + "`n}}"
 $source=Join-Path $out 'extracted.cs'; [IO.File]::WriteAllText($source,$extracted,[Text.UTF8Encoding]::new($false))

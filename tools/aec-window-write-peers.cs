@@ -58,6 +58,25 @@ namespace RevitLocalCodex {
   private static object SetElementMaterial(Document doc, Dictionary<string,object> args, out MaterialAssignmentExpectation expectation){expectation=null;throw new InvalidOperationException("Out of scope material assignment peer.");}
   private static void VerifyElementMaterial(Document doc, MaterialAssignmentExpectation expectation){throw new InvalidOperationException("Out of scope material assignment peer.");}
 
+  // Only window and the shared transaction dispatcher are under test here.
+  // Other operations are deliberately fail-closed, and have dedicated peers.
+  private sealed class BasicCreatedExpectation { internal ElementId Id; }
+  private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {} private sealed class RoofCreationExpectation {}
+  static BeamCreationExpectation CreateBeam(UIApplication u,Dictionary<string,object> a){throw new InvalidOperationException("out of scope");}
+  static object VerifyBeam(Document d,Dictionary<string,object> a,BeamCreationExpectation x){throw new InvalidOperationException("out of scope");}
+  static TypeChangeExpectation ChangeElementType(Document d,Dictionary<string,object> a){throw new InvalidOperationException("out of scope");}
+  static object VerifyTypeChange(Document d,TypeChangeExpectation x){throw new InvalidOperationException("out of scope");}
+  static GroupCreationExpectation CreateModelGroup(Document d,Dictionary<string,object> a){throw new InvalidOperationException("out of scope");}
+  static object VerifyModelGroup(Document d,GroupCreationExpectation x){throw new InvalidOperationException("out of scope");}
+  static RoofCreationExpectation CreateFlatRoof(UIApplication u,Dictionary<string,object> a){throw new InvalidOperationException("out of scope");}
+  static object VerifyFlatRoof(Document d,Dictionary<string,object> a,RoofCreationExpectation x){throw new InvalidOperationException("out of scope");}
+  static object ApplyViewTemplate(Document d,Dictionary<string,object> a,out ElementId id){id=null;throw new InvalidOperationException("out of scope");}
+  static object VerifyViewTemplate(Document d,Dictionary<string,object> a,ElementId id=null){throw new InvalidOperationException("out of scope");}
+  static object CreateColumn(Document d,Dictionary<string,object> a,BasicCreatedExpectation x){throw new InvalidOperationException("out of scope");}
+  static object ReadColumn(Document d,Dictionary<string,object> a,ElementId id){throw new InvalidOperationException("out of scope");}
+  static object BasicWrite(UIApplication u,string op,Dictionary<string,object> a,BasicCreatedExpectation x){throw new InvalidOperationException("out of scope");}
+  static object ReadBasicCreated(Document d,string op,Dictionary<string,object> a,ElementId id){throw new InvalidOperationException("out of scope");}
+  static void VerifyPinned(Document d,Dictionary<string,object> a,bool pin){throw new InvalidOperationException("out of scope");}
   class ParameterWriteExpectation {} class RejectErrors {}
   static string TextNoteInput(Dictionary<string,object> args){throw new InvalidOperationException("Out of scope text-note peer.");} static string NormalizeTextNote(string value){throw new InvalidOperationException("Out of scope text-note peer.");}
   static object WriteTypeParameter(UIApplication u,Dictionary<string,object>a){throw new Exception("unused");}
