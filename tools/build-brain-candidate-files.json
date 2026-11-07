@@ -342,5 +342,8 @@
   "lib/project-binding-approval-owner.mjs",
   "lib/project-binding-atomic-review.mjs",
   "lib/project-binding-panel-approval.mjs",
-  "public/project-binding-review.mjs"
+  "public/project-binding-review.mjs",
+  "lib/research-durable-claim.mjs",
+  "lib/research-scope-owner.mjs",
+  "lib/research-recovery-adapter.mjs"
 ]

@@ -75,9 +75,9 @@
         "realWebViewVerified": false
       },
       "projectBindingSafety20261107": {
-        "status": "closed_synthetic_e2e",
-        "validation": "synthetic conversation HTTP original preparation and write queue end-to-end; related 60/60; complete Revit API host build",
-        "remaining": "durable replay guard and original receipt recovery, real WebView and Revit",
+        "status": "closed_integrated_recovery_research",
+        "validation": "67/67 including synthetic end-to-end and three real Node publish crash stages; full Revit API host build",
+        "remaining": "power failure, durable root integrity and concurrency, missing request recovery, manual resolution, real WebView and Revit",
         "writeRegistered": false
       }
     },
