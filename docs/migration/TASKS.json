@@ -125,6 +125,25 @@
       "publication": { "privateBranch": "codex/aec-workspace-20261107" }
     },
     {
+      "id": "BX-024",
+      "title": "AEC 竖直剖面视图创建",
+      "status": "in_progress",
+      "acceptance": "精确剖面类型 ID、内部毫米坐标底边中心、水平朝向和矩形尺寸，核对裁剪及远裁剪状态，保留文档权限、逐次确认、事务和原回执",
+      "evidence": "AEC-SECTION-WRITE.zh-CN.md",
+      "unmigratedFromOriginal50": 31,
+      "candidateWorkspaceTools": 81,
+      "candidateReadOnlyTools": 43,
+      "controlledCSharpSectionChecks": 10,
+      "controlledCSharpChecks": 55,
+      "controlledHostChecks": 105,
+      "nodeRegressionChecks": 125,
+      "revit2024ApiCompilationInputs": 36,
+      "revit2024ApiCompileVerified": true,
+      "realRevitModelExecutionVerified": false,
+      "realRevitWebViewVerified": false,
+      "publication": { "privateBranch": "codex/aec-workspace-20261107" }
+    },
+    {
       "id": "BX-023",
       "title": "AEC 墙上放窗与 Codex 合成端到端验证",
       "status": "in_progress",

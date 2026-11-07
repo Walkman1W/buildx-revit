@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -101,7 +101,7 @@ namespace RevitLocalCodex
                     else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -500,6 +500,29 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "create_section_view")
+            {
+                Fields(args, "expected_document", "mode", "view_family_type_id", "name", "origin_mm", "angle_degrees", "width_mm", "height_mm", "depth_mm");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Sections require a project document.");
+                string name = SectionName(args);
+                ViewFamilyType type = RequiredElement(doc, NativeModelQueries.ExactId(args, "view_family_type_id")) as ViewFamilyType;
+                if (type == null || !type.IsValidObject || type.ViewFamily != ViewFamily.Section) throw new InvalidOperationException("view_family_type_id must identify a valid Section ViewFamilyType.");
+                XYZ origin = MillimeterPoint(Required(args, "origin_mm"), "origin_mm");
+                double angle = SectionAngle(args), width = SectionLength(args, "width_mm"), height = SectionLength(args, "height_mm"), depth = SectionLength(args, "depth_mm");
+                XYZ look = new XYZ(Math.Cos(angle), Math.Sin(angle), 0), up = XYZ.BasisZ;
+                Transform transform = Transform.Identity;
+                transform.Origin = origin; transform.BasisZ = look; transform.BasisY = up; transform.BasisX = up.CrossProduct(look);
+                BoundingBoxXYZ box = new BoundingBoxXYZ();
+                box.Transform = transform; box.Min = new XYZ(-width / 2, 0, 0); box.Max = new XYZ(width / 2, height, depth);
+                for (int i = 0; i < 3; i++) { box.set_MinEnabled(i, true); box.set_MaxEnabled(i, true); }
+                for (int x = 0; x < 2; x++) for (int y = 0; y < 2; y++) for (int z = 0; z < 2; z++)
+                    if (!XYZ.IsWithinLengthLimits(transform.OfPoint(new XYZ(x == 0 ? box.Min.X : box.Max.X, y == 0 ? box.Min.Y : box.Max.Y, z == 0 ? box.Min.Z : box.Max.Z))))
+                        throw new InvalidOperationException("Section bounds exceed Revit coordinate limits.");
+                ViewSection section = ViewSection.CreateSection(doc, type.Id, box);
+                section.Name = name; created.Id = section.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_text_note")
             {
                 Fields(args, "expected_document", "mode", "view_id", "text_type_id", "point_mm", "text");
@@ -662,6 +685,41 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "create_section_view")
+            {
+                ViewSection section = element as ViewSection;
+                long typeId = NativeModelQueries.ExactId(args, "view_family_type_id");
+                ViewFamilyType type = doc.GetElement(new ElementId(typeId)) as ViewFamilyType;
+                if (section == null || !section.IsValidObject || section.IsTemplate || section.ViewType != ViewType.Section
+                    || section.GetTypeId().Value != typeId || type == null || !type.IsValidObject || type.ViewFamily != ViewFamily.Section
+                    || !String.Equals(section.Name, SectionName(args), StringComparison.Ordinal) || !section.CropBoxActive)
+                    throw new InvalidOperationException("Created section identity, type, name or active crop changed.");
+                using (ViewCropRegionShapeManager region = section.GetCropRegionShapeManager())
+                    if (region == null || region.ShapeSet || region.Split)
+                        throw new InvalidOperationException("Created section must have one rectangular crop region.");
+                BoundingBoxXYZ crop = section.CropBox;
+                Parameter far = section.get_Parameter(BuiltInParameter.VIEWER_BOUND_OFFSET_FAR);
+                Parameter clipping = section.get_Parameter(BuiltInParameter.VIEWER_BOUND_FAR_CLIPPING);
+                if (crop == null || crop.Transform == null || far == null || far.StorageType != StorageType.Double || !far.HasValue
+                    || clipping == null || clipping.StorageType != StorageType.Integer || !clipping.HasValue)
+                    throw new InvalidOperationException("Created section crop or far clip is unavailable.");
+                int clippingMode = clipping.AsInteger();
+                if (clippingMode != 1 && clippingMode != 2)
+                    throw new InvalidOperationException("Created section far clipping is inactive.");
+                Transform t = crop.Transform;
+                XYZ actualLook = t.BasisZ.Negate(), actualUp = t.BasisY;
+                double angle = SectionAngle(args);
+                XYZ requestedLook = new XYZ(Math.Cos(angle), Math.Sin(angle), 0);
+                XYZ actualOrigin = t.OfPoint(new XYZ((crop.Min.X + crop.Max.X) / 2, crop.Min.Y, crop.Max.Z));
+                double width = crop.Max.X - crop.Min.X, height = crop.Max.Y - crop.Min.Y, depth = far.AsDouble();
+                if (!(actualLook.DistanceTo(requestedLook) <= 1e-8 && actualUp.DistanceTo(XYZ.BasisZ) <= 1e-8
+                    && actualOrigin.DistanceTo(MillimeterPoint(Required(args, "origin_mm"), "origin_mm")) <= Feet(0.001)
+                    && Math.Abs(width - SectionLength(args, "width_mm")) <= Feet(0.001)
+                    && Math.Abs(height - SectionLength(args, "height_mm")) <= Feet(0.001)
+                    && Math.Abs(depth - SectionLength(args, "depth_mm")) <= Feet(0.001)))
+                    throw new InvalidOperationException("Created section geometry or direction changed.");
+                return new { element_id = DescribedId(section.Id), view_family_type_id = DescribedId(section.GetTypeId()), name = section.Name, view_kind = "section", origin_mm = PointDto(actualOrigin), look_direction = new { x = actualLook.X, y = actualLook.Y, z = actualLook.Z }, width_mm = Millimeters(width), height_mm = Millimeters(height), depth_mm = Millimeters(depth) };
+            }
             if (operation == "create_text_note")
             {
                 TextNote note = element as TextNote;
@@ -794,6 +852,30 @@ namespace RevitLocalCodex
                 return new { element_id = DescribedId(grid.Id), name = grid.Name,
                     start_mm = PointDto(forward ? actualStart : actualEnd), end_mm = PointDto(forward ? actualEnd : actualStart) };
             }
+        }
+
+        private static string SectionName(Dictionary<string, object> args)
+        {
+            string name = Required(args, "name") as string;
+            if (String.IsNullOrWhiteSpace(name) || name.Length > 255 || name != name.Trim()
+                || name[0] == '\ufeff' || name[name.Length - 1] == '\ufeff'
+                || name.Any(c => c <= '\u001f' || (c >= '\u007f' && c <= '\u009f')))
+                throw new InvalidOperationException("name must be 1..255 characters without surrounding whitespace or control characters.");
+            return name;
+        }
+
+        private static double SectionAngle(Dictionary<string, object> args)
+        {
+            double degrees = FiniteNumber(Required(args, "angle_degrees"), "angle_degrees");
+            if (degrees < 0 || degrees >= 360) throw new InvalidOperationException("angle_degrees must be in [0, 360).");
+            return degrees * Math.PI / 180;
+        }
+
+        private static double SectionLength(Dictionary<string, object> args, string key)
+        {
+            double mm = FiniteNumber(Required(args, key), key);
+            if (mm < 100 || mm > 1000000) throw new InvalidOperationException(key + " must be in [100, 1000000] mm.");
+            return Feet(mm);
         }
 
         private static string SheetText(Dictionary<string, object> args, string key)

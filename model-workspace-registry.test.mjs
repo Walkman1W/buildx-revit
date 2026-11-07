@@ -323,3 +323,25 @@ test('text note is discoverable in Code Mode views and requires a guarded model 
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
  const result=await dispatcher.invokeCommand(name,{view_id:'1',text_type_id:'2',point_mm:{x:0,y:0,z:0},text:'hello'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+test('section view is discovered in paged views and runs only through the guarded operation',async()=>{
+  const name='revit_create_section_view',found=[];
+  for(let offset=0,more=true;more;offset+=3){
+    const page=describeModelOperationSchema({domain:'views',offset,limit:3});
+    assert.equal(page.ok,true);found.push(...page.value.tools.map(tool=>tool.name));more=page.value.hasMore;
+  }
+  assert.equal(found.filter(item=>item===name).length,1);
+  const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);
+  assert.ok(registered);
+  assert.deepEqual(describeModelOperationSchema({tool:name}).value.inputSchema,registered.inputSchema);
+  assert.equal(registered.inputSchema.properties.angle_degrees.exclusiveMaximum,360);
+  assert.equal(registered.inputSchema.properties.mode.default,'rollback');
+  assert.equal(supportsModelPermissionTool(name),true);
+  assert.equal(modelOperationEffect(name).kind,'model_transaction');
+  assert.equal(modelCommandById(name).readOnly,false);
+  let calls=0;
+  const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
+  const result=await dispatcher.invokeCommand(name,{name:'Test',view_family_type_id:'1',origin_mm:{x:0,y:0,z:0},
+    angle_degrees:90,width_mm:1000,height_mm:3000,depth_mm:4000},{confirmed:false});
+  assert.equal(result.ok,false);assert.equal(calls,0);
+});

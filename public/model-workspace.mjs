@@ -81,7 +81,8 @@ export function modelSchemaParameters(command, values) {
       } else if (rule.type === 'number' || rule.type === 'integer') {
         value = typeof value === 'number' ? value : Number(value);
         if (!Number.isFinite(value) || rule.type === 'integer' && !Number.isSafeInteger(value)) throw new Error();
-        if (rule.minimum !== undefined && value < rule.minimum || rule.maximum !== undefined && value > rule.maximum || rule.exclusiveMinimum !== undefined && value <= rule.exclusiveMinimum) throw new Error();
+        if (rule.minimum !== undefined && value < rule.minimum || rule.maximum !== undefined && value > rule.maximum ||
+          rule.exclusiveMinimum !== undefined && value <= rule.exclusiveMinimum || rule.exclusiveMaximum !== undefined && value >= rule.exclusiveMaximum) throw new Error();
       } else if (rule.type === 'boolean') {
         if (![true,false,'true','false'].includes(value)) throw new Error();
         value = value === true || value === 'true';
@@ -580,6 +581,11 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         let label=COMMAND_PARAMETER_LABELS[key] || key;
         if(key==='parameters'&&command.tool==='revit_run_command')label='参数值';
         if(key==='template_id'&&command.tool==='revit_apply_view_template')label='视图样板 ID';
+        if(command.tool==='revit_create_section_view'){
+          if(key==='origin_mm')label='切面底边中心（mm）';
+          if(key==='angle_degrees')label='剖切朝向（°）';
+          if(key==='depth_mm')label='远裁剪距离（mm）';
+        }
         const options={document,Event,id,key,rule,label,required:required.has(key),value:draft?.values[key],multiline:command.tool==='revit_create_text_note'&&key==='text',onChange:invalidate,onCommand};
         const field=command.tool==='revit_set_parameters' && key==='changes'?createParameterChangeField(options):command.tool==='revit_set_parameter_value' && key==='changes'?createParameterChangeField({...options,maxChanges:1,exactIds:true}):command.tool==='revit_run_command' && key==='parameters'?createPersonalCommandFields(options):
           (rule.type==='integer'||rule.type==='array'&&rule.items?.type==='integer')&&createCommandChoiceField(options)||createCommandField(options);

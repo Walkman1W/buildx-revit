@@ -221,3 +221,32 @@ test('text note is searchable and manual multiline submission requires confirmat
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',view_id:'9007199254740993',text_type_id:'9007199254740994',point_mm:{x:1,y:2,z:3},text:'第一行\n第二行'});
  await ui.respond(ui.requests[0],{ok:true,executionId:'text-note-write'});
 });
+
+test('section view search and manual form accept exact type and bounded geometry after confirmation',async t=>{
+  const name='revit_create_section_view';
+  for(const query of [name,'create_section_view','csv','创建剖面视图']){
+    assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(tool=>tool.name===name&&tool.readOnly===false),query);
+  }
+  const ui=await setup(t,PANEL_TOOL_CATALOG);
+  ui.input('@csv');
+  const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));
+  assert.ok(option);option.click();assert.equal(ui.get('prompt').value,'@'+name+' ');
+  ui.document.body.querySelectorAll('.model-tab')[1].click();
+  ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+  const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);
+  assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+  const field=key=>ui.get('model-command-'+name+'-'+key);
+  for(const [key,value] of Object.entries({name:'剖面 A',view_family_type_id:'9007199254740993',
+    width_mm:2000,height_mm:3200,depth_mm:4000,'origin_mm-x':100,'origin_mm-y':-200,'origin_mm-z':300})){
+    field(key).value=String(value);
+  }
+  const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];
+  field('angle_degrees').value='360';confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,0);
+  field('angle_degrees').value='225';field('angle_degrees').dispatchEvent(new UiEvent('input'));
+  run.click();await flush();assert.equal(ui.requests.length,0);
+  confirm.checked=true;run.click();await flush();
+  assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'剖面 A',view_family_type_id:'9007199254740993',
+    origin_mm:{x:100,y:-200,z:300},angle_degrees:225,width_mm:2000,height_mm:3200,depth_mm:4000});
+  await ui.respond(ui.requests[0],{ok:true,executionId:'section-write'});
+});

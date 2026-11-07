@@ -6,6 +6,48 @@ const operations=['create_level','create_grid','pin_element','unpin_element','cr
 const hostPatch={version:'0.8.9',nativeBasicWritesVersion:1,nativeBasicWriteOperations:operations};
 const args=(more)=>({expected_document:SOURCE_DOCUMENT.path,...more});
 const envelope=(request,value)=>{const e=writeEnvelope(request,{value});e.result.operation=request.operation;return e;};
+
+test('section view publishes only valid requests and preserves the actual rollback receipt',async t=>{
+  const tool='revit_create_section_view',operation='create_section_view';
+  const all=[...operations,operation],sectionHost={...hostPatch,nativeBasicWriteOperations:all};
+  const parameters={name:'Section A',view_family_type_id:'9007199254740993',origin_mm:{x:-20,y:2100,z:3050},angle_degrees:225,width_mm:1200,height_mm:3450,depth_mm:4200};
+  const {angle_degrees:angle,...facts}=parameters;
+  const value={...facts,element_id:'9007199254740994',view_kind:'section',look_direction:{x:-Math.SQRT1_2,y:-Math.SQRT1_2,z:0}};
+  const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+  assert.equal(absent.requests.length,0);
+
+  const fixture=await singleParameterWriteFixture(t,{hostPatch:sectionHost,operations:all,respondEnvelope:r=>envelope(r,value)});
+  for(const change of [{name:' Bad'},{name:'Bad\u0007name'},{view_family_type_id:'9223372036854775808'},
+    {origin_mm:{x:0,y:0,z:Infinity}},{angle_degrees:360},{angle_degrees:-0.01},{width_mm:99},{height_mm:1000001},{depth_mm:0},{extra:true}]){
+    await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),fixture.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+  }
+  assert.equal(fixture.requests.length,0);
+  const result=await invokeWorkbench(tool,args(parameters),fixture.options());fixture.remember(result.receiptOwner);
+  assert.equal(fixture.requests.length,1);
+  assert.equal(fixture.requests[0].operation,operation);
+  assert.equal(fixture.requests[0].args.mode,'rollback');
+  assert.equal(fixture.requests[0].args.angle_degrees,angle);
+  assert.deepEqual(result.value,value);
+  assert.equal(result.receiptOwner.inspect().value.status,'received');
+});
+
+test('section geometry or type receipt drift stays unconfirmed without a replay',async t=>{
+  const operation='create_section_view',all=[...operations,operation];
+  const parameters={name:'Section A',view_family_type_id:'3',origin_mm:{x:10,y:20,z:30},angle_degrees:0,width_mm:1000,height_mm:3000,depth_mm:4000};
+  const value={element_id:'5',view_kind:'section',name:parameters.name,view_family_type_id:'3',origin_mm:parameters.origin_mm,
+    look_direction:{x:1,y:0,z:0},width_mm:1000,height_mm:3000,depth_mm:4000};
+  for(const change of [{look_direction:{x:-1,y:0,z:0}},{origin_mm:{x:10.0008,y:20.0008,z:30}},{depth_mm:3999.998},{view_family_type_id:'4'}]){
+    const fixture=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,
+      respondEnvelope:r=>envelope(r,{...value,...change})});
+    let owner;
+    await assert.rejects(invokeWorkbench('revit_create_section_view',args(parameters),fixture.options()),error=>{
+      const facts=workbenchFailureEvidence(error);owner=fixture.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';
+    });
+    assert.equal(owner.inspect().value.status,'unconfirmed');
+    assert.equal(fixture.requests.length,1);
+  }
+});
 test('basic writes require advertised capability before publication',async t=>{
   for(const patch of [{version:'0.8.8'},{nativeBasicWritesVersion:0},{nativeBasicWriteOperations:[]},{nativeBasicWriteOperations:['pin_element','pin_element']}]){
     const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,...patch},operations});
