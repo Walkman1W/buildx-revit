@@ -274,3 +274,10 @@ test('material is searchable and manual submission needs confirmation',async t=>
  assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'Test material',red:12,green:34,blue:56,transparency:25,shininess:50,smoothness:50});
  await ui.respond(ui.requests[0],{ok:true,executionId:'material-write'});
 });
+
+test('change type is searchable and manual form requires confirmation',async t=>{
+ const name='revit_change_element_type';for(const query of [name,'change_element_type','更改构件类型'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(tool=>tool.name===name&&tool.readOnly===false));
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();ui.get('model-command-'+name+'-element_id').value='9007199254740993';ui.get('model-command-'+name+'-target_type_id').value='9007199254740994';
+ const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',element_id:'9007199254740993',target_type_id:'9007199254740994'});await ui.respond(ui.requests[0],{ok:true,executionId:'change-type-write'});
+});

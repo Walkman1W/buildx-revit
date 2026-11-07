@@ -363,3 +363,8 @@ test('material is discoverable in Code Mode elements and guarded by model permis
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
  const result=await dispatcher.invokeCommand(name,{name:'Test material',red:12,green:34,blue:56,transparency:25},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+test('change type contract is discoverable and requires guarded model permission',async()=>{
+ const name='revit_change_element_type',schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(schema.value.inputSchema.properties.mode.default,'rollback');assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{element_id:'1',target_type_id:'2'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
+});

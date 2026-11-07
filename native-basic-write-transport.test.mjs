@@ -321,3 +321,13 @@ test('material explicit shine and smoothness values are read back exactly',async
   assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
  }
 });
+
+test('change type checks host and exact IDs, preserves original receipt, never replays drift',async t=>{
+  const tool='revit_change_element_type',operation='change_element_type',all=[...operations,operation];
+  const parameters={element_id:'9007199254740993',target_type_id:'9007199254740994'},value={element_id:parameters.element_id,before_type_id:'42',target_type_id:parameters.target_type_id,changed:true};
+  const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});await assert.rejects(invokeWorkbench(tool,args(parameters),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
+  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+  for(const change of [{element_id:'0'},{element_id:9007199254740992},{target_type_id:'9223372036854775808'},{element_ids:['1','1']},{extra:1}])await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+  assert.equal(f.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(f.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
+  for(const change of [{element_id:'3'},{target_type_id:'2'},{before_type_id:'0'},{changed:false}]){const x=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;await assert.rejects(invokeWorkbench(tool,args(parameters),x.options()),e=>{const facts=workbenchFailureEvidence(e);owner=x.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(x.requests.length,1);}
+});
