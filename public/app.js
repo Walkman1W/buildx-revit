@@ -1042,16 +1042,16 @@ async function showDynamicApproval(value){
     return;
   }
   const str=(v,max,empty=false)=>typeof v==='string'&&v.length<=max&&(empty||v.length>0)&&!v.includes('\0');
-  const typeWrite=value?.action==='revit_set_type_parameter';
+  const typeWrite=value?.action==='revit_set_type_parameter',projectBinding=value?.action==='revit_bind_existing_project_parameter';
   if(!modelUiEnabled||!ready||!busy||!value||typeof value!=='object'||Array.isArray(value)||
     !str(value.id,200)||!/^\w[\w-]*$/.test(value.id)||typeof value.digest!=='string'||!/^[a-f0-9]{64}$/.test(value.digest)||
     !['terminal','browser','plugin','model'].includes(value.kind)||!str(value.action,16384)||!str(value.target,4096)||
     !str(value.source,512)||!str(value.cwd,4096,true)||!str(value.parameters,65536,true)||
     !Number.isSafeInteger(value.deadline)||value.deadline<=0||!str(value.conversationId,200)||value.conversationId!==lastSession?.conversation?.id||
-    typeWrite&&(value.kind!=='model'||!str(value.typeParameterReview,60000))||!typeWrite&&Object.hasOwn(value,'typeParameterReview')){
+    typeWrite&&(value.kind!=='model'||!str(value.typeParameterReview,60000))||!typeWrite&&Object.hasOwn(value,'typeParameterReview')||projectBinding&&(value.kind!=='model'||!str(value.projectBindingReview,60000))||!projectBinding&&Object.hasOwn(value,'projectBindingReview')){
     invalidateDynamicApproval();box.hidden=true;return;
   }
-  const fields=['id','digest','kind','action','target','cwd','source','parameters','deadline','conversationId','typeParameterReview'];
+  const fields=['id','digest','kind','action','target','cwd','source','parameters','deadline','conversationId','typeParameterReview','projectBindingReview'];
   if(dynamicApproval?.request.id===value.id){
     if(fields.some(key=>dynamicApproval.request[key]!==value[key])){invalidateDynamicApproval();box.hidden=true;}
     return;
@@ -1061,7 +1061,7 @@ async function showDynamicApproval(value){
   const request=Object.freeze(Object.fromEntries(fields.map(key=>[key,value[key]])));
   const owner={request,accountEpoch,contextEpoch,permissionIdentity:typeApprovalPermissionIdentity(),connectionGeneration:modelPickerIdentity.connectionGeneration,
     accountRevision:modelPickerIdentity.accountRevision,state:'pending',timer:null};
-  dynamicApproval=owner;box.replaceChildren();box.hidden=typeWrite;
+  dynamicApproval=owner;box.replaceChildren();box.hidden=typeWrite||projectBinding;
   const expire=()=>{if(dynamicApproval===owner&&['pending','submitting'].includes(owner.state)){settleDynamicApproval(owner,owner.state==='submitting'?'unknown':'expired');updateButtons();}};
   if(request.deadline<=Date.now())expire();else owner.timer=setTimeout(expire,Math.min(request.deadline-Date.now(),2147483647));
   let typeReviewCard=null;
@@ -1079,6 +1079,13 @@ async function showDynamicApproval(value){
       return;
     }
   }
+  if(projectBinding){
+    updateButtons();
+    try{const review=await import('./project-binding-review.mjs');const facts=review.parseProjectBindingReview(request.projectBindingReview);
+      if(dynamicApproval!==owner||owner.state!=='pending')return;if(!dynamicApprovalCurrent(owner)){invalidateDynamicApproval();return;}if(request.deadline<=Date.now()){expire();return;}
+      typeReviewCard=review.renderProjectBindingReview(document,facts);
+    }catch{if(dynamicApproval===owner&&owner.state==='pending'){settleDynamicApproval(owner,'disconnected');box.hidden=true;updateButtons();}return;}
+  }
   box.hidden=false;
   const names={terminal:'终端',browser:'浏览器',plugin:'插件',model:'模型'},title=node('strong','','需要确认 '+names[request.kind]+' 操作'),detail=node('dl');
   for(const [label,text] of typeWrite?[['操作','修改类型参数'],['目标',request.target],['来源',request.source]]:[['操作',request.action],['目标',request.target],['参数',request.parameters],['工作目录',request.cwd],['来源',request.source]]){
@@ -1086,7 +1093,7 @@ async function showDynamicApproval(value){
   }
   const actions=node('div','dynamic-approval-actions'),accept=node('button','','同意本次操作'),decline=node('button','secondary-button','拒绝'),feedback=node('p','dynamic-approval-feedback');
   accept.type='button';decline.type='button';feedback.setAttribute('role','status');actions.append(accept,decline);box.append(title,detail,...(typeReviewCard?[typeReviewCard]:[]),actions,feedback);
-  if(request.kind==='model'&&!typeWrite)box.insertBefore(node('p','dynamic-approval-feedback','请核对完整参数。C# 脚本不是安全沙盒，回滚不能撤销文件、网络等事务外副作用。'),actions);
+  if(request.kind==='model'&&!typeWrite&&!projectBinding)box.insertBefore(node('p','dynamic-approval-feedback','请核对完整参数。C# 脚本不是安全沙盒，回滚不能撤销文件、网络等事务外副作用。'),actions);
   owner.accept=accept;owner.decline=decline;owner.feedback=feedback;
   async function decide(decision){
     if(owner.state!=='pending'||!dynamicApprovalCurrent(owner))return;

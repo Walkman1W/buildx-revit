@@ -340,5 +340,7 @@
   "lib/project-instance-binding-preview.mjs",
   "lib/project-parameter-preparation.mjs",
   "lib/project-binding-approval-owner.mjs",
-  "lib/project-binding-atomic-review.mjs"
+  "lib/project-binding-atomic-review.mjs",
+  "lib/project-binding-panel-approval.mjs",
+  "public/project-binding-review.mjs"
 ]
