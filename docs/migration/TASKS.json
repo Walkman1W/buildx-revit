@@ -342,6 +342,13 @@
       "validationScope": "isolated synthetic verifier and controlled API peers only",
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false
+    },
+    {
+      "id": "BX-PROJECT-BINDING-RECOVERY-ISOLATED-20261107",
+      "title": "项目参数原回执恢复对照",
+      "status": "in_progress",
+      "acceptance": "可信原生 owner 保护身份、跨重启防重及原回执核对；生产门禁仅在安全证据充分后评估",
+      "evidence": "隔离 Node 9/9；请求篡改、宿主替换和重复文件拒绝释放；研究锚点 ABA 未修复，真实 Revit 与断电恢复未验"
     }
   ]
 }
