@@ -707,7 +707,9 @@ namespace RevitLocalCodex
                 try {
 #if BUILDX_BATCH_FILTER_CANDIDATE
                     if (operation == "batch_set_parameters_by_filter")
-                        result = DispatchBatchFilterCandidate(uiapp, id, claimed, claimedText, expires, access, args);
+                        // File identity is not yet bound atomically from publication
+                        // through claim. A macro-enabled build must fail closed too.
+                        throw new InvalidOperationException("Batch candidate unavailable: claimed file identity is not yet proven.");
                     else
 #endif
                     result = atomicRead
