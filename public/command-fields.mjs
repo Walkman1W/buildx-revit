@@ -5,7 +5,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   element_id:'构件',element_ids:'构件',type_id:'类型 ID',target_type_id:'目标类型 ID',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
   name:'名称',description:'说明',parameters:'参数定义',parameter_labels:'输入项名称',parameter_options:'下拉选项与模型来源',steps:'只读步骤',source_request_id:'关联执行请求 ID',
   revision:'命令版本',job_handle:'族作业标识',level_id:'标高',base_level_id:'底部标高 ID',top_level_id:'顶部标高 ID',wall_type_id:'墙类型',pipe_type_id:'管类型',conduit_type_id:'导管类型 ID',duct_type_id:'风管类型 ID',
-  floor_type_id:'楼板类型',symbol_id:'族类型',system_type_id:'系统类型',width_mm:'宽度（mm）',
+  floor_type_id:'楼板类型',roof_type_id:'屋顶类型 ID',origin_xy_mm:'矩形原点 XY（mm）',symbol_id:'族类型',system_type_id:'系统类型',width_mm:'宽度（mm）',
   depth_mm:'深度（mm）',height_mm:'高度（mm）',thickness_mm:'板厚（mm）',shelf_count:'层板数量',
   diameter_mm:'管径（mm）',start_mm:'起点（mm）',end_mm:'终点（mm）',delta_mm:'位移（mm）',
   wall_id:'墙 ID',facing_direction:'朝向（水平单位向量）',point_mm:'位置（mm）',point_xy_mm:'位置 XY（mm）',origin_mm:'起点（mm）',axis_origin_mm:'旋转中心（mm）',
