@@ -1,6 +1,6 @@
 # BuildX 实施状态
 
-更新日期：2026 年 11 月 5 日。
+更新日期：2026 年 11 月 7 日。
 
 主要实施聊天：`01a1a752-4305-77f1-8b04-e8a1b338c1d0`，项目目录 `D:\code\BuildX`。
 
@@ -13,6 +13,10 @@
 `npm run test:native-queries` 最终合并运行 **181/181 通过、0 跳过**；真实 MCP 客户端逐一调用六项并验证完整 structuredContent/outputSchema。实际 C# 服务及参数方法在受控 API peers 中测试，再跨 Node 临时队列校验。宿主检查 **80/80**；最终源码真实 Revit 2024 API 引用编译成功。上述结果均不等于已加载插件或真实模型验收。
 
 ## 已核对与待验
+
+- AEC 候选新增墙上放窗，并合入文字注释。未接入能力余 32 项。放窗支持精确类型、墙、标高与内部坐标，默认回滚；已确认创建的安全整数 ID 可作为视觉检查来源。真实 Codex 在合成会话按需读取契约后调用一次模拟预览。Revit 2024 API 引用编译通过；真实 Revit 窗族、事务和 WebView 待验。[放窗验收](AEC-WINDOW-WRITE.zh-CN.md)
+
+- AEC 候选新增文字注释，原 50 项未接入能力还剩 33 项。生产 C# 受控夹具 45/45、宿主 105/105、Node 串行 120/120，含 Code Mode、全目录 `@` 和命令栏多行确认。36 份 C# 使用 Revit 2024 API 引用编译通过。真实 Revit 定位、多行呈现、事务和 WebView 待验。[文字注释验收](AEC-TEXT-NOTE-WRITE.zh-CN.md)
 
 - AEC 候选新增视图样板应用，原 50 项未接入能力还剩 34 项。生产 C# 受控夹具 38/38、宿主 105/105、Node 串行 116/116，36 份 C# 使用 Revit 2024 API 引用编译通过。Code Mode、全目录 `@` 和命令栏确认通过受控验证，真实 Revit 样板控制、事务和 WebView 待验。[视图样板验收](AEC-VIEW-TEMPLATE-WRITE.zh-CN.md)
 - AEC 候选新增图纸视口放置，原 50 项未接入能力还剩 35 项。生产 C# 受控夹具 30/30、宿主 105/105、Node 串行 112/112，36 份 C# 使用 Revit 2024 API 引用编译通过。Code Mode、全目录 `@` 和命令栏确认通过受控验证，真实 Revit 纸面定位、事务和 WebView 待验。[视口验收](AEC-VIEWPORT-WRITE.zh-CN.md)

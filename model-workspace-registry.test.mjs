@@ -312,3 +312,14 @@ test('view template is discoverable in Code Mode views and requires a guarded mo
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
  const result=await dispatcher.invokeCommand(name,{view_id:'1',template_id:'2'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+test('text note is discoverable in Code Mode views and requires a guarded model transaction',async()=>{
+ const name='revit_create_text_note',found=[];let offset=0,more=true;
+ while(more){const result=describeModelOperationSchema({domain:'views',offset,limit:3});assert.equal(result.ok,true);found.push(...result.value.tools.map(tool=>tool.name));more=result.value.hasMore;offset+=3;}
+ assert.equal(found.filter(item=>item===name).length,1);assert.equal(supportsModelPermissionTool(name),true);
+ const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);assert.ok(registered);assert.equal(registered.inputSchema.properties.mode.default,'rollback');
+ assert.deepEqual(describeModelOperationSchema({tool:name}).value.inputSchema,registered.inputSchema);
+ assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(modelCommandById(name).readOnly,false);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
+ const result=await dispatcher.invokeCommand(name,{view_id:'1',text_type_id:'2',point_mm:{x:0,y:0,z:0},text:'hello'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
+});

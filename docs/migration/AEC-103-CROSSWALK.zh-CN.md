@@ -1,10 +1,10 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **78 项**，包括 43 项只读查询和 35 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **80 项**，包括 43 项只读查询和 37 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
-AEC 侧有 **27 项已有同名工具、19 项已接入候选、14 项有关联工具、34 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
+AEC 侧有 **27 项已有同名工具、21 项已接入候选、14 项有关联工具、32 项未接入、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。关联工具可能仅覆盖一部分用途。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
-本批增加视图样板应用。既有候选涵盖视口放置、普通和占位图纸、直风管、直线电气导管、楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[视图样板验收](AEC-VIEW-TEMPLATE-WRITE.zh-CN.md) · [视口验收](AEC-VIEWPORT-WRITE.zh-CN.md) · [图纸验收](AEC-SHEET-WRITE.zh-CN.md) · [风管验收](AEC-DUCT-WRITE.zh-CN.md) · [导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
+本批增加墙上放窗，并合入文字注释候选。既有候选涵盖视图样板、视口放置、普通和占位图纸、直风管、直线电气导管、楼层平面图、等轴测三维视图、材料用量、碰撞候选、标高、直线轴网、固定构件和取消固定。管道连接查询 `revit_get_pipe_network` 是 BuildX 自有能力，未计入 AEC 的 103 行。[放窗验收](AEC-WINDOW-WRITE.zh-CN.md) · [文字注释验收](AEC-TEXT-NOTE-WRITE.zh-CN.md) · [视图样板验收](AEC-VIEW-TEMPLATE-WRITE.zh-CN.md) · [视口验收](AEC-VIEWPORT-WRITE.zh-CN.md) · [图纸验收](AEC-SHEET-WRITE.zh-CN.md) · [风管验收](AEC-DUCT-WRITE.zh-CN.md) · [导管验收](AEC-CONDUIT-WRITE.zh-CN.md) · [视图验收](AEC-VIEW-WRITES.zh-CN.md) · [工作区验收](AEC-WORKSPACE-WAVE.zh-CN.md)
 
 ## 模型查询与检查
 
@@ -98,7 +98,7 @@ AEC 侧有 **27 项已有同名工具、19 项已接入候选、14 项有关联�
 | `revit_renumber_sheets` | 批量重编号 | 未接入 |
 | `revit_set_selection` | 设置当前选择 | 未接入 |
 | `revit_select_by_unique_ids` | 按 UniqueId 选择并缩放 | 未接入 |
-| `revit_create_text_note` | 创建文字注释 | 未接入 |
+| `revit_create_text_note` | 创建文字注释 | 候选 · 指定视图与文字类型精确 ID、内部坐标毫米锚点及纯文本，回读文本和位置。[验收](AEC-TEXT-NOTE-WRITE.zh-CN.md) |
 | `revit_create_tag` | 标记构件 | 关联能力 · `revit_smart_annotate`。以当前视图、选中构件和标签类型为条件。 |
 | `revit_create_schedule` | 创建明细表 | 未接入 |
 | `revit_get_schedule_data` | 读取明细表单元格 | 已接入候选 · 按明细表 ID 读取正文显示值，行列分别分页。尚未实机验证。 |
@@ -114,7 +114,7 @@ AEC 侧有 **27 项已有同名工具、19 项已接入候选、14 项有关联�
 | --- | --- | --- |
 | `revit_place_family_instance` | 放置族实例 | 已有同名 |
 | `revit_place_door` | 在墙上放置门 | 已有同名 |
-| `revit_place_window` | 在墙上放置窗 | 未接入 |
+| `revit_place_window` | 在墙上放置窗 | 候选 · 指定窗类型、直墙、标高和内部坐标位置，支持水平朝向，回读宿主、位置和尺寸。[验收](AEC-WINDOW-WRITE.zh-CN.md) |
 | `revit_list_families` | 列出已载族及类型 | 关联能力 · `revit_list_family_types`。以类型为主，未提供完整族层级。 |
 | `revit_edit_family` | 打开族编辑 | 关联能力 · `revit_family_inspect_job`。读取已存在的族作业，任意现有族打开编辑另议。 |
 | `revit_change_element_type` | 批量更换构件类型 | 未接入 |
