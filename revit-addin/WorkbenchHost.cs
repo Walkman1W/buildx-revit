@@ -672,7 +672,8 @@ namespace RevitLocalCodex
             try
             {
                 if (new FileInfo(claimed).Length > 128 * 1024) throw new InvalidOperationException("Request exceeds 128 KiB.");
-                var request = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(claimed));
+                string claimedText = File.ReadAllText(claimed);
+                var request = json.Deserialize<Dictionary<string, object>>(claimedText);
                 if (Text(request, "id") != id) throw new InvalidOperationException("Request id mismatch.");
                 if (Text(request, "targetSession") != session) throw new InvalidOperationException("Revit session changed; query status again.");
                 DateTime expires;
@@ -703,7 +704,13 @@ namespace RevitLocalCodex
                 dispatchStartedTicks = Stopwatch.GetTimestamp();
                 validationFinishedTicks = dispatchStartedTicks;
                 dispatchStarted = true;
-                try { result = atomicRead
+                try {
+#if BUILDX_BATCH_FILTER_CANDIDATE
+                    if (operation == "batch_set_parameters_by_filter")
+                        result = DispatchBatchFilterCandidate(uiapp, id, claimed, claimedText, expires, access, args);
+                    else
+#endif
+                    result = atomicRead
                     ? DispatchAtomicRead(uiapp, operation, args ?? new Dictionary<string, object>(), id, access)
                     : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access); }
                 finally { dispatchFinishedUtc = DateTime.UtcNow; dispatchFinishedTicks = Stopwatch.GetTimestamp(); }
@@ -735,6 +742,38 @@ namespace RevitLocalCodex
             };
             WriteAtomic(Path.Combine(queue, "outbox", id + ".json"), success, successWithTiming);
         }
+
+#if BUILDX_BATCH_FILTER_CANDIDATE
+        // Compile-time experimental only. No tool catalog or capability advertises
+        // this operation. The claimed request is held open without write/delete
+        // sharing throughout the dialog and transaction on Windows.
+        private object DispatchBatchFilterCandidate(UIApplication app, string id, string claimed, string claimedText, DateTime expires, AccessPolicy.Binding access, Dictionary<string, object> args)
+        {
+            if (access == null || args == null || app == null || app.ActiveUIDocument == null || app.ActiveUIDocument.Document == null)
+                throw new InvalidOperationException("A bound access policy, request and active document are required.");
+            Document document = app.ActiveUIDocument.Document;
+            RequireProjectEdit(document, ExpectedDocument(args), access);
+            string cancel = Path.Combine(queue, "cancel", id + ".json");
+            using (var locked = new FileStream(claimed, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                using (var reader = new StreamReader(locked, System.Text.Encoding.UTF8, true, 1024, true))
+                    if (!String.Equals(reader.ReadToEnd(), claimedText, StringComparison.Ordinal)) throw new InvalidOperationException("Claimed request changed before review.");
+                var owner = new BatchFilterHostCandidate(session,
+                    requestId => requestId == id && DateTime.UtcNow < expires && File.Exists(claimed),
+                    requestId => {
+                        if (requestId != id) return true;
+                        try { File.GetAttributes(Path.GetDirectoryName(cancel)); File.GetAttributes(cancel); return true; }
+                        catch (FileNotFoundException) { return false; }
+                        catch { return true; }
+                    },
+                    (ui, current) => {
+                        try { RequireProjectEdit(current, ExpectedDocument(args), access); return true; }
+                        catch { return false; }
+                    });
+                return FreezeResult(owner.Run(app, id, session, args));
+            }
+        }
+#endif
 
         private static bool AtomicReadRequested(Dictionary<string, object> request, string operation)
         {
