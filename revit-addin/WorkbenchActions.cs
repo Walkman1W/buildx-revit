@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_schedule", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -101,7 +101,7 @@ namespace RevitLocalCodex
                     else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -500,6 +500,23 @@ namespace RevitLocalCodex
         private static object BasicWrite(UIApplication uiapp, string operation, Dictionary<string, object> args, BasicCreatedExpectation created)
         {
             Document doc = uiapp.ActiveUIDocument.Document;
+            if (operation == "create_schedule")
+            {
+                Fields(args, "expected_document", "mode", "name", "category");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Schedules require a project document.");
+                string name = SectionName(args), categoryName = Required(args, "category") as string;
+                BuiltInCategory category;
+                if (String.IsNullOrEmpty(categoryName) || !categoryName.StartsWith("OST_", StringComparison.Ordinal)
+                    || !Enum.TryParse<BuiltInCategory>(categoryName, false, out category) || !Enum.IsDefined(typeof(BuiltInCategory), category)
+                    || !String.Equals(Enum.GetName(typeof(BuiltInCategory), category), categoryName, StringComparison.Ordinal))
+                    throw new InvalidOperationException("category must be an exact BuiltInCategory enum name.");
+                Category resolved = Category.GetCategory(doc, category);
+                if (resolved == null || !ViewSchedule.IsValidCategoryForSchedule(resolved.Id)) throw new InvalidOperationException("Category is not valid for a regular schedule.");
+                ViewSchedule schedule = ViewSchedule.CreateSchedule(doc, resolved.Id);
+                schedule.Name = name; created.Id = schedule.Id;
+                doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, created.Id);
+            }
             if (operation == "create_section_view")
             {
                 Fields(args, "expected_document", "mode", "view_family_type_id", "name", "origin_mm", "angle_degrees", "width_mm", "height_mm", "depth_mm");
@@ -685,6 +702,17 @@ namespace RevitLocalCodex
         private static object ReadBasicCreated(Document doc, string operation, Dictionary<string, object> args, ElementId id)
         {
             Element element = doc.GetElement(id);
+            if (operation == "create_schedule")
+            {
+                ViewSchedule schedule = element as ViewSchedule;
+                BuiltInCategory category = (BuiltInCategory)Enum.Parse(typeof(BuiltInCategory), (string)Required(args, "category"), false);
+                Category resolved = Category.GetCategory(doc, category);
+                if (schedule == null || !schedule.IsValidObject || schedule.IsTemplate || schedule.Definition == null || resolved == null
+                    || schedule.Definition.CategoryId.Value != resolved.Id.Value || schedule.Definition.GetFieldCount() != 0
+                    || !String.Equals(schedule.Name, SectionName(args), StringComparison.Ordinal))
+                    throw new InvalidOperationException("Created schedule identity, category, name or empty field list changed.");
+                return new { element_id = DescribedId(schedule.Id), name = schedule.Name, category = (string)Required(args, "category"), field_count = 0 };
+            }
             if (operation == "create_section_view")
             {
                 ViewSection section = element as ViewSection;

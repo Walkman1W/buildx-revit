@@ -271,3 +271,20 @@ test('text note receipt mismatch remains unconfirmed without replay',async t=>{
  const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,point_mm:{x:1.0006,y:2.0006,z:3}})});
  const result=await invokeWorkbench('revit_create_text_note',args(parameters),f.options());f.remember(result.receiptOwner);assert.equal(result.receiptOwner.inspect().value.status,'received');assert.equal(f.requests.length,1);
 });
+
+test('schedule requires capability, preserves receipt and rejects result drift without replay',async t=>{
+  const tool='revit_create_schedule',operation='create_schedule',all=[...operations,operation];
+  const parameters={name:'Walls schedule',category:'OST_Walls'},value={element_id:'9007199254740993',...parameters,field_count:0};
+  const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
+  const fixture=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+  for(const change of [{name:' Bad'},{name:'Bad\u0007name'},{category:'Walls'},{extra:true}])await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),fixture.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+  assert.equal(fixture.requests.length,0);
+  const result=await invokeWorkbench(tool,args(parameters),fixture.options());fixture.remember(result.receiptOwner);
+  assert.equal(fixture.requests.length,1);assert.equal(fixture.requests[0].args.mode,'rollback');assert.deepEqual(result.value,value);assert.equal(result.receiptOwner.inspect().value.status,'received');
+  for(const change of [{field_count:1},{category:'OST_Doors'},{name:'other'}]){
+    const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;
+    await assert.rejects(invokeWorkbench(tool,args(parameters),f.options()),e=>{const facts=workbenchFailureEvidence(e);owner=f.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+    assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
+  }
+});

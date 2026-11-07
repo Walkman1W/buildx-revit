@@ -250,3 +250,12 @@ test('section view search and manual form accept exact type and bounded geometry
     origin_mm:{x:100,y:-200,z:300},angle_degrees:225,width_mm:2000,height_mm:3200,depth_mm:4000});
   await ui.respond(ui.requests[0],{ok:true,executionId:'section-write'});
 });
+
+test('schedule is searchable and manual form requires confirmation',async t=>{
+ const name='revit_create_schedule';for(const query of [name,'create_schedule','创建明细表'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(tool=>tool.name===name&&tool.readOnly===false));
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ ui.get('model-command-'+name+'-name').value='墙明细';ui.get('model-command-'+name+'-category').value='OST_Walls';
+ const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);
+ confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'墙明细',category:'OST_Walls'});await ui.respond(ui.requests[0],{ok:true,executionId:'schedule-write'});
+});

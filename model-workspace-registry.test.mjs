@@ -345,3 +345,10 @@ test('section view is discovered in paged views and runs only through the guarde
     angle_degrees:90,width_mm:1000,height_mm:3000,depth_mm:4000},{confirmed:false});
   assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+test('schedule is discoverable and guarded as a model transaction',async()=>{
+ const name='revit_create_schedule';const schema=describeModelOperationSchema({tool:name});assert.equal(schema.ok,true);assert.equal(schema.value.inputSchema.properties.mode.default,'rollback');
+ assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
+ const result=await dispatcher.invokeCommand(name,{name:'Walls',category:'OST_Walls'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
+});
