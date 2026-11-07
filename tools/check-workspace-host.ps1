@@ -58,6 +58,6 @@ if($LASTEXITCODE-ne 0){throw 'Managed verifier compilation failed.'}
 & $program (Join-Path $evidence 'receipts') | Set-Content -LiteralPath (Join-Path $evidence 'results.json') -Encoding utf8
 if($LASTEXITCODE-ne 0){throw 'Managed verification failed.'}
 $result=Get-Content -LiteralPath (Join-Path $evidence 'results.json') -Raw|ConvertFrom-Json
-if($result.checks-ne 108 -or @($result.results|Where-Object {-not $_.passed}).Count){throw 'Managed checks are incomplete.'}
+if($result.checks-ne 109 -or @($result.results|Where-Object {-not $_.passed}).Count){throw 'Managed checks are incomplete.'}
 [ordered]@{source=$hostPath;sourceSha256=(Get-FileHash -LiteralPath $hostPath -Algorithm SHA256).Hash.ToLowerInvariant();documentIdentitySource=$documentSourcePath;documentIdentitySha256=(Get-FileHash -LiteralPath $documentSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();accessPolicySource=$accessPolicyPath;accessPolicySha256=(Get-FileHash -LiteralPath $accessPolicyPath -Algorithm SHA256).Hash.ToLowerInvariant();operationClassificationSource=$actionsSourcePath;operationClassificationSha256=(Get-FileHash -LiteralPath $actionsSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();checks=$result.checks;scope='Exact scheduler, request/access validation and native document identity owners with controlled Revit/business peers; not a real Revit run.';methods=@($methods.Keys)}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $evidence 'source-proof.json') -Encoding utf8
 Write-Output ('Managed checks passed: '+$result.checks+'; evidence: '+$evidence)

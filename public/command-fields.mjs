@@ -1,7 +1,7 @@
 // Native, reusable field presentation. Tool schemas and the server continue to
 // own validation and execution; controls only collect explicit user choices.
 export const COMMAND_PARAMETER_LABELS = Object.freeze({
-  action:'操作',baseline_token:'基线 token',expected_version:'固定事件版本',
+  action:'操作',baseline_token:'基线 token',expected_version:'固定事件版本',expected_snapshot:'上一页快照指纹',
   keyword:'关键词',category:'类别',category1:'第一类别',category2:'第二类别',name_contains:'名称包含',limit:'每页数量',offset:'起始位置',
   category_ids:'类别 ID（每行一个）',definition_guid:'共享参数 GUID',definition_id:'参数定义 ID',data_type:'数据类型 ID',element_uids:'构件 UniqueId（每行一个）',element_id:'构件',element_ids:'构件',type_id:'类型 ID',target_type_id:'目标类型 ID',old_type_id:'原族类型 ID',new_type_id:'新族类型 ID',parameter_id:'参数 ID',parameter_name:'参数名称',mode:'执行方式',code:'C# 方法体',command_id:'命令 ID',
   name:'名称',description:'说明',parameters:'参数定义',parameter_labels:'输入项名称',parameter_options:'下拉选项与模型来源',steps:'只读步骤',source_request_id:'关联执行请求 ID',

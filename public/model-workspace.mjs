@@ -147,6 +147,18 @@ export function modelCommandPresentation(command) {
     view.columns = ['名称','类别','ID'];
     view.rows = (Array.isArray(data.items) ? data.items : []).slice(0,200).map(item => [text(item.name),text(item.category),text(item.element_id)]);
     if (Number.isSafeInteger(data.returned) && Number.isSafeInteger(data.total)) view.summary = '显示 ' + data.returned + ' / ' + data.total + ' 项' + (data.has_more || data.truncated ? ' · 仅展示本次返回' : '');
+  } else if (command.commandId === 'revit_preview_project_parameter_binding') {
+    const payload=Object.hasOwn(data,'value')?data.value:data;
+    if(payload?.schema_version!==1||payload.coverage!=='complete_current_document_instances'||payload.authorization!=='not_granted'||payload.binding_attempted!==false||
+      !Number.isSafeInteger(payload.instance_count)||payload.instance_count<0||payload.instance_count>500||!Number.isSafeInteger(payload.offset)||payload.offset<0||
+      !Number.isSafeInteger(payload.limit)||payload.limit<1||payload.limit>50||typeof payload.snapshot_id!=='string'||!/^[a-f0-9]{64}$/.test(payload.snapshot_id)||
+      !Array.isArray(payload.instances)||payload.instances.length!==Math.min(payload.limit,payload.instance_count-payload.offset)||payload.offset>payload.instance_count||
+      payload.has_more!==(payload.offset+payload.instances.length<payload.instance_count)||payload.instances.some(item=>!item||typeof item.element_id!=='string'||typeof item.category_id!=='string'||typeof item.unique_id!=='string')){
+      view.status='结果待核对';view.error='项目参数影响预览不完整，请核对原回执。';return view;
+    }
+    view.columns=['构件 ID','类别 ID','UniqueId'];view.rows=payload.instances.map(item=>[item.element_id,item.category_id,item.unique_id]);
+    view.summary='显示 '+payload.offset+' 起的 '+payload.instances.length+' / '+payload.instance_count+' 个当前实例；未来实例也可能受影响。本次只读，不授予写入权限。'+
+      (payload.has_more?' 下一页须使用相同快照指纹：'+payload.snapshot_id:'');
   } else if (command.commandId === 'revit_preview_batch_parameter_filter') {
     const payload=Object.hasOwn(data,'value')?data.value:data;
     if(payload?.schema_version!==1||payload.scope!=='exact_category_type_level_instances'||payload.complete!==true||payload.write_authorization!=='not_granted'||
@@ -186,7 +198,7 @@ export function modelCommandPresentation(command) {
       view.rows = Object.entries(payload).slice(0,40).map(([key,value]) => [key,typeof value === 'object' && value !== null ? JSON.stringify(value) : text(value)]);
     } else view.rows = [['返回值',typeof payload === 'object' ? JSON.stringify(payload) : text(payload)]];
   }
-  if (!view.rows.length && command.commandId !== 'revit_preview_batch_parameter_filter') view.summary = command.commandId === 'selection' ? '当前没有选择构件' : command.commandId === 'levels' ? '没有标高' : '没有匹配的构件';
+  if (!view.rows.length && !['revit_preview_batch_parameter_filter','revit_preview_project_parameter_binding'].includes(command.commandId)) view.summary = command.commandId === 'selection' ? '当前没有选择构件' : command.commandId === 'levels' ? '没有标高' : '没有匹配的构件';
   return view;
 }
 

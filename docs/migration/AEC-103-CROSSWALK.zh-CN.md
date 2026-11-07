@@ -1,6 +1,6 @@
 # AEC Revit 103 项与 BuildX 工具对照
 
-按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **104 项**，包括 45 项只读查询和 59 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
+按固定的 AEC Revit provider 清单核对 **103 个工具名称**。当前 BuildX 工作区候选源码注册 **105 项**，包括 46 项只读查询和 59 项其他操作。工作区另有 BuildX 自有能力，工具总数与 AEC 覆盖数分别统计。本表按源码和契约核对，试用宿主是否已经加载这些能力以实际验证记录为准。[AEC 源清单](aec-revit-command-inventory.json)
 
 AEC 侧有 **27 项已有同名工具、44 项具名候选、14 项有关联工具、9 项尚无具名入口、9 项暂缓**。同名工具按 BuildX 的 ID、单位、分页、权限和回执契约使用。具名候选和关联工具可能只覆盖原工具的一部分用途；下表注明边界，不代表真实 Revit 验收。暂缓项涉及文档、中心模型、反射或通用脚本的较高权限。
 
@@ -45,7 +45,7 @@ AEC 侧有 **27 项已有同名工具、44 项具名候选、14 项有关联工�
 | `revit_list_shared_parameters` | 读取文档中的共享参数 | 已有同名 |
 | `revit_create_shared_parameter` | 建立共享参数 | 未接入 |
 | `revit_list_project_parameters` | 读取项目参数 | 已有同名 |
-| `revit_create_project_parameter` | 建立项目参数 | 未接入 |
+| `revit_create_project_parameter` | 建立项目参数 | 写入未接入 · BuildX 只读 `revit_preview_project_parameter_binding` 预览现有未绑定共享定义的实例影响并按固定指纹分页，不创建或绑定参数。 |
 | `revit_batch_set_parameters` | 按显式构件批量写参数 | 关联能力 · `revit_set_parameters`。显式实例和参数 ID，按批次上限处理。 |
 | `revit_get_type_parameters` | 读取类型参数 | 已有同名 |
 | `revit_set_type_parameter` | 写入类型参数 | 已有同名 |

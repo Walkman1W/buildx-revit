@@ -60,9 +60,9 @@
       "latestAecBatch": {
         "ledger": "AEC-103-CROSSWALK.zh-CN.md",
         "verification": "AEC-HIGH-FREQUENCY-BATCH-20261107.zh-CN.md",
-        "workspaceToolCount": 104,
-        "readQueryCount": 45,
-        "extraBuildxReadOnlyCandidates": ["revit_preview_batch_parameter_filter"],
+        "workspaceToolCount": 105,
+        "readQueryCount": 46,
+        "extraBuildxReadOnlyCandidates": ["revit_preview_batch_parameter_filter", "revit_preview_project_parameter_binding"],
         "newNamedCandidates": 22,
         "aecNamesWithoutCandidate": 9,
         "previouslyDeferred": 9,

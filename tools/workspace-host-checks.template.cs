@@ -78,6 +78,8 @@ namespace RevitLocalCodex {
     internal sealed class FamilyApprovalPeer { public void DisposeApprovalObserver(){} }
     internal static class WorkbenchActions {
         // ORIGINAL_OPERATION_CLASSIFICATION
+        internal static int BatchPreviewCalls;
+        internal static object PreviewBatchParameterFilter(Document doc,string category,long? typeId,long? levelId,long parameterId){BatchPreviewCalls++;if(doc==null||category!="OST_Walls"||parameterId!=-100)throw new InvalidOperationException("Invalid batch preview facts");return new { complete=true,write_authorization="not_granted" };}
         // Type-write business behavior is tested by the separate actual
         // book/writer producer. Scheduler checks must never approve it here.
         internal sealed class TypeWritePlan { internal long TypeId,ParameterId; internal string ExpectedDocument; }
@@ -87,8 +89,9 @@ namespace RevitLocalCodex {
         internal static TypeWritePreparation PrepareTypeParameterWrite(Document doc,Dictionary<string,object> args){throw new NotSupportedException("Type writing is outside scheduler checks.");}
     }
     internal static class NativeModelQueries {
-        internal static long ExactId(Dictionary<string,object> args,string key){throw new NotSupportedException("Type writing is outside scheduler checks.");}
-        internal static long ExactSignedId(Dictionary<string,object> args,string key){throw new NotSupportedException("Type writing is outside scheduler checks.");}
+        internal static void Fields(Dictionary<string,object> args,params string[] fields){foreach(string key in args.Keys)if(!fields.Contains(key))throw new InvalidOperationException("Unexpected field");}
+        internal static long ExactId(Dictionary<string,object> args,string key){return Convert.ToInt64(args[key]);}
+        internal static long ExactSignedId(Dictionary<string,object> args,string key){return Convert.ToInt64(args[key]);}
     }
     internal sealed class TypeParameterWriteApproval {
         internal const string PermitArgument="__native_type_write_permit";
@@ -403,6 +406,20 @@ namespace RevitLocalCodex {
             if(!mismatch||snapshotBridge.Calls!=1)throw new Exception("Snapshot mismatched document dispatched");
             return new {name="snapshot-atomic",passed=true,dispatchCalls=snapshotBridge.Calls};
         }
+        public object CheckBatchPreviewAtomic() {
+            WorkbenchActions.BatchPreviewCalls=0;
+            foreach(var request in new[]{new Dictionary<string,object>(),new Dictionary<string,object>{{"atomicRead",false}}}) {
+                bool refused=false;try{AtomicReadRequested(request,"preview_batch_parameter_filter");}catch(InvalidOperationException){refused=true;}
+                if(!refused||WorkbenchActions.BatchPreviewCalls!=0)throw new Exception("Batch preview admitted without atomic snapshot");
+            }
+            var args=new Dictionary<string,object>{{"category","OST_Walls"},{"parameter_id","-100"}};
+            var result=(Dictionary<string,object>)DispatchAtomicRead(new UIApplication(),"preview_batch_parameter_filter",args,"fixture",null);
+            var value=(Dictionary<string,object>)result["value"];var doc=(Dictionary<string,object>)value["document"];
+            if(WorkbenchActions.BatchPreviewCalls!=1||(string)doc["path"]!="D:\\fixture.rvt"||(string)value["operation"]!="preview_batch_parameter_filter"||(bool)value["modifiedByOperation"]||(string)result["hostSession"]!=session)throw new Exception("Batch preview atomic identity mismatch");
+            bool mismatch=false;try{DispatchAtomicRead(new UIApplication(),"preview_batch_parameter_filter",new Dictionary<string,object>{{"category","OST_Walls"},{"parameter_id","-100"},{"expected_document","D:\\other.rvt"}},"fixture",null);}catch(InvalidOperationException){mismatch=true;}
+            if(!mismatch||WorkbenchActions.BatchPreviewCalls!=1)throw new Exception("Batch preview mismatched document dispatched");
+            return new {name="batch-preview-atomic",passed=true,dispatchCalls=WorkbenchActions.BatchPreviewCalls};
+        }
         public object CheckNamedRead(string operation) {
             var request = new Dictionary<string, object> { { "atomicRead", true } };
             if (!WorkbenchActions.IsRead(operation) || RequiresProjectEdit(operation) || !AtomicReadRequested(request, operation))
@@ -662,6 +679,7 @@ namespace RevitLocalCodex {
                 foreach(string name in new[]{"queue-oldest-finalized-file","queue-time-tie","queue-observed-retained","queue-observed-missing","queue-observed-claimed","queue-observed-receipt","queue-observed-expired","queue-invalid-and-claimed-excluded"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckQueueOrder(name));}
                 foreach(string name in new[]{"atomic-project-binding-raw-queue","atomic-auto-bind","atomic-explicit-mismatch","atomic-document-changed","atomic-null-status","atomic-null-health","atomic-native-document","atomic-invalid-flag","atomic-write-refused","idle-empty","idle-pending","idle-bounded","atomic-equivalent-wrapper","atomic-same-path-new-document","atomic-invalid-before","atomic-invalid-after","atomic-view-changed","atomic-null-to-document"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
                 current="snapshot-atomic";results.Add(new WorkbenchHost(Path.Combine(root,current)).CheckSnapshotAtomic());
+                current="batch-preview-atomic";results.Add(new WorkbenchHost(Path.Combine(root,current)).CheckBatchPreviewAtomic());
                 foreach(string name in new[]{"atomic-preparation-success","atomic-preparation-document-changed","atomic-preparation-view-changed","atomic-preparation-without-snapshot"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}
                 foreach(string operation in new[]{"preview_project_parameter_binding","get_warnings","get_rvt_links","get_link_instances","get_pipe_network","get_revision_sequences","get_schedule_data","get_group_members","calculate_material_quantities","check_clashes"}){current=operation;results.Add(new WorkbenchHost(Path.Combine(root,operation)).CheckNamedRead(operation));}
                 foreach(string name in new[]{"wake-once-and-timing","wake-stale-after-completion","wake-stale-after-dispose","wake-abort-failure-retry","wake-post-failure-expired","wake-raise-denied","wake-shutdown","wake-cleanup-blocks-next"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckWake(name));}
