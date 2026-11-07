@@ -91,6 +91,13 @@ namespace Autodesk.Revit.DB {
 namespace RevitLocalCodex {
  internal static class AccessPolicy {internal sealed class Binding {}}
  internal static partial class WorkbenchActions {
+        // View-template writes are outside this parameter-write fixture.
+        private static object ApplyViewTemplate(Document doc, Dictionary<string, object> args, out ElementId before) { before = null; throw new InvalidOperationException("Out of scope view-template peer."); }
+        private static object VerifyViewTemplate(Document doc, Dictionary<string, object> args, ElementId before = null) { throw new InvalidOperationException("Out of scope view-template peer."); }
+        // Window placement is outside this fixture; window producer tests exercise the real methods.
+        private static object PlaceWindow(Document doc, Dictionary<string, object> args, BasicCreatedExpectation created) { throw new InvalidOperationException("Out of scope window-write peer."); }
+        private static object ReadWindow(Document doc, Dictionary<string, object> args, ElementId id) { throw new InvalidOperationException("Out of scope window-write peer."); }
+
   internal static bool IsRead(string op){return NativeParameterQueries.IsRead(op)||NativeModelQueries.IsRead(op);}
   internal static object Read(UIApplication app,string op,Dictionary<string,object> args){return NativeParameterQueries.IsRead(op)?NativeParameterQueries.Read(app,op,args):NativeModelQueries.Read(app,op,args);}
   private sealed class BasicCreatedExpectation { internal ElementId Id; }

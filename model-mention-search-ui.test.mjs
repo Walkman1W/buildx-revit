@@ -184,3 +184,21 @@ test('view template is searchable and manual submission requires one confirmatio
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',view_id:'9007199254740993',template_id:'9007199254740994'});
  await ui.respond(ui.requests[0],{ok:true,executionId:'view-template-write'});
 });
+
+test('window mention and manual form require confirmation and preserve rollback',async t=>{
+ const name='revit_place_window',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+ assert.equal(tool?.label,'在墙上放置窗');assert.equal(tool.readOnly,false);
+ for(const query of [name,'place_window','pw','在墙上放置窗'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@pw');const picker=ui.get('model-tool-picker');
+ const option=picker.querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();
+ assert.equal(ui.get('prompt').value,'@'+name+' ');assert.equal(ui.requests.length,0);
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [key,value] of Object.entries({symbol_id:'101',wall_id:'202',level_id:'303'}))ui.get('model-command-'+name+'-'+key).value=value;
+ for(const [axis,value] of Object.entries({x:1000,y:0,z:1000}))ui.get('model-command-'+name+'-point_mm-'+axis).value=String(value);
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,name);assert.equal(ui.requests[0].body.confirmed,true);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',symbol_id:101,wall_id:202,level_id:303,point_mm:{x:1000,y:0,z:1000}});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'window-fixture'});
+});

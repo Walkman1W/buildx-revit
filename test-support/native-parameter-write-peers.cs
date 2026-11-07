@@ -142,6 +142,13 @@ namespace RevitLocalCodex {
         private static object TransformElements(Document doc,string operation,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope transform peer."); }
         private static object CreateWall(UIApplication app,Dictionary<string,object> args) { throw new InvalidOperationException("Out of scope wall peer."); }
         private sealed class BasicCreatedExpectation { internal ElementId Id; }
+        // View-template writes are outside this parameter-write fixture.
+        private static object ApplyViewTemplate(Document doc, Dictionary<string, object> args, out ElementId before) { before = null; throw new InvalidOperationException("Out of scope view-template peer."); }
+        private static object VerifyViewTemplate(Document doc, Dictionary<string, object> args, ElementId before = null) { throw new InvalidOperationException("Out of scope view-template peer."); }
+        // Window placement is outside this fixture; window producer tests exercise the real methods.
+        private static object PlaceWindow(Document doc, Dictionary<string, object> args, BasicCreatedExpectation created) { throw new InvalidOperationException("Out of scope window-write peer."); }
+        private static object ReadWindow(Document doc, Dictionary<string, object> args, ElementId id) { throw new InvalidOperationException("Out of scope window-write peer."); }
+
         private static object BasicWrite(UIApplication app,string operation,Dictionary<string,object> args,BasicCreatedExpectation created) { throw new InvalidOperationException("Out of scope basic-write peer."); }
         private static void VerifyPinned(Document doc,Dictionary<string,object> args,bool desired) { throw new InvalidOperationException("Out of scope basic-write peer."); }
         private static object ReadBasicCreated(Document doc,string operation,Dictionary<string,object> args,ElementId id) { throw new InvalidOperationException("Out of scope basic-write peer."); }

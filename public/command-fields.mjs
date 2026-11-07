@@ -8,7 +8,7 @@ export const COMMAND_PARAMETER_LABELS = Object.freeze({
   floor_type_id:'楼板类型',symbol_id:'族类型',system_type_id:'系统类型',width_mm:'宽度（mm）',
   depth_mm:'深度（mm）',height_mm:'高度（mm）',thickness_mm:'板厚（mm）',shelf_count:'层板数量',
   diameter_mm:'管径（mm）',start_mm:'起点（mm）',end_mm:'终点（mm）',delta_mm:'位移（mm）',
-  point_mm:'位置（mm）',origin_mm:'起点（mm）',axis_origin_mm:'旋转中心（mm）',
+  wall_id:'墙 ID',facing_direction:'朝向（水平单位向量）',point_mm:'位置（mm）',origin_mm:'起点（mm）',axis_origin_mm:'旋转中心（mm）',
   angle_degrees:'旋转角度（°）',offset_mm:'标高偏移（mm）',elevation_mm:'高程（mm）',tolerance_feet:'包围盒容差（英尺）',fields:'返回字段',template_id:'族模板',changes:'参数修改',
   view_id:'视图 ID',view_family_type_id:'视图类型 ID',sheet_id:'图纸 ID',number:'图纸编号',titleblock_id:'图框类型 ID',group_id:'模型组 ID',source_view_id:'参照视图',context_element_ids:'周边参照构件',
   x_mm:'图纸 X（mm）',y_mm:'图纸 Y（mm）',

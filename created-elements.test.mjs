@@ -27,3 +27,16 @@ test('door creation IDs preserve rollback and exact account/conversation/documen
   assert.equal(ledger.record('revit_place_door',receipt({mode:'commit',committed:false}),document,scope),null);
   assert.equal(ledger.record('revit_place_door',receipt({document:'other'}),document,scope),null);
 });
+
+
+test('window creation binds only its safe committed ID to the original scope',()=>{
+  const ledger=createCreatedElementLedger(),result=receipt({value:{element_id:23,wall_id:12,symbol_id:34,level_id:56}});
+  const record=ledger.record('revit_place_window',result,document,scope);
+  assert.deepEqual(record.element_ids,[23]);assert.equal(ledger.resolve(result.request_id,document,scope),record);
+  for(const id of [0,-1,Number.MAX_SAFE_INTEGER+1,'9007199254740993','23',null])assert.equal(ledger.record('revit_place_window',receipt({value:{element_id:id}}),document,scope),null);
+  for(const foreign of [{...scope,account:'other'},{...scope,conversationId:'other'}])assert.throws(()=>ledger.resolve(result.request_id,document,foreign),/当前账号、对话/);
+  for(const foreign of [{...document,session:'a'.repeat(32)},{...document,path:'D:\\samples\\other.rvt'}])assert.throws(()=>ledger.resolve(result.request_id,foreign,scope),/当前账号、对话/);
+  const rollback=receipt({mode:'rollback',committed:false,value:{element_id:24}});
+  assert.equal(ledger.record('revit_place_window',rollback,document,scope).valid_for_inspection,false);
+  assert.throws(()=>ledger.resolve(rollback.request_id,document,scope),/已回滚/);
+});

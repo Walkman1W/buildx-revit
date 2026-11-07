@@ -79,7 +79,8 @@ test('original native receipt inspection restores only its owned pending session
   const req=await request(f),failed=value(f,req.id,req.args);
   failed.value.success=false;failed.value.cleanup_pending=true;failed.value.outcome='cleanup_pending';failed.value.code='VISUAL_RESTORE_PENDING';failed.value.restoration={status:'pending',session_handle:'owned-handle',source_view_unchanged:true};
   await fs.writeFile(path.join(f.root,'queue','outbox',req.id+'.json'),JSON.stringify(envelope(req.id,failed)));
-  const result=await pending,checking=result.receiptOwner.inspect();let recoveryRequest;
+  const result=await pending,initial=await result.receiptOwner.inspect();assert.equal(initial.value.canRestoreVisual,true);
+  const checking=result.receiptOwner.restoreVisual();let recoveryRequest;
   for(let i=0;i<200&&!recoveryRequest;i++){
     for(const name of (await fs.readdir(f.inbox)).filter(name=>name.endsWith('.json')&&name!==req.id+'.json')){
       const candidate=JSON.parse(await fs.readFile(path.join(f.inbox,name),'utf8'));if(candidate.operation==='restore_visual_session')recoveryRequest=candidate;
@@ -105,7 +106,7 @@ test('creation ledger owns producer field interpretation and rejects rollback/fo
 test('dispatcher resolves trusted created source into actual IDs before native inspection',async()=>{
   const calls=[],id=randomUUID();
   const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>({hostSession:source.session,document:{title:source.title,path:source.path}}),invokeWorkbench:async(name,args)=>{calls.push({name,args});return name==='revit_create_wall'?{request_id:id,mode:'commit',committed:true,document:source.title,value:{element_id:23}}:{operation:'inspect_elements',hostSession:source.session,document:{title:source.title,path:source.path},request_id:randomUUID(),value:{success:true}};}});
-  const created=await dispatcher.invokeTool('revit_create_wall',{mode:'commit'},{creationScope:scope});assert.deepEqual(created.created_elements.element_ids,[23]);
+  const created=await dispatcher.invokeTool('revit_create_wall',{mode:'commit',wall_type_id:1,level_id:2,start_mm:{x:0,y:0,z:0},end_mm:{x:1000,y:0,z:0},height_mm:3000},{creationScope:scope});assert.deepEqual(created.created_elements.element_ids,[23]);
   await dispatcher.invokeTool('revit_inspect_elements',{source_request_id:id},{creationScope:scope});assert.deepEqual(calls[1].args.element_ids,[23]);assert.equal(Object.hasOwn(calls[1].args,'source_request_id'),false);
   await assert.rejects(dispatcher.invokeTool('revit_inspect_elements',{source_request_id:id},{creationScope:{...scope,conversationId:'other'}}),/当前账号、对话/);
 });
@@ -124,8 +125,22 @@ test('pending cleanup recovery is bound, concurrent checks share work and unknow
   const original={inspect:()=>({ok:true,value:{status:'unconfirmed',terminal:false,evidence:{restorationStatus:'pending',sessionHandle:'owned-handle'}}}),close:()=>({ok:true,value:{closed:true}})};
   const recovery={inspect:()=>{inspectCalls++;return {ok:true,value:{status:late?'received':'pending',terminal:late,requestId:'recovery-id',evidence:{restorationStatus:late?'restored':'pending'}}};},close:()=>{closeCalls++;return {ok:true,value:{closed:true}};}};
   const owner=createVisualRecoveryOwner({receiptOwner:original,restore:async handle=>{assert.equal(handle,'owned-handle');restoreCalls++;throw new Error('unknown');},failureEvidence:()=>({outcome:'unconfirmed',receiptOwner:recovery,requestIds:['recovery-id']})});
-  await Promise.all([owner.inspect(),owner.inspect()]);assert.equal(restoreCalls,1);
+  const checked=await Promise.all([owner.inspect(),owner.inspect()]);assert.equal(restoreCalls,0);assert.equal(checked[0].value.canRestoreVisual,true);
+  await owner.restoreVisual();assert.equal(restoreCalls,1);
   assert.equal((await owner.inspect()).value.terminal,false);assert.equal(restoreCalls,1);assert.equal(inspectCalls,1);
   late=true;const fixed=await owner.inspect();assert.equal(fixed.value.terminal,true);assert.equal(fixed.value.evidence.recoveryRequestId,'recovery-id');assert.equal(restoreCalls,1);
   await owner.close();assert.equal(closeCalls,1);
+});
+
+
+test('committed window source resolves to its created ID for inspection; rollback cannot resolve',async()=>{
+  const calls=[],id=randomUUID(),rolled=randomUUID();
+  const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>({hostSession:source.session,document:{title:source.title,path:source.path}}),invokeWorkbench:async(name,args)=>{
+    calls.push({name,args});if(name==='revit_place_window')return {request_id:args.mode==='commit'?id:rolled,mode:args.mode,committed:args.mode==='commit',document:source.title,value:{element_id:23,wall_id:12,symbol_id:34,level_id:56}};
+    return {operation:'inspect_elements',hostSession:source.session,document:{title:source.title,path:source.path},request_id:randomUUID(),value:{success:true}};
+  }});
+  const created=await dispatcher.invokeTool('revit_place_window',{mode:'commit',symbol_id:34,wall_id:12,level_id:56,point_mm:{x:0,y:0,z:0}},{creationScope:scope});assert.deepEqual(created.created_elements.element_ids,[23]);
+  await dispatcher.invokeTool('revit_inspect_elements',{source_request_id:id},{creationScope:scope});assert.deepEqual(calls[1].args.element_ids,[23]);
+  await dispatcher.invokeTool('revit_place_window',{mode:'rollback',symbol_id:34,wall_id:12,level_id:56,point_mm:{x:0,y:0,z:0}},{creationScope:scope});
+  await assert.rejects(dispatcher.invokeTool('revit_inspect_elements',{source_request_id:rolled},{creationScope:scope}),/回滚/);assert.equal(calls.length,3);
 });

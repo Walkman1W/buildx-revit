@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template" };
+        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -98,6 +98,7 @@ namespace RevitLocalCodex
                     if (operation == "apply_view_template") result = ApplyViewTemplate(doc, args, out beforeTemplateId);
                     else if (parameterWrites != null) result = SetParameters(doc, args, parameterWrites, guardedParameter);
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
+                    else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
                     else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_sheet" || operation == "place_viewport_on_sheet") result = BasicWrite(uiapp, operation, args, basicCreated);
@@ -118,7 +119,7 @@ namespace RevitLocalCodex
                     if (parameterWrites != null) VerifyParameterWrites(doc, parameterWrites);
                     if (operation == "apply_view_template") result = VerifyViewTemplate(doc, args, beforeTemplateId);
                     if (operation == "pin_element" || operation == "unpin_element") VerifyPinned(doc, args, operation == "pin_element");
-                    if (basicCreated.Id != null) result = ReadBasicCreated(doc, operation, args, basicCreated.Id);
+                    if (basicCreated.Id != null) result = operation == "place_window" ? ReadWindow(doc, args, basicCreated.Id) : ReadBasicCreated(doc, operation, args, basicCreated.Id);
                     return result;
                 }
                 catch { if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack(); throw; }
@@ -393,6 +394,79 @@ namespace RevitLocalCodex
             if (Math.Abs(actual - diameter) > Feet(0.001)) throw new InvalidOperationException("Pipe type did not retain the requested diameter.");
             return new { element_id = pipe.Id.Value, pipe_type_id = type.Id.Value, system_type_id = system.Id.Value, level_id = level.Id.Value,
                 start_mm = PointDto(start), end_mm = PointDto(end), diameter_mm = Millimeters(actual) };
+        }
+
+        private static XYZ WindowFacing(Dictionary<string, object> args)
+        {
+            if (!args.ContainsKey("facing_direction")) return null;
+            var d = Required(args, "facing_direction") as Dictionary<string, object>;
+            if (d == null) throw new InvalidOperationException("facing_direction must be an object.");
+            Fields(d, "x", "y", "z");
+            XYZ v = new XYZ(FiniteNumber(Required(d, "x"), "facing_direction.x"), FiniteNumber(Required(d, "y"), "facing_direction.y"), FiniteNumber(Required(d, "z"), "facing_direction.z"));
+            if (Math.Abs(v.Z) > 0.000001 || Math.Abs(v.GetLength() - 1.0) > 0.000001) throw new InvalidOperationException("facing_direction must be a horizontal unit vector.");
+            return v.Normalize();
+        }
+
+        private static object PlaceWindow(Document doc, Dictionary<string, object> args, BasicCreatedExpectation created)
+        {
+            Fields(args, "expected_document", "mode", "symbol_id", "wall_id", "level_id", "point_mm", "facing_direction");
+            if (doc.IsFamilyDocument) throw new InvalidOperationException("Windows require a project document.");
+            FamilySymbol symbol = RequiredElement(doc, NativeModelQueries.ExactId(args, "symbol_id")) as FamilySymbol;
+            Wall wall = RequiredElement(doc, NativeModelQueries.ExactId(args, "wall_id")) as Wall;
+            Level level = RequiredElement(doc, NativeModelQueries.ExactId(args, "level_id")) as Level;
+            XYZ target = MillimeterPoint(Required(args, "point_mm"), "point_mm"), facing = WindowFacing(args);
+            if (symbol == null || !symbol.IsValidObject || symbol.Family == null || symbol.Category == null || symbol.Category.Id.Value != (long)BuiltInCategory.OST_Windows || symbol.Family.FamilyPlacementType != FamilyPlacementType.OneLevelBasedHosted) throw new InvalidOperationException("symbol_id must identify a loaded OneLevelBasedHosted window FamilySymbol.");
+            if (wall == null || !wall.IsValidObject || wall.WallType == null || wall.WallType.Kind != WallKind.Basic || wall.CrossSection != WallCrossSection.Vertical || wall.GroupId != ElementId.InvalidElementId) throw new InvalidOperationException("wall_id must identify a vertical ungrouped Basic wall.");
+            if (level == null || !level.IsValidObject) throw new InvalidOperationException("level_id must identify a Level.");
+            LocationCurve location = wall.Location as LocationCurve;
+            Line line = location == null ? null : location.Curve as Line;
+            if (line == null || !line.IsBound || Math.Abs(line.GetEndPoint(0).Z - line.GetEndPoint(1).Z) > 0.000001) throw new InvalidOperationException("Only straight horizontal wall location lines are supported.");
+            XYZ start = line.GetEndPoint(0), axis = (line.GetEndPoint(1) - start).Normalize();
+            XYZ inPlane = new XYZ(target.X, target.Y, start.Z);
+            double along = (inPlane - start).DotProduct(axis), tolerance = Feet(1);
+            if (along < 0 || along > line.Length || (inPlane - (start + axis * along)).GetLength() > tolerance) throw new InvalidOperationException("point_mm must lie on the wall location-line segment within 1 mm.");
+            BoundingBoxXYZ bounds = wall.get_BoundingBox(null);
+            if (bounds == null || target.Z < bounds.Min.Z - tolerance || target.Z > bounds.Max.Z + tolerance) throw new InvalidOperationException("point_mm.Z must be within wall bounds.");
+            if (facing != null && Math.Abs(facing.DotProduct(axis.CrossProduct(XYZ.BasisZ).Normalize())) < 0.999999) throw new InvalidOperationException("facing_direction must be perpendicular to the wall.");
+            if (!symbol.IsActive) { symbol.Activate(); doc.Regenerate(); }
+            FamilyInstance instance = doc.Create.NewFamilyInstance(target, symbol, wall, level, Autodesk.Revit.DB.Structure.StructuralType.NonStructural);
+            if (instance == null) throw new InvalidOperationException("Window creation failed.");
+            created.Id = instance.Id;
+            Parameter sill = instance.get_Parameter(BuiltInParameter.INSTANCE_SILL_HEIGHT_PARAM);
+            double offset = target.Z - level.ProjectElevation;
+            if (sill != null && sill.StorageType == StorageType.Double && Math.Abs(sill.AsDouble() - offset) > 0.000000001)
+            {
+                if (sill.IsReadOnly || (!sill.Set(offset) && Math.Abs(sill.AsDouble() - offset) > 0.000001)) throw new InvalidOperationException("Revit rejected window sill offset.");
+            }
+            doc.Regenerate();
+            instance = doc.GetElement(created.Id) as FamilyInstance;
+            if (instance == null) throw new InvalidOperationException("Created window is unavailable.");
+            if (facing != null && instance.FacingOrientation.Normalize().DotProduct(facing) < 0.999999)
+            {
+                if (!instance.CanFlipFacing || !instance.flipFacing()) throw new InvalidOperationException("Window cannot flip to requested facing.");
+                doc.Regenerate();
+            }
+            return ReadWindow(doc, args, created.Id);
+        }
+
+        private static double? WindowDimension(FamilyInstance instance, BuiltInParameter id)
+        {
+            foreach (Parameter p in new Parameter[] { instance.get_Parameter(id), instance.Symbol.get_Parameter(id) })
+                if (p != null && p.StorageType == StorageType.Double && p.HasValue) { double value = Millimeters(p.AsDouble()); if (!double.IsNaN(value) && !double.IsInfinity(value) && value > 0) return value; }
+            return null;
+        }
+
+        private static object ReadWindow(Document doc, Dictionary<string, object> args, ElementId id)
+        {
+            FamilyInstance actual = doc.GetElement(id) as FamilyInstance;
+            LocationPoint location = actual == null ? null : actual.Location as LocationPoint;
+            XYZ target = MillimeterPoint(Required(args, "point_mm"), "point_mm"), requestedFacing = WindowFacing(args);
+            long wallId = NativeModelQueries.ExactId(args, "wall_id"), symbolId = NativeModelQueries.ExactId(args, "symbol_id"), levelId = NativeModelQueries.ExactId(args, "level_id");
+            Level level = doc.GetElement(new ElementId(levelId)) as Level;
+            if (actual == null || !actual.IsValidObject || actual.Symbol == null || actual.Host == null || actual.Host.Id.Value != wallId || actual.GetTypeId().Value != symbolId || actual.LevelId.Value != levelId || level == null || location == null || location.Point.DistanceTo(target) > Feet(1)) throw new InvalidOperationException("Window placement readback did not match host, type, level or position.");
+            XYZ facing = actual.FacingOrientation.Normalize();
+            if (requestedFacing != null && facing.DotProduct(requestedFacing) < 0.999999) throw new InvalidOperationException("Window facing readback did not match.");
+            return new { element_id = DescribedId(actual.Id), wall_id = DescribedId(actual.Host.Id), wall_type_id = DescribedId(actual.Host.GetTypeId()), symbol_id = DescribedId(actual.GetTypeId()), level_id = DescribedId(actual.LevelId), point_mm = PointDto(location.Point), offset_mm = Millimeters(location.Point.Z - level.ProjectElevation), facing_direction = new { x = facing.X, y = facing.Y, z = facing.Z }, facing_flipped = actual.FacingFlipped, dimensions_mm = new { width = WindowDimension(actual, BuiltInParameter.WINDOW_WIDTH), height = WindowDimension(actual, BuiltInParameter.WINDOW_HEIGHT) } };
         }
 
         private sealed class BasicCreatedExpectation { internal ElementId Id; }
