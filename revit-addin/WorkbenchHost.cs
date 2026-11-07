@@ -702,9 +702,16 @@ namespace RevitLocalCodex
                 dispatchStartedTicks = Stopwatch.GetTimestamp();
                 validationFinishedTicks = dispatchStartedTicks;
                 dispatchStarted = true;
-                try { result = atomicRead
-                    ? DispatchAtomicRead(uiapp, operation, args ?? new Dictionary<string, object>(), id, access)
-                    : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access); }
+                try {
+#if BUILDX_DELETE_REVIEW_CANDIDATE
+                    if (!atomicRead && operation == "internal_delete_review_candidate")
+                        result = DispatchDeleteReviewCandidate(uiapp, args ?? new Dictionary<string, object>(), id, expires, access);
+                    else
+#endif
+                    result = atomicRead
+                        ? DispatchAtomicRead(uiapp, operation, args ?? new Dictionary<string, object>(), id, access)
+                        : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access);
+                }
                 finally { dispatchFinishedUtc = DateTime.UtcNow; dispatchFinishedTicks = Stopwatch.GetTimestamp(); }
             }
             catch (Exception error)
@@ -720,6 +727,13 @@ namespace RevitLocalCodex
                     { "completedUtc", DateTime.UtcNow.ToString("o") }
                 };
                 if (scriptFailure != null) failure["transaction"] = scriptFailure.TransactionReceipt;
+#if BUILDX_DELETE_REVIEW_CANDIDATE
+                if (cause is DeleteRollbackPreview.RollbackUnknownException)
+                {
+                    failure["error"] = BoundedFailureError("DELETE_REVIEW_OUTCOME_UNKNOWN", "Original delete review outcome or rollback is unconfirmed; inspect this same request and do not replay.");
+                    failure["transaction"] = new { outcome = "unknown", committed = (bool?)null, rolled_back = (bool?)null };
+                }
+#endif
                 var failureWithTiming = new Dictionary<string, object>(failure) {
                     { "timing", ReceiptTiming(id, observation, executeEnteredUtc, executeEnteredTicks, claimedUtc, claimedTicks, dispatchStartedUtc, validationFinishedTicks, dispatchFinishedUtc, dispatchStartedTicks, dispatchFinishedTicks) }
                 };
@@ -843,6 +857,25 @@ namespace RevitLocalCodex
             args.Add(TypeParameterWriteApproval.PermitArgument, permit);
             return args;
         }
+
+#if BUILDX_DELETE_REVIEW_CANDIDATE
+        // Compile-time internal candidate only; not enabled by the production build.
+        // Session and request ID are supplied by this host's claimed request, never args.
+        private object DispatchDeleteReviewCandidate(UIApplication uiapp, Dictionary<string, object> args, string claimedId, DateTime expires, AccessPolicy.Binding access)
+        {
+            if (access == null) throw new InvalidOperationException("Delete review requires an explicit current access-policy binding.");
+            Document doc = uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
+            var documentSource = new BuildX.FamilyRevit.RevitProjectDocumentSource(Thread.CurrentThread.ManagedThreadId);
+            return FreezeResult(DeleteReviewHostAdapter.Run(doc, claimedId, session, expires.ToUniversalTime(), args,
+                () => uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document,
+                documentSource.SameOpenDocument,
+                (active, path) => RequireProjectEdit(active, path, access), DeleteReviewCancelled));
+        }
+        private bool DeleteReviewCancelled(string requestId, string hostSession)
+        {
+            return hostSession != session || DeleteReviewCancellation.Requested(queue, requestId, hostSession);
+        }
+#endif
 
         private object Dispatch(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access)
         {

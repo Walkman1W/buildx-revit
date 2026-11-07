@@ -4,7 +4,7 @@ using Autodesk.Revit.DB;
 namespace Autodesk.Revit.UI {
  [Flags] public enum TaskDialogCommonButtons { Yes=1,No=2 }
  public enum TaskDialogResult { Yes,No }
- public class TaskDialog { public static readonly Queue<TaskDialogResult> Replies=new Queue<TaskDialogResult>();public static readonly List<string> Shown=new List<string>();public string MainInstruction,MainContent;public TaskDialogCommonButtons CommonButtons;public TaskDialogResult DefaultButton;public TaskDialog(string title){} public TaskDialogResult Show(){Shown.Add(MainContent);return Replies.Dequeue();} }
+ public class TaskDialog { public static readonly Queue<TaskDialogResult> Replies=new Queue<TaskDialogResult>();public static readonly List<string> Shown=new List<string>();public static Action<int> OnShow;public string MainInstruction,MainContent;public TaskDialogCommonButtons CommonButtons;public TaskDialogResult DefaultButton;public TaskDialog(string title){} public TaskDialogResult Show(){Shown.Add(MainContent);if(OnShow!=null)OnShow(Shown.Count);return Replies.Dequeue();} }
 }
 namespace RevitLocalCodex {
  class NativeReviewTests {
