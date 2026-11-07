@@ -157,7 +157,8 @@ export function modelCommandPresentation(command) {
       view.status='结果待核对';view.error='项目参数影响预览不完整，请核对原回执。';return view;
     }
     view.columns=['构件 ID','类别 ID','UniqueId'];view.rows=payload.instances.map(item=>[item.element_id,item.category_id,item.unique_id]);
-    view.summary='显示 '+payload.offset+' 起的 '+payload.instances.length+' / '+payload.instance_count+' 个当前实例；未来实例也可能受影响。本次只读，不授予写入权限。'+
+    const range=payload.instances.length?'第 '+(payload.offset+1)+'–'+(payload.offset+payload.instances.length)+' 项 / 共 '+payload.instance_count+' 项':'共 '+payload.instance_count+' 项';
+    view.summary='当前实例：'+range+'；未来实例也可能受影响。本次只读，不授予写入权限。'+
       (payload.has_more?' 下一页须使用相同快照指纹：'+payload.snapshot_id:'');
   } else if (command.commandId === 'revit_preview_batch_parameter_filter') {
     const payload=Object.hasOwn(data,'value')?data.value:data;
