@@ -429,7 +429,7 @@ namespace RevitLocalCodex {
             var prepared=(Dictionary<string,object>)DispatchAtomicRead(prepareUi,"preview_batch_parameter_filter",prepareArgs,"fixture",null);
             var ticket=(Dictionary<string,object>)prepared["batch_write_preparation"];
             if ((int)ticket["schema_version"]!=1 || ((string)ticket["token"]).Length!=32)throw new Exception("Native batch preparation missing");
-            var writeArgs=new Dictionary<string,object>{{"expected_document","D:\\fixture.rvt"},{"category","OST_Walls"},{"parameter_id","-100"},{"mode","rollback"},{"storage_type","String"},{"value","new"},{"batch_write_preparation",ticket}};
+            var writeArgs=new Dictionary<string,object>{{"expected_document","D:\\fixture.rvt"},{"category","OST_Walls"},{"parameter_id","-100"},{"mode","rollback"},{"storage_type","String"},{"value","new"},{"batch_write_preparation",new Dictionary<string,object>{{"schema_version",1},{"token",ticket["token"]}}}};
             // Keep the same native document object as the preparation.
             // A new wrapper/document must not reuse the permit.
             WorkbenchActions.BatchWriteCalls=0;
@@ -438,7 +438,8 @@ namespace RevitLocalCodex {
             bool replay=false;try{DispatchClosedBatchWriteCandidate(prepareUi.ActiveUIDocument.Document,writeArgs,null);}catch(InvalidOperationException){replay=true;}
             if(!replay||WorkbenchActions.BatchWriteCalls!=1)throw new Exception("Replayed native ticket reached writer peer");
             prepared=(Dictionary<string,object>)DispatchAtomicRead(prepareUi,"preview_batch_parameter_filter",prepareArgs,"fixture",null);
-            writeArgs["batch_write_preparation"]=prepared["batch_write_preparation"];
+            var nextTicket=(Dictionary<string,object>)prepared["batch_write_preparation"];
+            writeArgs["batch_write_preparation"]=new Dictionary<string,object>{{"schema_version",1},{"token",nextTicket["token"]}};
             bool foreign=false;try{DispatchClosedBatchWriteCandidate(new Document(),writeArgs,null);}catch(InvalidOperationException){foreign=true;}
             if(!foreign||WorkbenchActions.BatchWriteCalls!=1)throw new Exception("Foreign document accepted native ticket");
             proposal["storage_type"]="Integer";bool bad=false;try{DispatchAtomicRead(new UIApplication(),"preview_batch_parameter_filter",prepareArgs,"fixture",null);}catch(InvalidOperationException){bad=true;}
@@ -725,6 +726,7 @@ namespace RevitLocalCodex {
         }
     }
 }
+
 
 
 

@@ -838,7 +838,7 @@ namespace RevitLocalCodex
                     issueBatchPreparation = () => {
                         if (batchFilterPreparations == null) batchFilterPreparations = new BatchFilterPreparationBook(session);
                         string token = batchFilterPreparations.Issue(doc, rawResult, (string)rawStorage, unit, target, (string)rawMode);
-                        return new { schema_version = 1, token = token };
+                        return new { schema_version = 1, token = token, expires_utc = DateTime.UtcNow.AddSeconds(110).ToString("yyyy-MM-ddTHH:mm:ss.fffZ", System.Globalization.CultureInfo.InvariantCulture) };
                     };
                 }
                 object result = FreezeResult(rawResult);
@@ -986,7 +986,11 @@ namespace RevitLocalCodex
                 object selected = FreezeResult(operation == "set_selection" ? WorkbenchActions.SetSelection(uiapp, args) : WorkbenchActions.SelectByUniqueIds(uiapp, args));
                 return new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = selected, effect = "ui_selection" };
             }
-            if (operation == "set_type_parameter")
+            // Deliberately fail closed in this build. The private candidate is
+            // not a dispatch capability until durable claim/receipt ownership
+            // and the panel decision path are integrated and verified.
+            if (operation == "batch_set_parameters_by_filter")
+                throw new InvalidOperationException("Batch filter writes are disabled until durable request ownership and approval are available.");            if (operation == "set_type_parameter")
             {
                 RequireProjectEdit(doc, ExpectedDocument(args), access);
                 args = BindTypeWritePermit(doc, args);
@@ -1170,6 +1174,8 @@ namespace RevitLocalCodex
         }
     }
 }
+
+
 
 
 
