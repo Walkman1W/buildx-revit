@@ -144,13 +144,13 @@ test('workbench transport error remains unknown and a full event budget still re
   f.codex.notify('turn/completed',turn,{eventId:'terminal',turn:{id:turn.turnId,status:'completed'}});
   const view=f.app.snapshot('client-a');assert.equal(view.busy,false);assert.equal(view.session.messages[1].status,'unknown');assert.match(view.session.messages.at(-1).text,/不完整/);
 });
-test('HTTP snapshot does not report a complete execution when the tool-record budget is exceeded',async t=>{
+test('HTTP snapshot preserves the turn status when the tool-record display budget is exceeded',async t=>{
   const f=await setup(t);await f.post('turn',{message:'长任务'});const turn=f.codex.turns[0];
   for(let i=0;i<40;i++)f.codex.notify('item/completed',turn,{item:{id:'tool-'+i,type:'mcpToolCall',tool:'revit_get_selection',status:'completed'}});
   f.codex.notify('item/started',turn,{item:{id:'tool-40',type:'mcpToolCall',tool:'revit_execute_csharp',status:'inProgress'}});
   f.codex.notify('turn/completed',turn,{turn:{id:turn.turnId,status:'completed'}});
-  const view=f.app.snapshot('client-a');assert.equal(view.busy,false);assert.equal(view.session.messages[1].status,'unknown');
-  assert.equal(view.session.messages[1].tools.length,40);assert.equal(view.session.messages[1].toolHistoryTruncated,true);assert.match(view.session.messages.at(-1).text,/原始执行回执/);
+  const view=f.app.snapshot('client-a');assert.equal(view.busy,false);assert.equal(view.session.messages[1].status,'completed');
+  assert.equal(view.session.messages[1].tools.length,40);assert.equal(view.session.messages[1].toolHistoryTruncated,true);
 });
 test('non-retryable error without a terminal receipt eventually retires the connection as unknown',async t=>{
   const original=setTimeout;

@@ -136,6 +136,21 @@ test('view trimming is not deletion of older recorded messages',async t=>{
   const after=await fs.readFile(f.file(session.conversationId));assert.ok(after.subarray(0,before.length).equals(before));
   const value=await f.store.get(scope,session.conversationId);assert.equal(value.summary.messageCount,50);assert.equal(value.session.messages.length,48);assert.equal(value.session.historyTruncated,true);
   assert.ok(after.toString().includes(oldest));assert.equal(value.session.contextMessageId,oldest);
+  assert.equal((await f.store.save(scope,value.session)).changed,false);
+  assert.deepEqual(await fs.readFile(f.file(session.conversationId)),after);
+  const rewritten=structuredClone(value.session);rewritten.messages[0].text='不允许改写';
+  assert.equal((await f.store.save(scope,rewritten)).error.code,'CHAT_HISTORY_CONFLICT');
+  assert.deepEqual(await fs.readFile(f.file(session.conversationId)),after);
+});
+
+test('tool display truncation survives history storage and restoration',async t=>{
+  const f=await fixture(t),session=conversation();
+  session.messages[1].toolHistoryTruncated=true;
+  assert.equal((await f.store.save(scope,session.view())).ok,true);
+  const saved=await f.store.get(scope,session.conversationId);
+  assert.equal(saved.session.messages[1].toolHistoryTruncated,true);
+  const restored=new ChatSession();restored.restoreHistory(saved.session);
+  assert.equal(restored.view().messages[1].toolHistoryTruncated,true);
 });
 
 test('incomplete and malformed files remain unchanged and appear as list issues with bounded paging',async t=>{

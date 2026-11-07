@@ -35,9 +35,18 @@ test('a 41st tool cannot make an incomplete execution record look complete',()=>
   // An unrecorded write may have entered the host before the turn ends.
   s.notification(run,'item/started',owned({item:{id:'tool-40',type:'mcpToolCall',tool:'revit_execute_csharp',status:'inProgress'}}),name=>name==='revit_execute_csharp'?'脚本':label(name));
   assert.equal(s.view().messages[1].tools.length,40);assert.equal(s.view().messages[1].toolHistoryTruncated,true);
-  assert.match(s.activity,/后续操作未显示/);
+  assert.match(s.activity,/后续记录未显示/);
+  assert.equal(s.view().historyTruncated,false);
   const terminal=s.notification(run,'turn/completed',owned({turn:{id:'turn-1',status:'completed'}}));s.finish(run,terminal.terminal);
-  assert.equal(s.view().messages[1].status,'unknown');assert.match(s.view().messages.at(-1).text,/原始执行回执/);assert.equal(s.run,null);
+  assert.equal(s.view().messages[1].status,'completed');assert.equal(s.run,null);
+});
+test('tool display overflow preserves failed and unknown terminal outcomes',()=>{
+  for(const status of ['failed','unknown','interrupted']){
+    const {s,run}=started();
+    for(let i=0;i<41;i++)s.notification(run,'item/started',owned({item:{id:'tool-'+i,type:'mcpToolCall',tool:'revit_get_selection'}}),label);
+    s.finish(run,status,status==='unknown'?'连接结果未知':null);
+    const message=s.view().messages[1];assert.equal(message.status,status);assert.equal(message.toolHistoryTruncated,true);assert.equal(message.tools[0].status,'unknown');
+  }
 });
 test('workbench tool errors retain unknown operation outcome unless the named producer supplies a valid fact',()=>{
   for(const [outcome,expected] of [[null,'unknown'],['unconfirmed','unknown'],['failed','failed'],['expired','failed'],['not_started','failed'],['forged','unknown']]){

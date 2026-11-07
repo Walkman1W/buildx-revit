@@ -910,14 +910,26 @@ function renderConversation() {
         return card;
       }));
       entry.attachments.hidden=!attachments.length;
-      const toolReceipts=Array.isArray(lastSession?.toolReceipts)?lastSession.toolReceipts.filter(item=>item.messageId===message.id):[];
-      const toolSignature = JSON.stringify([message.tools || [],toolReceipts]);
-      if (entry.toolSignature !== toolSignature) {
-        entry.tools.replaceChildren(...(Array.isArray(message.tools) ? message.tools : []).map(tool => toolCard(message.id,tool,toolReceipts.find(item=>item.itemId===tool.id))));
-        entry.tools.hidden = !entry.tools.childElementCount;
-        entry.toolSignature = toolSignature;
-      }
       entry.signature = signature;
+    }
+    const toolReceipts=Array.isArray(lastSession?.toolReceipts)?lastSession.toolReceipts.filter(item=>item.messageId===message.id):[];
+    const tools=Array.isArray(message.tools)?message.tools:[];
+    const toolSignature=JSON.stringify([tools,toolReceipts,message.toolHistoryTruncated]);
+    if(entry.toolSignature!==toolSignature){
+      const previous=entry.toolCards || new Map(), next=new Map();
+      const cards=tools.map(tool=>{
+        const receipt=toolReceipts.find(item=>item.itemId===tool.id);
+        const cardSignature=JSON.stringify([tool,receipt]);
+        let card=previous.get(tool.id);
+        if(!card || card.signature!==cardSignature) card={signature:cardSignature,element:toolCard(message.id,tool,receipt)};
+        next.set(tool.id,card);
+        return card.element;
+      });
+      if(message.role==='assistant' && message.toolHistoryTruncated===true) cards.push(node('p','history-note tool-history-notice','本轮部分工具记录超出显示上限。请核对原始执行回执，避免重复提交。'));
+      entry.tools.replaceChildren(...cards);
+      entry.tools.hidden=!cards.length;
+      entry.toolCards=next;
+      entry.toolSignature=toolSignature;
     }
   }
   for (const [id, entry] of messageNodes) if (!liveIds.has(id)) {
