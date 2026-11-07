@@ -75,9 +75,9 @@
         "realWebViewVerified": false
       },
       "projectBindingSafety20261107": {
-        "status": "closed_integrated_recovery_research",
-        "validation": "67/67 including synthetic end-to-end and three real Node publish crash stages; full Revit API host build",
-        "remaining": "power failure, durable root integrity and concurrency, missing request recovery, manual resolution, real WebView and Revit",
+        "status": "closed_root_identity_and_pending_recovery_research",
+        "validation": "69/69 synthetic conversation, queue, root replacement, restart, receipt recovery and existing type approval",
+        "remaining": "trusted anchor ACL and atomic directory-handle operations to close replacement races, power loss, real WebView and Revit",
         "writeRegistered": false
       }
     },

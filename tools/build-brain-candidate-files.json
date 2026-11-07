@@ -345,5 +345,6 @@
   "public/project-binding-review.mjs",
   "lib/research-durable-claim.mjs",
   "lib/research-scope-owner.mjs",
-  "lib/research-recovery-adapter.mjs"
+  "lib/research-recovery-adapter.mjs",
+  "lib/project-binding-pending-recovery.mjs"
 ]
