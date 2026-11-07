@@ -1,3 +1,4 @@
+import {BATCH_PREVIEW_TOOL} from './lib/batch-filter-preview.mjs';
 import test from 'node:test';
 import {SNAPSHOT_DELTA_TOOL} from './lib/native-snapshot-delta.mjs';
 import assert from 'node:assert/strict';
@@ -62,7 +63,7 @@ test('the complete inventory includes the native model and type-parameter contra
   for(const item of MODEL_COMMAND_CATALOG){
     assert.ok(Object.isFrozen(item));assert.equal(typeof item.label,'string');
     if(READ_TOOLS.includes(item.tool)){
-      const source=[...NATIVE_MODEL_QUERY_TOOLS,...NATIVE_PARAMETER_QUERY_TOOLS,SNAPSHOT_DELTA_TOOL].find(tool=>tool.name===item.tool);assert.equal(item.enabled,true);
+      const source=[...NATIVE_MODEL_QUERY_TOOLS,...NATIVE_PARAMETER_QUERY_TOOLS,SNAPSHOT_DELTA_TOOL,BATCH_PREVIEW_TOOL].find(tool=>tool.name===item.tool);assert.equal(item.enabled,true);
       const projected=structuredClone(source.inputSchema);delete projected.properties.expected_document;projected.required=projected.required.filter(key=>key!=='expected_document');
       assert.deepEqual(item.inputSchema,projected);assert.equal(item.unavailableReason,null);continue;
     }

@@ -53,7 +53,7 @@ namespace RevitLocalCodex
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
-        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "get_snapshot_delta", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
+        private static readonly string[] AtomicReadOperations = { "status", "get_selection", "list_levels", "search_elements", "list_family_types", "describe_parameters", "capture_model_snapshot", "get_snapshot_delta", "preview_batch_parameter_filter", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "get_type_parameter_impact", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
 
         internal string SessionId { get { return session; } }
 
@@ -324,6 +324,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
+                    nativeBatchFilterPreviewVersion = 1, nativeBatchFilterPreviewOperations = new[] { "preview_batch_parameter_filter" },
                     nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
@@ -742,6 +743,7 @@ namespace RevitLocalCodex
             if (present && !(value is bool)) throw new InvalidOperationException("atomicRead must be a boolean.");
             if (!present || !(bool)value)
             {
+                if (operation == "preview_batch_parameter_filter") throw new InvalidOperationException("Batch parameter preview requires an atomic read snapshot.");
                 if (operation == "get_snapshot_delta")
                     throw new InvalidOperationException("Snapshot delta requires an atomic read snapshot.");
                 if (operation == "get_model_preparation")
@@ -800,6 +802,17 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("Type-write proposal differs from the reviewed type/parameter.");
                 preparation = WorkbenchActions.PrepareTypeParameterWrite(doc, proposal);
                 value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = FreezeResult(preparation.Impact.Dto()), modifiedByOperation = false };
+            }
+            else if (operation == "preview_batch_parameter_filter")
+            {
+                NativeModelQueries.Fields(boundArgs, "expected_document", "category", "type_id", "level_id", "parameter_id");
+                object rawCategory;
+                if (!boundArgs.TryGetValue("category", out rawCategory) || !(rawCategory is string)) throw new InvalidOperationException("Exact category required.");
+                long? typeId = boundArgs.ContainsKey("type_id") ? (long?)NativeModelQueries.ExactId(boundArgs, "type_id") : null;
+                long? levelId = boundArgs.ContainsKey("level_id") ? (long?)NativeModelQueries.ExactId(boundArgs, "level_id") : null;
+                long parameterId = NativeModelQueries.ExactSignedId(boundArgs, "parameter_id");
+                object result = FreezeResult(WorkbenchActions.PreviewBatchParameterFilter(doc, (string)rawCategory, typeId, levelId, parameterId));
+                value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = result, modifiedByOperation = false };
             }
             else if (operation == "get_snapshot_delta")
             {
@@ -973,6 +986,7 @@ namespace RevitLocalCodex
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
                     nativeTypeParameterWritesVersion = 1, nativeTypeParameterWriteOperations = new[] { "set_type_parameter" },
+                    nativeBatchFilterPreviewVersion = 1, nativeBatchFilterPreviewOperations = new[] { "preview_batch_parameter_filter" },
                     nativeSnapshotDeltaVersion = snapshotBridge == null ? 0 : 1, nativeSnapshotDeltaOperations = snapshotBridge == null ? new string[0] : new[] { "get_snapshot_delta" },
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
