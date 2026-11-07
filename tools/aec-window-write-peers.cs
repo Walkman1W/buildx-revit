@@ -61,7 +61,10 @@ namespace RevitLocalCodex {
   // Only window and the shared transaction dispatcher are under test here.
   // Other operations are deliberately fail-closed, and have dedicated peers.
   private sealed class BasicCreatedExpectation { internal ElementId Id; }
-  private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {} private sealed class RoofCreationExpectation {}
+  private sealed class UngroupExpectation {}
+        private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
+        private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
+        private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {} private sealed class RoofCreationExpectation {}
   static BeamCreationExpectation CreateBeam(UIApplication u,Dictionary<string,object> a){throw new InvalidOperationException("out of scope");}
   static object VerifyBeam(Document d,Dictionary<string,object> a,BeamCreationExpectation x){throw new InvalidOperationException("out of scope");}
   static TypeChangeExpectation ChangeElementType(Document d,Dictionary<string,object> a){throw new InvalidOperationException("out of scope");}

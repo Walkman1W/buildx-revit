@@ -145,6 +145,9 @@ namespace RevitLocalCodex {
         private sealed class BasicCreatedExpectation { internal ElementId Id; }
         // The parameter producer extracts the shared dispatcher; unrelated
         // operations fail closed here and are covered by dedicated fixtures.
+        private sealed class UngroupExpectation {}
+        private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
+        private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private sealed class BeamCreationExpectation {} private sealed class TypeChangeExpectation {} private sealed class GroupCreationExpectation {} private sealed class RoofCreationExpectation {}
         private static BeamCreationExpectation CreateBeam(UIApplication u, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope beam peer.");}
         private static object VerifyBeam(Document d, Dictionary<string,object> a, BeamCreationExpectation e){throw new InvalidOperationException("Out of scope beam peer.");}
