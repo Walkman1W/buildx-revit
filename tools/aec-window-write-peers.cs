@@ -72,6 +72,8 @@ namespace RevitLocalCodex {
   static object VerifyFlatRoof(Document d,Dictionary<string,object> a,RoofCreationExpectation x){throw new InvalidOperationException("out of scope");}
   static object ApplyViewTemplate(Document d,Dictionary<string,object> a,out ElementId id){id=null;throw new InvalidOperationException("out of scope");}
   static object VerifyViewTemplate(Document d,Dictionary<string,object> a,ElementId id=null){throw new InvalidOperationException("out of scope");}
+  static object CreateFoundation(Document d,Dictionary<string,object> a,BasicCreatedExpectation x){throw new InvalidOperationException("out of scope");}
+  static object ReadFoundation(Document d,Dictionary<string,object> a,ElementId id){throw new InvalidOperationException("out of scope");}
   static object CreateColumn(Document d,Dictionary<string,object> a,BasicCreatedExpectation x){throw new InvalidOperationException("out of scope");}
   static object ReadColumn(Document d,Dictionary<string,object> a,ElementId id){throw new InvalidOperationException("out of scope");}
   static object BasicWrite(UIApplication u,string op,Dictionary<string,object> a,BasicCreatedExpectation x){throw new InvalidOperationException("out of scope");}

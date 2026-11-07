@@ -393,3 +393,9 @@ test('material assignment is discoverable and guarded in Code Mode',async()=>{
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
  const result=await dispatcher.invokeCommand(name,{element_id:101,parameter_id:-123,material_id:202,expected_has_value:true,expected_value_internal:-1},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+test('foundation is discoverable in elements and requires guarded model permission',async()=>{
+ const name='revit_create_foundation',found=[];let offset=0,more=true;while(more){const page=describeModelOperationSchema({domain:'elements',offset,limit:3});assert.equal(page.ok,true);found.push(...page.value.tools.map(x=>x.name));more=page.value.hasMore;offset+=3;}
+ assert.equal(found.filter(x=>x===name).length,1);assert.equal(describeModelOperationSchema({tool:name}).value.inputSchema.properties.mode.default,'rollback');assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(supportsModelPermissionTool(name),true);assert.equal(modelCommandById(name).readOnly,false);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});const result=await dispatcher.invokeCommand(name,{symbol_id:3,level_id:1,point_mm:{x:0,y:0,z:0}},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
+});

@@ -118,6 +118,8 @@ namespace RevitLocalCodex {
         private static object VerifyFlatRoof(Document d, Dictionary<string,object> a, RoofCreationExpectation e){throw new InvalidOperationException("Out of scope roof peer.");}
         private static object CreateColumn(Document d, Dictionary<string,object> a, BasicCreatedExpectation e){throw new InvalidOperationException("Out of scope column peer.");}
         private static object ReadColumn(Document d, Dictionary<string,object> a, ElementId id){throw new InvalidOperationException("Out of scope column peer.");}
+  private static object CreateFoundation(Document d, Dictionary<string,object> a, BasicCreatedExpectation c) { throw new InvalidOperationException("Foundation is covered by its dedicated peer fixture."); }
+  private static object ReadFoundation(Document d, Dictionary<string,object> a, ElementId id) { throw new InvalidOperationException("Foundation is covered by its dedicated peer fixture."); }
 
   private static object BasicWrite(UIApplication app,string op,Dictionary<string,object> args,BasicCreatedExpectation created){throw new InvalidOperationException("Out of scope basic-write peer.");}
   private static void VerifyPinned(Document doc,Dictionary<string,object> args,bool desired){throw new InvalidOperationException("Out of scope basic-write peer.");}

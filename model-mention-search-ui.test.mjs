@@ -336,3 +336,12 @@ test('material assignment has searchable guarded manual form',async t=>{
  assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',element_id:101,parameter_id:-123,material_id:202,expected_has_value:true,expected_value_internal:-1});
  await ui.respond(ui.requests[0],{ok:true,executionId:'assignment-write'});
 });
+
+test('foundation mention and manual form require confirmation',async t=>{
+ const name='revit_create_foundation';for(const q of [name,'create_foundation','创建独立基础'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,q).some(x=>x.name===name&&x.readOnly===false));
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@create_foundation');const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(x=>x.textContent.includes(name));assert.ok(option);option.click();
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(x=>x.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [k,v] of Object.entries({symbol_id:'3',level_id:'1','point_mm-x':'304.8','point_mm-y':'609.6','point_mm-z':'0'}))ui.get('model-command-'+name+'-'+k).value=v;
+ const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);
+ assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',symbol_id:3,level_id:1,point_mm:{x:304.8,y:609.6,z:0}});await ui.respond(ui.requests[0],{ok:true,executionId:'foundation-fixture'});
+});

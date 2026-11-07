@@ -16,7 +16,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_element_material", "create_material", "create_roof", "create_group", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_beam", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "set_element_material", "create_material", "create_roof", "create_group", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_room", "create_column", "create_foundation", "create_beam", "create_schedule", "change_element_type", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -111,6 +111,7 @@ namespace RevitLocalCodex
                     else if (operation == "move_elements" || operation == "copy_elements") result = TransformElements(doc, operation, args);
                     else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
                     else if (operation == "create_column") result = CreateColumn(doc, args, basicCreated);
+                    else if (operation == "create_foundation") result = CreateFoundation(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
                     else if (operation == "create_material" || operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_room" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
@@ -141,7 +142,7 @@ namespace RevitLocalCodex
                     if (roofCreation != null) result = VerifyFlatRoof(doc, args, roofCreation);
                     if (materialAssignment != null) VerifyElementMaterial(doc, materialAssignment);
                     if (operation == "pin_element" || operation == "unpin_element") VerifyPinned(doc, args, operation == "pin_element");
-                    if (basicCreated.Id != null) result = operation == "place_window" ? ReadWindow(doc, args, basicCreated.Id) : operation == "create_column" ? ReadColumn(doc, args, basicCreated.Id) : ReadBasicCreated(doc, operation, args, basicCreated.Id);
+                    if (basicCreated.Id != null) result = operation == "place_window" ? ReadWindow(doc, args, basicCreated.Id) : operation == "create_column" ? ReadColumn(doc, args, basicCreated.Id) : operation == "create_foundation" ? ReadFoundation(doc, args, basicCreated.Id) : ReadBasicCreated(doc, operation, args, basicCreated.Id);
                     return result;
                 }
                 catch { if (transaction.GetStatus() == TransactionStatus.Started) transaction.RollBack(); throw; }
@@ -563,6 +564,40 @@ namespace RevitLocalCodex
             Parameter p = instance.get_Parameter(id);
             if (p == null || !p.HasValue || p.StorageType != storage || (storage == StorageType.ElementId ? p.AsElementId() == null || p.AsElementId().Value != ((ElementId)expected).Value : Double.IsNaN(p.AsDouble()) || Double.IsInfinity(p.AsDouble()) || Math.Abs(p.AsDouble()-(double)expected)>1e-9))
                 throw new InvalidOperationException("Column constraint readback differs: " + id);
+        }
+
+        private static object CreateFoundation(Document doc, Dictionary<string, object> args, BasicCreatedExpectation created)
+        {
+            Fields(args, "expected_document", "mode", "symbol_id", "level_id", "point_mm");
+            if (doc.IsFamilyDocument) throw new InvalidOperationException("Foundations require a project document.");
+            FamilySymbol symbol = RequiredElement(doc, NativeModelQueries.ExactId(args, "symbol_id")) as FamilySymbol;
+            Level level = RequiredElement(doc, NativeModelQueries.ExactId(args, "level_id")) as Level;
+            XYZ point = MillimeterPoint(Required(args, "point_mm"), "point_mm");
+            if (symbol == null || !symbol.IsValidObject || symbol.Family == null || symbol.Category == null || symbol.Category.Id.Value != (long)BuiltInCategory.OST_StructuralFoundation || symbol.Family.FamilyPlacementType != FamilyPlacementType.OneLevelBased)
+                throw new InvalidOperationException("symbol_id must identify a non-hosted OneLevelBased structural foundation type.");
+            if (level == null || !level.IsValidObject || Math.Abs(point.Z - level.ProjectElevation) > Feet(0.001))
+                throw new InvalidOperationException("Foundation point Z must equal a valid level's project elevation.");
+            if (!symbol.IsActive) { symbol.Activate(); doc.Regenerate(); }
+            FamilyInstance foundation = doc.Create.NewFamilyInstance(point, symbol, level, Autodesk.Revit.DB.Structure.StructuralType.Footing);
+            if (foundation == null || !foundation.IsValidObject) throw new InvalidOperationException("Revit did not create a valid isolated foundation.");
+            created.Id = foundation.Id; doc.Regenerate();
+            return ReadFoundation(doc, args, created.Id);
+        }
+
+        private static object ReadFoundation(Document doc, Dictionary<string, object> args, ElementId id)
+        {
+            FamilyInstance foundation = doc.GetElement(id) as FamilyInstance;
+            long symbolId = NativeModelQueries.ExactId(args, "symbol_id"), levelId = NativeModelQueries.ExactId(args, "level_id");
+            FamilySymbol symbol = doc.GetElement(new ElementId(symbolId)) as FamilySymbol;
+            Level level = doc.GetElement(new ElementId(levelId)) as Level;
+            XYZ requested = MillimeterPoint(Required(args, "point_mm"), "point_mm");
+            LocationPoint location = foundation == null ? null : foundation.Location as LocationPoint;
+            if (foundation == null || !foundation.IsValidObject || foundation.Host != null || foundation.StructuralType != Autodesk.Revit.DB.Structure.StructuralType.Footing ||
+                foundation.Symbol == null || foundation.GetTypeId() == null || foundation.GetTypeId().Value != symbolId || foundation.LevelId == null || foundation.LevelId.Value != levelId ||
+                symbol == null || !symbol.IsValidObject || symbol.Family == null || symbol.Category == null || symbol.Category.Id.Value != (long)BuiltInCategory.OST_StructuralFoundation || symbol.Family.FamilyPlacementType != FamilyPlacementType.OneLevelBased ||
+                level == null || !level.IsValidObject || location == null || !ColumnFinitePoint(location.Point) || location.Point.DistanceTo(requested) > Feet(0.001) || Math.Abs(requested.Z-level.ProjectElevation) > Feet(0.001))
+                throw new InvalidOperationException("Created foundation type, level, footing classification or point differs from request.");
+            return new { element_id = DescribedId(foundation.Id), symbol_id = DescribedId(foundation.GetTypeId()), level_id = DescribedId(level.Id), point_mm = PointDto(location.Point), foundation_kind = "isolated", level_elevation_mm = Millimeters(level.ProjectElevation) };
         }
 
         private sealed class BasicCreatedExpectation { internal ElementId Id; }

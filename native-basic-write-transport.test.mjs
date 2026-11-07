@@ -395,3 +395,12 @@ test('material assignment requires exact prior state and retains unknown origina
  const bad=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,{...value,material_id:'203'})});let owner;
  await assert.rejects(invokeWorkbench(tool,args(parameters),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
 });
+
+test('foundation requires named host and exact original rollback receipt without replay',async t=>{
+ const tool='revit_create_foundation',operation='create_foundation',all=[...operations,operation],parameters={symbol_id:'9007199254740993',level_id:'9007199254740994',point_mm:{x:100,y:200,z:300}},value={element_id:'3',...parameters,foundation_kind:'isolated',level_elevation_mm:300};
+ const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});await assert.rejects(invokeWorkbench(tool,args(parameters),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{symbol_id:'0'},{level_id:9007199254740992},{point_mm:{x:NaN,y:0,z:0}},{host_id:1}])await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(f.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
+ for(const change of [{level_id:'2'},{symbol_id:'2'},{point_mm:{x:101,y:200,z:300}},{foundation_kind:'other'},{level_elevation_mm:301}]){const x=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;await assert.rejects(invokeWorkbench(tool,args(parameters),x.options()),e=>{const facts=workbenchFailureEvidence(e);owner=x.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(x.requests.length,1);}
+});

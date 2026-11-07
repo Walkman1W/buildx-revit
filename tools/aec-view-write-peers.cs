@@ -90,6 +90,8 @@ namespace Autodesk.Revit.UI { public class UIDocument { public Document Document
 namespace RevitLocalCodex {
  internal static class NativeModelQueries { internal static long ExactId(Dictionary<string,object> a,string k){object v=a[k];if(v==null || !(v is long) || (long)v<=0)throw new InvalidOperationException("invalid id");return (long)v;} }
  internal static partial class WorkbenchActions {
+  private static object CreateFoundation(Document d, Dictionary<string,object> a, BasicCreatedExpectation c) { throw new InvalidOperationException("Foundation is covered by its dedicated peer fixture."); }
+  private static object ReadFoundation(Document d, Dictionary<string,object> a, ElementId id) { throw new InvalidOperationException("Foundation is covered by its dedicated peer fixture."); }
   private static object CreateColumn(Document d, Dictionary<string,object> a, BasicCreatedExpectation c) { throw new InvalidOperationException("Column is covered by its dedicated peer fixture."); }
   private static object ReadColumn(Document d, Dictionary<string,object> a, ElementId id) { throw new InvalidOperationException("Column is covered by its dedicated peer fixture."); }
   private sealed class MaterialAssignmentExpectation {}
