@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MODEL_COMMANDS,modelCommandParameters,modelCommandPresentation,modelToolCatalog,modelMentionQuery,modelMentionParts} from './public/model-workspace.mjs';
+import {MODEL_COMMANDS,modelCommandParameters,modelCommandPresentation,modelToolCatalog,modelMentionQuery,modelMentionParts,modelMentionMatches} from './public/model-workspace.mjs';
 
 test('model command intents are fixed structured parameters and contain no natural-language turn',() => {
   assert.equal(MODEL_COMMANDS.length,4);
@@ -67,4 +67,9 @@ test('highlight parts exactly preserve text and mark only known complete mention
   assert.equal(parts.map(part=>part.text).join(''),text);
   assert.deepEqual(parts.filter(part=>part.tool).map(part=>part.text),['@revit_get_selection']);
   assert.deepEqual(modelMentionParts('',catalog),[{text:'',tool:false}]);
+});
+
+test('project parameter binding preview is searchable by at-mention',()=>{
+ const catalog=modelToolCatalog([{name:'revit_preview_project_parameter_binding',label:'项目参数绑定影响预览',readOnly:true}]);
+ assert.equal(modelMentionMatches(catalog,'项目参数')[0].name,'revit_preview_project_parameter_binding');
 });

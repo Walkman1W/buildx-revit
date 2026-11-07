@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.Globalization;
 using System.Linq;
 using Autodesk.Revit.DB;
@@ -27,6 +28,24 @@ namespace RevitLocalCodex
             internal InstanceFact[] Instances { get { return (InstanceFact[])instances.Clone(); } }
             internal Snapshot(Guid guid,long id,string dataType,string name,string title,string path,long[] categories,InstanceFact[] instances)
             {Guid=guid;DefinitionId=id;DataType=dataType;DefinitionName=name;DocumentTitle=title;DocumentPath=path;categoryIds=(long[])categories.Clone();this.instances=(InstanceFact[])instances.Clone();}
+        }
+        internal static object Read(Document doc, Dictionary<string, object> args)
+        {
+            NativeModelQueries.Fields(args, "expected_document", "definition_guid", "definition_id", "data_type", "category_ids");
+            if (doc == null || String.IsNullOrWhiteSpace(doc.PathName)) throw new InvalidOperationException("A saved project is required.");
+            object rawGuid, rawType, rawIds; Guid guid;
+            if (!args.TryGetValue("definition_guid", out rawGuid) || !(rawGuid is string) || !Guid.TryParseExact((string)rawGuid, "D", out guid) || ((string)rawGuid) != guid.ToString("D") ||
+                !args.TryGetValue("data_type", out rawType) || !(rawType is string) || !args.TryGetValue("category_ids", out rawIds) || !(rawIds is IList))
+                throw new InvalidOperationException("Invalid preview arguments.");
+            var ids = new List<long>();
+            foreach (object raw in (IList)rawIds)
+            {
+                var one = new Dictionary<string, object> { { "id", raw } };
+                if (!(raw is string)) throw new InvalidOperationException("Category IDs must be exact strings.");
+                ids.Add(NativeModelQueries.ExactSignedId(one, "id"));
+            }
+            if (!args.ContainsKey("definition_id") || !(args["definition_id"] is string)) throw new InvalidOperationException("Definition ID must be an exact string.");
+            return Describe(Capture(doc, guid, NativeModelQueries.ExactId(args, "definition_id"), (string)rawType, ids));
         }
         internal static Snapshot Capture(Document doc,Guid guid,long expectedDefinitionId,string expectedDataType,IList<long> requestedCategoryIds)
         {

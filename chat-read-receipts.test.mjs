@@ -203,3 +203,26 @@ test('library refresh waits for the existing optional status request to reach a 
   assert.equal((await list()).value.value.projectStatus,'unsaved');
   assert.equal(calls,2);assert.equal(closes,1);
 });
+
+test('late project binding preview receipt returns to the original MCP call without replay',async t=>{
+ const name='revit_preview_project_parameter_binding',operation='preview_project_parameter_binding',f=await fixture(t),queue=path.join(f.directory,'workbench','queue');
+ await Promise.all(['inbox','processing','outbox'].map(folder=>fs.mkdir(path.join(queue,folder),{recursive:true})));
+ const capabilities={atomicReadSnapshot:true,nativeModelQueriesVersion:1,nativeModelQueryOperations:[operation],projectBindingPreviewVersion:1};
+ await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId:hostSession,pid:process.pid,version:'0.8.9',...capabilities}));
+ assert.equal((await f.post('/api/turn',{client:'test',message:'Preview binding'})).status,202);
+ const document={title:'Controlled fixture model',path:'D:\\samples\\controlled.rvt',activeViewId:12,activeViewType:'ThreeD',modified:false};
+ const args={expected_document:document.path,definition_guid:'d6c25563-54cb-43e7-8003-e7cf8df36916',definition_id:'45',data_type:'text',category_ids:['-2000011']};
+ const mcp=await openWorkspaceMcp(f),result=await mcp.callTool({name,arguments:args},{timeout:5000});
+ assert.equal(result.structuredContent.buildxToolOutcome.outcome,'unconfirmed');const proof=result._meta?.[CHAT_READ_RECEIPT_META];assert.ok(proof);assert.equal(proof.tool,name);
+ const filename=proof.requestId+'.json';assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[filename]);
+ const request=JSON.parse(await fs.readFile(path.join(queue,'inbox',filename),'utf8'));assert.equal(request.operation,operation);assert.equal(request.atomicRead,true);
+ const {isError:_mcpError,...appServerResult}=result;f.codex.notify('item/completed',{item:{type:'mcpToolCall',id:'original',server:'revit_workbench',tool:name,status:'failed',result:appServerResult}});f.codex.notify('turn/completed',{turn:{id:'turn',status:'completed'}});
+ const original=f.app.snapshot('test').session,assistant=original.messages.find(message=>message.role==='assistant');assert.equal(assistant.tools.find(item=>item.id==='original').status,'unknown');
+ await fs.rename(path.join(queue,'inbox',filename),path.join(queue,'processing',filename));
+ const value={schema_version:1,definition_guid:args.definition_guid,definition_id:'45',data_type:'text',definition_name:'Synthetic',document_title:document.title,document_path:document.path,binding_before:'unbound',proposed_binding:'instance',category_ids:['-2000011'],instance_count:0,instances:[],coverage:'complete_current_document_instances',future_instances_affected:true,authorization:'not_granted',host_session_bound:false,human_decision:false,binding_attempted:false,external_file_accessed:false};
+ const payload={id:proof.requestId,hostSession,completedUtc:new Date().toISOString(),ok:true,result:{operation,hostSession,atomicReadSnapshot:true,snapshot:{hostSession,hostVersion:'0.8.9',document,capabilities},value:{operation,hostSession,document:{title:document.title,path:document.path},modifiedByOperation:false,value}}};
+ const outbox=path.join(queue,'outbox',filename);await fs.writeFile(outbox+'.tmp',JSON.stringify(payload));await fs.rename(outbox+'.tmp',outbox);
+ let current;for(let i=0;i<160;i++){current=f.app.snapshot('test').session;if(current.toolReceipts?.length&&current.conversation.persistence?.status==='saved')break;await wait(20);}
+ assert.deepEqual(current.toolReceipts,[{messageId:assistant.id,itemId:'original',requestId:proof.requestId,status:'received',checkedAt:current.toolReceipts?.[0]?.checkedAt}]);
+ assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[]);assert.deepEqual(await fs.readdir(path.join(queue,'processing')),[filename]);assert.equal(f.codex.turns,1);
+});

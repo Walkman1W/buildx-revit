@@ -86,3 +86,9 @@ test('XY coordinates use native numeric controls while preserving exact object v
  axes[0].value='-1.5';axes[1].value='200';assert.deepEqual(JSON.parse(item.input.value),{x:-1.5,y:200});
  item.input.value='{"x":4,"y":5}';assert.deepEqual(axes.map(a=>a.value),['4','5']);
 });
+
+test('project preview category identities use a bounded native multiline field',()=>{
+ const item=field({key:'category_ids',rule:{type:'array',items:{type:'string',maxLength:20},minItems:1,maxItems:30,uniqueItems:true}});
+ assert.equal(item.controls[1].tagName,'TEXTAREA');item.controls[1].value='-2000011\n-2000032';assert.deepEqual(JSON.parse(item.input.value),['-2000011','-2000032']);
+ item.controls[1].value='-2000011\n-2000011';assert.throws(()=>JSON.parse(item.input.value));
+});
