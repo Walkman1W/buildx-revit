@@ -352,3 +352,14 @@ test('schedule is discoverable and guarded as a model transaction',async()=>{
  let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
  const result=await dispatcher.invokeCommand(name,{name:'Walls',category:'OST_Walls'},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
 });
+
+
+test('material is discoverable in Code Mode elements and guarded by model permission',async()=>{
+ const name='revit_create_material',found=[];let offset=0,more=true;
+ while(more){const page=describeModelOperationSchema({domain:'elements',offset,limit:3});assert.equal(page.ok,true);found.push(...page.value.tools.map(tool=>tool.name));more=page.value.hasMore;offset+=3;}
+ assert.equal(found.filter(item=>item===name).length,1);assert.equal(supportsModelPermissionTool(name),true);
+ const registered=MODEL_AI_EFFECT_TOOLS.find(tool=>tool.name===name);assert.ok(registered);assert.deepEqual(describeModelOperationSchema({tool:name}).value.inputSchema,registered.inputSchema);
+ assert.equal(modelOperationEffect(name).kind,'model_transaction');assert.equal(modelCommandById(name).readOnly,false);
+ let calls=0;const dispatcher=createModelToolDispatcher({invokeAtomicRead:async()=>status(),invokeWorkbench:async()=>{calls++;}});
+ const result=await dispatcher.invokeCommand(name,{name:'Test material',red:12,green:34,blue:56,transparency:25},{confirmed:false});assert.equal(result.ok,false);assert.equal(calls,0);
+});

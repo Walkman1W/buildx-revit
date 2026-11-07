@@ -259,3 +259,18 @@ test('schedule is searchable and manual form requires confirmation',async t=>{
  const run=row.querySelectorAll('.model-command-run')[0],confirm=row.querySelectorAll('.model-command-confirm')[0].children[0];run.click();await flush();assert.equal(ui.requests.length,0);
  confirm.checked=true;run.click();await flush();assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'墙明细',category:'OST_Walls'});await ui.respond(ui.requests[0],{ok:true,executionId:'schedule-write'});
 });
+
+
+test('material is searchable and manual submission needs confirmation',async t=>{
+ const name='revit_create_material',tool=PANEL_TOOL_CATALOG.find(item=>item.name===name);
+ assert.equal(tool?.label,'创建材质');assert.equal(tool.readOnly,false);
+ for(const query of [name,'create_material','cm','创建材质'])assert.ok(modelMentionMatches(PANEL_TOOL_CATALOG,query).some(item=>item.name===name),query);
+ const ui=await setup(t,PANEL_TOOL_CATALOG);ui.input('@create_material');const option=ui.get('model-tool-picker').querySelectorAll('.model-tool-option').find(item=>item.textContent.includes(name));assert.ok(option);option.click();assert.equal(ui.get('prompt').value,'@'+name+' ');
+ ui.document.body.querySelectorAll('.model-tab')[1].click();ui.emit('state',{...state,toolCatalog:PANEL_TOOL_CATALOG,commandCatalog:MODEL_COMMAND_CATALOG});await flush();
+ const row=ui.get('model-command-list').querySelectorAll('.model-command-item').find(item=>item.dataset.commandId===name);assert.ok(row);row.querySelectorAll('.model-command-apply')[0].click();
+ for(const [key,value] of Object.entries({name:'Test material',red:'12',green:'34',blue:'56',transparency:'25'}))ui.get('model-command-'+name+'-'+key).value=value;
+ row.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+ row.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;row.querySelectorAll('.model-command-run')[0].click();await flush();
+ assert.equal(ui.requests.length,1);assert.deepEqual(ui.requests[0].body.parameters,{mode:'rollback',name:'Test material',red:12,green:34,blue:56,transparency:25});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'material-write'});
+});

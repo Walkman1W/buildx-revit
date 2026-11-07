@@ -15,7 +15,7 @@ namespace RevitLocalCodex
     internal static partial class WorkbenchActions
     {
         internal static readonly string[] ReadOperations = { "get_selection", "search_elements", "list_levels", "list_family_types", "describe_parameters", "capture_model_snapshot", "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_type_parameters", "get_parameter_value", "list_sheets", "get_sheet_info", "list_titleblocks", "get_categories", "get_worksets", "get_phases", "get_phase_filters", "get_design_options", "list_shared_parameters", "list_project_parameters", "get_warnings", "get_rvt_links", "get_link_instances", "get_pipe_network", "get_revision_sequences", "get_schedule_data", "get_group_members", "calculate_material_quantities", "check_clashes" };
-        internal static readonly string[] WriteOperations = { "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_schedule", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
+        internal static readonly string[] WriteOperations = { "create_material", "set_parameters", "set_parameter_value", "set_type_parameter", "move_elements", "copy_elements", "create_wall", "create_pipe", "create_conduit", "create_duct", "create_level", "create_grid", "pin_element", "unpin_element", "create_floor_plan_view", "create_3d_view", "create_section_view", "create_schedule", "create_sheet", "place_viewport_on_sheet", "apply_view_template", "place_window", "create_text_note" };
         internal static bool IsRead(string operation) { return ReadOperations.Contains(operation, StringComparer.Ordinal); }
         internal static bool IsWrite(string operation) { return WriteOperations.Contains(operation, StringComparer.Ordinal); }
 
@@ -101,7 +101,7 @@ namespace RevitLocalCodex
                     else if (operation == "place_window") result = PlaceWindow(doc, args, basicCreated);
                     else if (operation == "create_wall") result = CreateWall(uiapp, args);
                     else if (operation == "create_pipe") result = CreatePipe(uiapp, args);
-                    else if (operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
+                    else if (operation == "create_material" || operation == "create_conduit" || operation == "create_duct" || operation == "create_level" || operation == "create_grid" || operation == "pin_element" || operation == "unpin_element" || operation == "create_floor_plan_view" || operation == "create_3d_view" || operation == "create_section_view" || operation == "create_schedule" || operation == "create_sheet" || operation == "place_viewport_on_sheet" || operation == "create_text_note") result = BasicWrite(uiapp, operation, args, basicCreated);
                     else throw new InvalidOperationException("Unknown write operation.");
                     transaction.SetFailureHandlingOptions(transaction.GetFailureHandlingOptions()
                         .SetFailuresPreprocessor(new RejectErrors()).SetClearAfterRollback(true));
@@ -517,6 +517,24 @@ namespace RevitLocalCodex
                 doc.Regenerate();
                 return ReadBasicCreated(doc, operation, args, created.Id);
             }
+            if (operation == "create_material")
+            {
+                Fields(args, "expected_document", "mode", "name", "red", "green", "blue", "transparency");
+                if (doc.IsFamilyDocument) throw new InvalidOperationException("Materials require a project document.");
+                string name = SheetText(args, "name");
+                using (var collector = new FilteredElementCollector(doc).OfClass(typeof(Material)))
+                    if (collector.ToElements().Any(e => String.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase)))
+                        throw new InvalidOperationException("A material with this name already exists.");
+                int red = MaterialInteger(args, "red", 255), green = MaterialInteger(args, "green", 255), blue = MaterialInteger(args, "blue", 255);
+                int transparency = MaterialInteger(args, "transparency", 100);
+                ElementId id = Material.Create(doc, name);
+                Material material = RequiredElement(doc, id.Value) as Material;
+                if (material == null || !material.IsValidObject) throw new InvalidOperationException("Material creation failed.");
+                material.Color = new Autodesk.Revit.DB.Color((byte)red, (byte)green, (byte)blue);
+                material.Transparency = transparency;
+                created.Id = id; doc.Regenerate();
+                return ReadBasicCreated(doc, operation, args, id);
+            }
             if (operation == "create_section_view")
             {
                 Fields(args, "expected_document", "mode", "view_family_type_id", "name", "origin_mm", "angle_degrees", "width_mm", "height_mm", "depth_mm");
@@ -713,6 +731,17 @@ namespace RevitLocalCodex
                     throw new InvalidOperationException("Created schedule identity, category, name or empty field list changed.");
                 return new { element_id = DescribedId(schedule.Id), name = schedule.Name, category = (string)Required(args, "category"), field_count = 0 };
             }
+            if (operation == "create_material")
+            {
+                Material material = element as Material;
+                if (material == null || !material.IsValidObject || !String.Equals(material.Name, SheetText(args, "name"), StringComparison.Ordinal))
+                    throw new InvalidOperationException("Created material identity changed.");
+                Autodesk.Revit.DB.Color color = material.Color;
+                int red = MaterialInteger(args, "red", 255), green = MaterialInteger(args, "green", 255), blue = MaterialInteger(args, "blue", 255), transparency = MaterialInteger(args, "transparency", 100);
+                if (color == null || color.Red != red || color.Green != green || color.Blue != blue || material.Transparency != transparency)
+                    throw new InvalidOperationException("Created material graphics properties changed.");
+                return new { element_id = DescribedId(material.Id), name = material.Name, red = (int)color.Red, green = (int)color.Green, blue = (int)color.Blue, transparency = material.Transparency };
+            }
             if (operation == "create_section_view")
             {
                 ViewSection section = element as ViewSection;
@@ -904,6 +933,13 @@ namespace RevitLocalCodex
             double mm = FiniteNumber(Required(args, key), key);
             if (mm < 100 || mm > 1000000) throw new InvalidOperationException(key + " must be in [100, 1000000] mm.");
             return Feet(mm);
+        }
+
+        private static int MaterialInteger(Dictionary<string, object> args, string key, int max)
+        {
+            double value = FiniteNumber(Required(args, key), key);
+            if (value < 0 || value > max || value != Math.Truncate(value)) throw new InvalidOperationException(key + " is outside its integer range.");
+            return (int)value;
         }
 
         private static string SheetText(Dictionary<string, object> args, string key)

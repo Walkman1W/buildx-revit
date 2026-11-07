@@ -288,3 +288,23 @@ test('schedule requires capability, preserves receipt and rejects result drift w
     assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(f.requests.length,1);
   }
 });
+
+
+test('material validates before queue, reads graphics exactly and retains mismatched original receipt',async t=>{
+ const operation='create_material',tool='revit_create_material',all=[...operations,operation];
+ const parameters={name:'Test material',red:12,green:34,blue:56,transparency:25};
+ const patch={...hostPatch,nativeBasicWriteOperations:all},value={element_id:'5',...parameters};
+ for(const host of [{...patch,version:'0.8.8'},{...patch,nativeBasicWriteOperations:operations}]){
+  const unsupported=await singleParameterWriteFixture(t,{hostPatch:host,operations:all});
+  await assert.rejects(invokeWorkbench(tool,args(parameters),unsupported.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(unsupported.requests.length,0);
+ }
+ const f=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{name:''},{name:' bad '},{red:-1},{green:256},{blue:1.5},{transparency:101},{texture:'file'}])
+  await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);
+ const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);
+ assert.deepEqual(result.value,value);assert.equal(f.requests[0].args.mode,'rollback');assert.equal(f.requests.length,1);
+ const bad=await singleParameterWriteFixture(t,{hostPatch:patch,operations:all,respondEnvelope:r=>envelope(r,{...value,red:13})});let owner;
+ await assert.rejects(invokeWorkbench(tool,args(parameters),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});
+ assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
+});
