@@ -158,6 +158,8 @@ namespace RevitLocalCodex {
         private sealed class MirrorExpectation {}
         private static MirrorExpectation MirrorOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope mirror peer.");}
         private static object VerifyMirror(Document d, Dictionary<string,object> a, MirrorExpectation e){throw new InvalidOperationException("Out of scope mirror peer.");}
+        private static List<TypeChangeExpectation> ReplaceFamilyTypes(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope family type peer.");}
+        private static object VerifyFamilyTypeChanges(Document d, Dictionary<string,object> a, List<TypeChangeExpectation> e){throw new InvalidOperationException("Out of scope family type peer.");}
         private sealed class UngroupExpectation {}
         private static UngroupExpectation UngroupOne(Document d, Dictionary<string,object> a){throw new InvalidOperationException("Out of scope ungroup peer.");}
         private static object VerifyUngroup(Document d, UngroupExpectation e){throw new InvalidOperationException("Out of scope ungroup peer.");}
