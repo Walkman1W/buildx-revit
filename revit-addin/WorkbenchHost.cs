@@ -50,6 +50,7 @@ namespace RevitLocalCodex
         // One owner per host session; family documents never enter the project script group.
         private BuildX.FamilyRevit.RevitFamilyWorkflow familyWorkflow;
         private TypeParameterWriteApproval typeParameterApprovals;
+        private BatchFilterPreparationBook batchFilterPreparations;
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
         private static readonly string[] FamilyOperations = { "family_templates", "family_create_valve", "family_create_cabinet", "family_inspect_job", "family_save_job", "family_save_cabinet", "family_load_job", "family_close_job", "family_close_cabinet" };
@@ -782,6 +783,10 @@ namespace RevitLocalCodex
             var boundArgs = new Dictionary<string, object>(args);
             object proposalWire;
             bool preparesTypeWrite = boundArgs.TryGetValue("type_write_proposal", out proposalWire);
+            object batchProposalWire;
+            bool preparesBatchWrite = boundArgs.TryGetValue("batch_write_proposal", out batchProposalWire);
+            if (preparesBatchWrite) boundArgs.Remove("batch_write_proposal");
+            if (preparesBatchWrite && (preparesTypeWrite || operation != "preview_batch_parameter_filter")) throw new InvalidOperationException("Batch preparation requires the atomic batch preview only.");
             if (preparesTypeWrite) boundArgs.Remove("type_write_proposal");
             // Omission is resolved once, inside the same Revit callback that
             // consumes it. An explicit identity is never replaced or guessed.
@@ -791,6 +796,7 @@ namespace RevitLocalCodex
                 RequireDocument(doc, ExpectedDocument(boundArgs));
             object value;
             WorkbenchActions.TypeWritePreparation preparation = null;
+            Func<object> issueBatchPreparation = null;
             if (preparesTypeWrite)
             {
                 if (operation != "get_type_parameter_impact") throw new InvalidOperationException("Type-write preparation requires the atomic type-impact operation.");
@@ -813,7 +819,29 @@ namespace RevitLocalCodex
                 long? typeId = boundArgs.ContainsKey("type_id") ? (long?)NativeModelQueries.ExactId(boundArgs, "type_id") : null;
                 long? levelId = boundArgs.ContainsKey("level_id") ? (long?)NativeModelQueries.ExactId(boundArgs, "level_id") : null;
                 long parameterId = NativeModelQueries.ExactSignedId(boundArgs, "parameter_id");
-                object result = FreezeResult(WorkbenchActions.PreviewBatchParameterFilter(doc, (string)rawCategory, typeId, levelId, parameterId));
+                object rawResult = WorkbenchActions.PreviewBatchParameterFilter(doc, (string)rawCategory, typeId, levelId, parameterId);
+                if (preparesBatchWrite)
+                {
+                    var proposal = batchProposalWire as Dictionary<string, object>;
+                    if (proposal == null) throw new InvalidOperationException("Batch preparation proposal required.");
+                    NativeModelQueries.Fields(proposal, "expected_document", "mode", "storage_type", "value_unit", "value");
+                    object rawDocument, rawMode, rawStorage, target, rawUnit;
+                    if (!proposal.TryGetValue("expected_document", out rawDocument) || !(rawDocument is string) ||
+                        !proposal.TryGetValue("mode", out rawMode) || !(rawMode is string) ||
+                        !proposal.TryGetValue("storage_type", out rawStorage) || !(rawStorage is string) ||
+                        !proposal.TryGetValue("value", out target)) throw new InvalidOperationException("Complete batch proposal required.");
+                    string unit = proposal.TryGetValue("value_unit", out rawUnit) ? rawUnit as string : null;
+                    if (proposal.ContainsKey("value_unit") && unit == null) throw new InvalidOperationException("Invalid value unit.");
+                    RequireProjectEdit(doc, (string)rawDocument, access);
+                    var phases = new BatchFilterWritePhases(rawResult, (string)rawStorage, unit, target);
+                    if (phases.Count == 0) throw new InvalidOperationException("Batch preparation requires at least one target.");
+                    issueBatchPreparation = () => {
+                        if (batchFilterPreparations == null) batchFilterPreparations = new BatchFilterPreparationBook(session);
+                        string token = batchFilterPreparations.Issue(doc, rawResult, (string)rawStorage, unit, target, (string)rawMode);
+                        return new { schema_version = 1, token = token };
+                    };
+                }
+                object result = FreezeResult(rawResult);
                 value = new { operation, hostSession = session, document = new { title = doc.Title, path = doc.PathName }, value = result, modifiedByOperation = false };
             }
             else if (operation == "get_snapshot_delta")
@@ -833,6 +861,8 @@ namespace RevitLocalCodex
             long? afterViewId = after == null || after.ActiveView == null ? (long?)null : after.ActiveView.Id.Value;
             if (viewId != afterViewId)
                 throw new InvalidOperationException("Active view changed during the read; snapshot was not published.");
+            if (issueBatchPreparation != null)
+                return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true, batch_write_preparation = issueBatchPreparation() });
             if (preparation != null)
                 return FreezeResult(new { operation, hostSession = session, snapshot = Status(doc, access), value, atomicReadSnapshot = true,
                     type_write_preparation = TypeParameterApprovals().Issue(doc, preparation.Plan) });
@@ -1113,3 +1143,5 @@ namespace RevitLocalCodex
         }
     }
 }
+
+
