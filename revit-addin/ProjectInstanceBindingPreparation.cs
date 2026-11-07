@@ -7,8 +7,8 @@ using Autodesk.Revit.DB;
 
 namespace RevitLocalCodex
 {
-    // Unregistered preparation only. This does not authorize or insert a binding,
-    // access any shared-parameter file or modify Application global state.
+    // Read-only preparation. It does not authorize or insert a binding, access
+    // any shared-parameter file, or modify Application global state.
     internal static class ProjectInstanceBindingPreparation
     {
         internal sealed class InstanceFact

@@ -7,9 +7,8 @@ using Autodesk.Revit.DB.Events;
 
 namespace RevitLocalCodex
 {
-    // Created on host startup before any baseline can be requested. This owner is
-    // intentionally not exposed as an MCP operation until receipt and capability
-    // ownership have been implemented and verified.
+    // Created on host startup before any baseline can be requested. The named
+    // query requires the host's atomic read and dedicated capability checks.
     internal sealed class SnapshotRevitBridge : IDisposable
     {
         private readonly ControlledApplication application;
@@ -73,8 +72,7 @@ namespace RevitLocalCodex
             if (doc == null || !doc.IsValidObject) throw new InvalidOperationException("An open document is required.");
             return lifecycle.Read(doc, token, version, offset, limit);
         }
-        // Internal candidate only; not dispatched until capability, atomic queue,
-        // receipt and authorization checks are proven together.
+        // Called only from the host's dedicated atomic-read candidate route.
         internal object Query(Document doc, Dictionary<string, object> args)
         {
             if (args == null || args.Keys.Any(k => k != "expected_document" && k != "action" && k != "baseline_token" && k != "expected_version" && k != "offset" && k != "limit"))

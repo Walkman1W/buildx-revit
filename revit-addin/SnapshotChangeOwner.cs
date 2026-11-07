@@ -12,8 +12,8 @@ namespace RevitLocalCodex
         { if (clock == null || frequency <= 0 || milliseconds <= 0) throw new ArgumentException("Invalid snapshot budget."); Clock=clock; Frequency=frequency; this.milliseconds=milliseconds; start=clock(); }
         internal void Check() { long now=Clock(); if (now < start || ((double)now-start)*1000.0/Frequency >= milliseconds) throw new InvalidOperationException("Snapshot time budget exceeded."); }
     }
-    // Unregistered, in-memory primitive. Its caller must own the Revit document
-    // event lifecycle and call Expire on close, missed events, or host shutdown.
+    // In-memory primitive for the bounded snapshot candidate. Its caller owns
+    // the Revit event lifecycle and expires it on missed events or host shutdown.
     // Pages describe observed events, not net semantic model changes.
     internal sealed class SnapshotChangeOwner
     {
