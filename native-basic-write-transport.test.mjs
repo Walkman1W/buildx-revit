@@ -366,3 +366,12 @@ test('column native capability, exact rollback receipt and mismatch remain guard
   await assert.rejects(invokeWorkbench('revit_create_column',args(input),bad.options()),e=>{const facts=workbenchFailureEvidence(e);owner=bad.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(bad.requests.length,1);
  }
 });
+
+test('beam checks capability and exact geometry receipts without replay',async t=>{
+ const tool='revit_create_beam',operation='create_beam',all=[...operations,operation],parameters={symbol_id:'9007199254740993',level_id:'9007199254740994',start_mm:{x:0,y:0,z:100},end_mm:{x:1000,y:0,z:200}},value={element_id:'3',...parameters};
+ const absent=await singleParameterWriteFixture(t,{hostPatch,operations:all});await assert.rejects(invokeWorkbench(tool,args(parameters),absent.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');assert.equal(absent.requests.length,0);
+ const f=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,value)});
+ for(const change of [{symbol_id:'0'},{level_id:9007199254740992},{end_mm:{x:0,y:0,z:100}},{extra:1}])await assert.rejects(invokeWorkbench(tool,args({...parameters,...change}),f.options()),e=>workbenchFailureEvidence(e).outcome==='not_started');
+ assert.equal(f.requests.length,0);const result=await invokeWorkbench(tool,args(parameters),f.options());f.remember(result.receiptOwner);assert.deepEqual(result.value,value);assert.equal(f.requests[0].args.mode,'rollback');assert.equal(result.receiptOwner.inspect().value.status,'received');
+ for(const change of [{level_id:'2'},{symbol_id:'2'},{end_mm:{x:1001,y:0,z:200}}]){const x=await singleParameterWriteFixture(t,{hostPatch:{...hostPatch,nativeBasicWriteOperations:all},operations:all,respondEnvelope:r=>envelope(r,{...value,...change})});let owner;await assert.rejects(invokeWorkbench(tool,args(parameters),x.options()),e=>{const facts=workbenchFailureEvidence(e);owner=x.remember(facts.receiptOwner);return facts.outcome==='unconfirmed';});assert.equal(owner.inspect().value.status,'unconfirmed');assert.equal(x.requests.length,1);}
+});
