@@ -6,6 +6,8 @@
 
 ## 当前阶段
 
+- 批量参数写研究切片移植未注册事实比较原语，受控 C# 14/14、只读预览及写入口关闭边界 Node 9/9。可信进程与请求绑定、持久防重和原回执仍未闭环；写入口保持关闭。未操作真实 Revit 或 41874。详见 [事实比较研究](BATCH-FILTER-FACTS-GUARD-20261107.zh-CN.md)。
+
 已从 `D:\code\REA\local-codex-panel` 白名单提取 507 份源码和必要测试，共 5,602,302 字节。复制前后来源摘要一致，目标逐文件摘要核对通过；清单见 `source-baseline.json`。源目录和已运行的插件保持原状。每小时检查继续本项目聊天，读取本状态和任务台账后推进。
 
 六项原生查询已完成源码闭环及本轮授权的隔离验证：自有输入/输出契约、C# 生产者、宿主 0.8.1 和具名能力、统一原子队列、sourceDocument、取消和原回执核对全部接通。旧宿主在入队前拒绝，六项不回落 AEC/Python provider；本工程内专属 adapter、relay 和刷新器已退出。详见 `NATIVE-SIX-VERIFICATION.zh-CN.md` 和 `native-six-verification.json`。

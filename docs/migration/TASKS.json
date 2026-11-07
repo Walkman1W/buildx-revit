@@ -49,6 +49,7 @@
     {
       "id": "BX-006",
       "title": "常用参数与建模命令迁移",
+      "batchFilterFactsGuard": "Unregistered research primitive; controlled C# 14/14 and closed-boundary/preview Node 9/9. Trusted request binding, durable deduplication and original receipt remain open; named write unavailable. See BATCH-FILTER-FACTS-GUARD-20261107.zh-CN.md.",
       "status": "in_progress",
       "acceptance": "以完整清单按需适配；共享权限、事务和回执，逐批记录真实验收",
       "currentSlice": "AEC high-frequency batch: 22 guarded named candidates from the prior 31 missing names; 9 names remain without candidates. Candidates have bounded semantics and are not full AEC parity.",
