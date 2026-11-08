@@ -6,6 +6,7 @@
 .model-picker-icon,.model-picker-current-effort,.model-picker-chevron{flex:none}
 .model-picker-icon{font-size:14px;color:#28644d}.model-picker-current-model{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.model-picker-current-effort{color:#286f55}.model-picker-chevron{font-size:13px;color:#829087}
 .model-picker-menu{position:absolute;z-index:20;right:0;bottom:calc(100% + 9px);display:grid;gap:8px;width:min(280px,calc(100vw - 40px));padding:12px;border:1px solid #d6e0d1;border-radius:10px;background:#fff;box-shadow:0 8px 28px #1c32251c;color:#34483b;white-space:normal}
+@media(max-width:359px){.model-picker-menu{width:min(280px,calc(100vw - 80px))}}
 .model-picker-field-label,.model-picker-effort-label{font-size:11px;font-weight:600;color:#596b5d}.model-picker select{width:100%;min-width:0;padding:7px;border:1px solid #d6e0d1;border-radius:6px;background:#fff;color:#263b30;font:inherit}
 .model-picker-reasoning{display:grid;gap:7px}.model-picker #model-picker-effort{width:100%;height:18px;margin:0;accent-color:#286f55;cursor:pointer}.model-picker #model-picker-effort:disabled,.model-picker select:disabled{cursor:default;opacity:.55}
 .composer-bottom .model-picker-refresh{justify-self:start;padding:3px 0;border:0;background:transparent;color:#28644d;font:inherit;cursor:pointer}.composer-bottom .model-picker-refresh:disabled{opacity:.55;cursor:default}

@@ -4,7 +4,7 @@ import {createParameterChangeField} from './parameter-change-field.mjs';
 import {createPersonalCommandFields} from './personal-command-fields.mjs';
 import {createManualTypeParameterWriteField} from './manual-type-parameter-write-field.mjs';
 import {clipboardImageFiles,hasTransferredFiles} from './clipboard-attachments.mjs';
-import {modelToolEntries,modelToolCountLabel} from './chat-view.mjs';
+import {modelToolEntries} from './chat-view.mjs';
 
 // Display adapter for the fixed model workspace. The original app owns every
 // request, account, draft and conversation; this module only presents intents.
@@ -262,16 +262,16 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   const prompt = get('prompt'), messages = get('messages'), topbar = document.querySelector('.topbar');
   if (!prompt || !messages || !topbar) return null;
   let mounted = false, active = false, shellBroken = false, currentView = 'chat', snapshot = null, catalog = [], commandCatalog = MODEL_COMMANDS;
-  let nav, chatTab, commandTab, knowledgeTab, skillsTab, knowledgePanel, skillsPage, commandList, accountButton, drawer, tools, overlay, picker, hint, controls;
-  let permissionBar,permissionSelect,permissionPlaceholder,permissionScope,permissionDetails,permissionSafety,permissionRefresh;
-  let accessOptions,accessScope,accessStatus,accessConfirm,accessConfirmText,accessConfirmApply,accessReview=null,accessReviewNotice='';
+  let nav, chatTab, commandTab, knowledgeTab, skillsTab, knowledgePanel, skillsPage, commandList, accountButton, drawer, overlay, picker, hint, controls;
+  let permissionBar,permissionSelect,permissionPlaceholder,permissionAutomatic,permissionScope,permissionDetails,permissionSafety,permissionRefresh;
+  let accessOptions,accessScope,accessStatus,accessConfirm,accessConfirmText,accessConfirmApply,accessMenu,accessMenuLabel,accessReview=null,accessReviewNotice='';
   const accessButtons=new Map();
   let modelReceiptPanel,modelReceiptDetails,modelReceiptTitle,modelReceiptState,modelReceiptDescription,modelReceiptStatus,modelReceiptNext,modelReceiptFailure,modelReceiptRaw,modelReceiptEvidence,modelReceiptCheck,modelReceiptAcknowledge,modelReceiptRecover,modelReceiptNotice,modelReceiptOpen,modelReceiptBinding=null;
   let terminalToggle,terminalHint,terminalPanel,terminalState,terminalMeta,terminalNotice,terminalStop,terminalCheck,terminalContent,terminalRequestId=null;
   let historyButton, historyPanel, historyList, historyNotice, historyText, historyContinue, historySignature = '';
   let mention = null, matches = [], selected = 0, composing = false, drawerOpen = false, drawerBody, drawerClose, drawerReturnFocus, drawerTitle;
   let accountMenu, accountMenuOpen = false, menuEmail, menuState, menuLogin, menuRegister, menuManage, menuSignOut;
-  let commandCatalogSignature = '', commandSearch, commandItems,createCommand,createCommandKind,createCommandHelp;
+  let commandCatalogSignature = '', commandSearch, commandItems,createArea,createCommand,createCommandKind,createCommandHelp;
   let commandButtons = [], parameterInputs = [], rows = [], resultRows = [];
   let draftOrigin = null, draftOriginStatus, draftOriginClear, chatDraftNotice;
   let attachmentButton, attachmentInput, attachmentList;
@@ -287,7 +287,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   const validAccessPolicy=policy=>policy?.available===true&&['read-only','project-write','full-access'].includes(policy.mode)&&Number.isSafeInteger(policy.revision)&&Array.isArray(policy.roots);
   const accessText=()=>{
     const policy=snapshot?.accessPolicy;
-    return validAccessPolicy(policy)?(policy.mode==='full-access'?'本机文件可读写':policy.mode==='project-write'?'项目目录可读写：'+policy.roots.join('；'):'文件与模型只读'):(snapshot?.accessPolicyMessage||'访问范围尚未核实。');
+    return validAccessPolicy(policy)?(policy.mode==='full-access'?'本机文件可读写':policy.mode==='project-write'?(snapshot?.confirmedWrite?'项目模型可申请写入：':'项目目录可读写：')+policy.roots.map(root=>root?.path??root).join('；'):'文件与模型只读'):(snapshot?.accessPolicyMessage||'访问范围尚未核实。');
   };
   function renderAccessStatus(){
     if(!active||!accessStatus)return;
@@ -302,13 +302,13 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   }
   function clearAccessReview({invalidated=false}={}){accessReview=null;accessReviewNotice=invalidated?'状态已变化，权限未修改，请重新选择':'';if(accessConfirm)accessConfirm.hidden=true;renderAccessStatus();}
   function reviewAccess(detail){
-    if(!canChangeAccess()||!['read-only','project-write','full-access'].includes(detail?.mode))return;
+    if(!canChangeAccess()||!['read-only','project-write','full-access'].includes(detail?.mode)||snapshot.confirmedWrite===true&&detail.mode==='full-access')return;
     clearAccessReview();
     if(detail.mode==='read-only'){window.dispatchEvent(new CustomEvent('buildx-access-policy-select',{detail:{mode:'read-only',confirmed:true}}));return;}
     if(detail.mode==='project-write'&&(typeof detail.rootId!=='string'||!detail.rootId)){switchView('knowledge');return;}
     if(detail.mode==='project-write'&&(typeof detail.path!=='string'||!detail.path||detail.path.length>32768||/[\u0000-\u001f\u007f]/.test(detail.path)))return;
     accessReview={mode:detail.mode,...detail.mode==='project-write'?{rootId:detail.rootId}:{},binding:accessBinding()};
-    accessConfirmText.textContent=(detail.mode==='full-access'?'允许 BuildX 读取和编辑当前 Windows 账号可访问的本机文件，并编辑当前 Revit 模型。此范围不限于资料库，资料库仍用于选择参考内容。':'允许 BuildX 读取和编辑以下目录及子目录中的文件，并编辑其中当前打开的 Revit 模型：'+detail.path)+' 此选择会记住，可随时切换为只读。';
+    accessConfirmText.textContent=(detail.mode==='full-access'?'允许 BuildX 读取和编辑当前 Windows 账号可访问的本机文件，并编辑当前 Revit 模型。此范围不限于资料库，资料库仍用于选择参考内容。':(snapshot.confirmedWrite?'允许 BuildX 读取以下目录，并对其中打开的 Revit 模型申请逐次确认写入：':'允许 BuildX 读取和编辑以下目录及子目录中的文件，并编辑其中当前打开的 Revit 模型：')+detail.path)+' 此选择会记住，可随时切换为只读。';
     accessConfirmApply.textContent=detail.mode==='full-access'?'启用完全访问':'授权此工作区';
     switchView('chat');accessConfirm.hidden=false;renderAccessStatus();accessConfirm.scrollIntoView({block:'nearest'});accessConfirm.focus();
   }
@@ -508,6 +508,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   function commandNeedsConfirmation(command,inputs){
     if(command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview===true)return false;
     if(command.readOnly!==false)return false;
+    if(snapshot?.confirmedWrite===true)return true;
     const grant=snapshot?.modelPermission,mode=inputs?.mode?.value||command.inputSchema?.properties?.mode?.default||'rollback';
     const currentGrant=snapshot?.ready===true&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===snapshot.commandConversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now());
     const coveredFull=snapshot?.accessPolicy?.available===true&&snapshot.accessPolicy.mode==='full-access'&&['revit_execute_csharp','revit_save_command','revit_run_command'].includes(command.tool);
@@ -653,7 +654,8 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     for(const group of commandItems?.querySelectorAll('.model-command-group') || []) group.hidden=[...group.querySelectorAll('.model-command-item')].every(item=>item.hidden);
   }
   function renderCommandCreation(value=snapshot){
-    const kind=createCommandKind.value,disabled=!value||value.blocked||value.busy||value.persistence?.status==='failed'||get('new-chat').disabled;
+    createArea.hidden=value?.confirmedWrite===true;
+    const kind=createCommandKind.value,disabled=!value||createArea.hidden||value.blocked||value.busy||value.persistence?.status==='failed'||get('new-chat').disabled;
     createCommandKind.disabled=Boolean(disabled);createCommand.disabled=Boolean(disabled||!['csharp','sequence'].includes(kind));
     createCommandHelp.textContent=kind==='sequence'?'串联现有只读查询，生成可复用的步骤命令。':kind==='csharp'?'用日常语言描述需求，生成可复用的 C# 命令。':'该类型暂未接入，请选择 C# 命令或只读步骤命令。';
   }
@@ -902,45 +904,47 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       historyPanel.hidden = !historyPanel.hidden; historyButton.setAttribute('aria-expanded',String(!historyPanel.hidden));
       if (!historyPanel.hidden) window.dispatchEvent(new CustomEvent('buildx-history-refresh'));
     });
-    tools = button('model-tools-count','工具'); tools.title = '查看工具'; tools.id = 'model-tools-toggle';
-    tools.addEventListener('click',() => { showDrawer(true); const panel = document.querySelector('.tools-panel'); panel.open = true; panel.scrollIntoView({block:'nearest'}); }); navigationActions.append(tools);
     document.querySelector('.connection').after(nav);
     permissionBar=el('div','model-permission-bar');permissionBar.id='model-permission-bar';
+    accessMenu=el('details','model-access-menu');accessMenuLabel=el('summary','model-access-menu-label','访问权限');accessMenuLabel.id='model-access-menu-label';accessMenuLabel.setAttribute('aria-label','选择访问权限');accessMenu.append(accessMenuLabel);
+    document.addEventListener('click',event=>{if(accessMenu.open&&!accessMenu.contains(event.target))accessMenu.open=false;});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&accessMenu.open){accessMenu.open=false;accessMenuLabel.focus();}});
     accessOptions=el('fieldset','model-access-options');accessOptions.id='model-access-options';accessOptions.setAttribute('aria-label','访问权限');accessOptions.setAttribute('aria-describedby','model-access-status');accessOptions.disabled=true;accessOptions.tabIndex=-1;
     accessOptions.append(el('legend','sr-only','访问权限'));
-    for(const [mode,label] of [['read-only','只读'],['project-write','项目读写'],['full-access','完全访问']]){
+    for(const [mode,label] of [['read-only','只读'],['project-write','项目范围'],['full-access','完全访问']]){
       const choice=button('model-access-choice',label);choice.id='model-access-'+mode;choice.disabled=true;choice.setAttribute('aria-label',label);choice.setAttribute('aria-pressed','false');
-      choice.addEventListener('click',()=>{if(!choice.disabled)reviewAccess({mode});});accessButtons.set(mode,choice);accessOptions.append(choice);
+      choice.addEventListener('click',()=>{if(!choice.disabled){accessMenu.open=false;reviewAccess({mode});}});accessButtons.set(mode,choice);accessOptions.append(choice);
     }
+    accessMenu.append(accessOptions);
     accessScope=el('span','sr-only');accessScope.setAttribute('role','status');
     const permissionLabel=el('label','sr-only','执行方式');permissionLabel.setAttribute('for','model-permission-select');
     permissionSelect=el('select','model-permission-select');permissionSelect.id='model-permission-select';permissionSelect.setAttribute('aria-label','执行方式');
     permissionSelect.title='选择回滚预览或应用方式；可访问文件和模型的范围由访问权限决定。';
-    for(const [value,label] of [['','请选择执行方式'],['__pending','更新中…'],['rollback','回滚预览'],['confirm','确认后应用'],['automatic','自动应用']]){const option=el('option','',label);option.value=value;if(value==='__pending')option.disabled=true;if(value==='')permissionPlaceholder=option;permissionSelect.append(option);}
+    for(const [value,label] of [['','请选择执行方式'],['__pending','更新中…'],['rollback','回滚预览'],['confirm','确认后应用'],['automatic','自动应用']]){const option=el('option','',label);option.value=value;if(value==='__pending')option.disabled=true;if(value==='')permissionPlaceholder=option;if(value==='automatic')permissionAutomatic=option;permissionSelect.append(option);}
     permissionSelect.value='';permissionSelect.disabled=true;
     permissionSelect.addEventListener('change',()=>{const level=permissionSelect.value;permissionSelect.value=snapshot?.modelPermission?.level||'';if(active&&!permissionSelect.disabled&&['rollback','confirm','automatic'].includes(level))window.dispatchEvent(new CustomEvent('buildx-model-permission-select',{detail:{level}}));});
     permissionScope=el('span','sr-only','权限尚未核实。');permissionScope.setAttribute('role','status');
     permissionRefresh=button('model-access-choice','刷新服务状态');permissionRefresh.id='model-permission-refresh';permissionRefresh.hidden=true;
     permissionRefresh.title='只读取服务状态，保留待核查的原回执。';
     permissionRefresh.addEventListener('click',()=>{if(active&&!permissionRefresh.hidden&&!permissionRefresh.disabled)window.dispatchEvent(new CustomEvent('buildx-model-permission-refresh'));});
-    permissionBar.append(accessOptions,accessScope,permissionLabel,permissionSelect,permissionScope,permissionRefresh);
+    permissionBar.append(accessMenu,accessScope,permissionLabel,permissionSelect,permissionScope,permissionRefresh);
     mountTerminal();
     accessConfirm=el('section','model-access-confirm');accessConfirm.id='model-access-confirm';accessConfirm.hidden=true;accessConfirm.tabIndex=-1;accessConfirm.setAttribute('aria-label','确认访问范围');
     accessConfirmText=el('p','model-access-confirm-text');accessConfirmApply=button('model-access-confirm-apply','授权此范围');accessConfirmApply.id='model-access-confirm-apply';
-    const accessCancel=button('model-access-confirm-cancel','取消');accessCancel.id='model-access-confirm-cancel';accessCancel.addEventListener('click',()=>{clearAccessReview();(accessButtons.get(snapshot?.accessPolicy?.mode)||accessOptions).focus();});
+    const accessCancel=button('model-access-confirm-cancel','取消');accessCancel.id='model-access-confirm-cancel';accessCancel.addEventListener('click',()=>{clearAccessReview();accessMenuLabel.focus();});
     accessConfirmApply.addEventListener('click',()=>{if(!accessReview)return;if(!canChangeAccess()||accessReview.binding!==accessBinding()){clearAccessReview({invalidated:true});return;}const detail={mode:accessReview.mode,...accessReview.rootId?{rootId:accessReview.rootId}:{},confirmed:true};clearAccessReview();window.dispatchEvent(new CustomEvent('buildx-access-policy-select',{detail}));});
     const accessActions=el('div','model-access-confirm-actions');accessActions.append(accessCancel,accessConfirmApply);accessConfirm.append(accessConfirmText,accessActions);get('composer').before(accessConfirm);
     accessStatus=el('p','model-access-status');accessStatus.id='model-access-status';accessStatus.setAttribute('role','status');accessStatus.hidden=true;get('composer').after(accessStatus);
     drawer = el('div','model-account-overlay'); drawer.id = 'model-account-drawer'; drawer.hidden = true;
     const dialog = el('section','model-account-dialog'); dialog.setAttribute('role','dialog'); dialog.setAttribute('aria-modal','true'); dialog.setAttribute('aria-labelledby','model-account-title'); dialog.tabIndex = -1;
-    const dialogHeading=el('header','model-account-heading'); drawerTitle=el('h2','','连接与工具'); drawerTitle.id='model-account-title';
+    const dialogHeading=el('header','model-account-heading'); drawerTitle=el('h2','','本机连接'); drawerTitle.id='model-account-title';
     drawerClose=button('model-account-close','×'); drawerClose.setAttribute('aria-label','关闭账号窗口'); drawerClose.addEventListener('click',()=>showDrawer(false));
     dialogHeading.append(drawerTitle,drawerClose); drawerBody=el('div','model-account-drawer'); dialog.append(dialogHeading,drawerBody); drawer.append(dialog); document.body.append(drawer);
     drawer.addEventListener('click',event=>{if(event.target === drawer)showDrawer(false);});
     historyNotice = el('div','model-conversation-note'); historyNotice.id = 'model-conversation-note'; historyNotice.hidden = true; historyNotice.setAttribute('role','status');
     historyText = el('span'); historyContinue = button('model-history-continue','新建对话继续'); historyContinue.addEventListener('click',() => get('new-chat').click());
     historyNotice.append(historyText,historyContinue); get('context-panel').before(historyNotice);
-    const accountPanels = [document.querySelector('.connection'),get('account-panel'),get('codex-account-panel'),document.querySelector('.tools-panel')];
+    const accountPanels = [document.querySelector('.connection'),get('account-panel'),get('codex-account-panel')];
     for (const panel of accountPanels) { remember(panel); drawerBody.append(panel); }
     const permissionInfo=el('details','account-panel'); permissionInfo.id='model-permission-info';
     const permissionSummary=el('summary'); permissionSummary.append(el('span','','访问权限与执行方式'),el('span','','查看范围')); permissionInfo.append(permissionSummary);
@@ -990,7 +994,8 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     remember(get('skills-panel')); skillsPage.append(get('skills-panel'));
     window.dispatchEvent(new CustomEvent('buildx-extra-panels-ready'));
     commandSearch=el('input','model-command-filter'); commandSearch.type='search'; commandSearch.placeholder='搜索命令或工具'; commandSearch.setAttribute('aria-label','搜索命令');
-    const createArea=el('div','command-create-area'),createControls=el('div','command-create-controls'),createType=el('label','command-create-type');createType.append(el('span','','命令类型'));
+    createArea=el('div','command-create-area');
+    const createControls=el('div','command-create-controls'),createType=el('label','command-create-type');createType.append(el('span','','命令类型'));
     createCommandKind=el('select');createCommandKind.id='model-create-command-kind';createCommandKind.setAttribute('aria-label','新命令类型');
     for(const [kind,label,disabled] of [['csharp','C# 命令',false],['sequence','只读步骤命令',false],['dll','原生 DLL（暂未接入）',true],['dynamo','Dynamo（暂未接入）',true]]){const option=el('option','',label);option.value=kind;option.disabled=disabled;createCommandKind.append(option);}createCommandKind.value='csharp';createType.append(createCommandKind);
     createCommand=button('command-create','');createCommand.id='model-create-command';createCommand.append(el('span','command-create-symbol','＋'),el('strong','','创建命令'));
@@ -1107,7 +1112,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     if (!mounted) mount();
     if (!active) {
       controls.hidden = false; controls.prepend(get('new-chat'));
-      for (const {element} of placements) if (element.id === 'account-panel' || element.id === 'codex-account-panel' || element.id !== 'skills-panel' && element.classList.contains('tools-panel') || element.classList.contains('connection')) drawerBody.append(element);
+      for (const {element} of placements) if (element.id === 'account-panel' || element.id === 'codex-account-panel' || element.classList.contains('connection')) drawerBody.append(element);
       skillsPage.append(get('skills-panel'));
       get('activity').append(get('stop'));
       prompt.setAttribute('aria-controls',picker.id); prompt.setAttribute('aria-autocomplete','list'); prompt.setAttribute('aria-expanded','false');
@@ -1118,11 +1123,15 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     const policy=value.accessPolicy,validAccess=validAccessPolicy(policy);
     const accessDisabled=!validAccess||value.accessPolicyPending===true||value.modelPermissionPending===true||value.blocked||value.busy||value.readOnly||value.ready!==true;
     accessOptions.disabled=Boolean(accessDisabled);accessOptions.setAttribute('aria-busy',String(value.accessPolicyPending===true));
-    for(const [mode,choice] of accessButtons){choice.disabled=Boolean(accessDisabled);choice.setAttribute('aria-pressed',String(validAccess&&policy.mode===mode));}
+    accessMenuLabel.textContent=value.accessPolicyPending?'更新中…':validAccess?({'read-only':'只读','project-write':'项目范围','full-access':'完全访问'}[policy.mode]||'访问权限'):'访问未核实';
+    accessMenuLabel.setAttribute('aria-disabled',String(Boolean(accessDisabled)));
+    if(accessDisabled)accessMenu.open=false;
+    for(const [mode,choice] of accessButtons){choice.hidden=value.confirmedWrite===true&&mode==='full-access';choice.disabled=Boolean(accessDisabled)||choice.hidden;choice.setAttribute('aria-pressed',String(validAccess&&policy.mode===mode));}
     if(accessReview&&(accessReview.binding!==accessBinding()||!canChangeAccess()))clearAccessReview({invalidated:true});
     renderAccessStatus();
     accessConfirmApply.disabled=!canChangeAccess();
     const permission=value.modelPermission, validPermission=value.ready===true&&permission?.available===true&&(permission.level===null||['rollback','confirm','automatic'].includes(permission.level))&&permission.conversationId===value.commandConversationId&&(permission.expiresAt===null||Number.isSafeInteger(permission.expiresAt)&&permission.expiresAt>Date.now());
+    permissionAutomatic.hidden=value.confirmedWrite===true;permissionAutomatic.disabled=permissionAutomatic.hidden;
     permissionPlaceholder.textContent=validPermission?'请选择执行方式':'执行未核实';
     permissionSelect.value=value.modelPermissionPending?'__pending':validPermission?permission.level||'':'';
     permissionSelect.disabled=!validPermission||value.modelPermissionPending===true||value.accessPolicyPending===true||value.blocked||value.busy||value.readOnly||value.ready!==true;
@@ -1131,7 +1140,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     permissionRefresh.hidden=value.modelPermissionStatusRefreshAvailable!==true;
     permissionRefresh.disabled=value.modelPermissionStatusRefreshing===true;
     permissionRefresh.textContent=permissionRefresh.disabled?'正在刷新…':'刷新服务状态';
-    permissionSafety.textContent=(validAccess?'访问范围：'+accessText()+'。':'访问范围尚未核实。')+' 脚本、文件和族操作按实际授权及执行方式核验。C# 脚本不是安全沙盒，回滚不能撤销事务外副作用。';
+    permissionSafety.textContent=(validAccess?'访问范围：'+accessText()+'。':'访问范围尚未核实。')+(value.confirmedWrite===true?' 每次模型写入和回滚预览均需确认。':' 脚本、文件和族操作按实际授权及执行方式核验。C# 脚本不是安全沙盒，回滚不能撤销事务外副作用。');
     permissionSelect.title=permissionText;
     const receipt=value.modelReceipt,hasReceipt=Boolean(receipt&&receipt.conversationId===value.commandConversationId);
     modelReceiptPanel.hidden=!hasReceipt;modelReceiptNotice.hidden=!hasReceipt;
@@ -1185,9 +1194,6 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     if(previous&&(previous.modelPermission?.revision!==value.modelPermission?.revision||previous.modelPermission?.level!==value.modelPermission?.level||previous.modelPermissionPending!==value.modelPermissionPending))for(const row of rows)if(row.inputs?.$confirmation)row.inputs.$confirmation.checked=false;
     for(const row of rows)renderCommandConfirmation(row);
     if (previous?.activeId !== value.activeId) { historyPanel.hidden = true; historyButton.setAttribute('aria-expanded','false'); closePicker(); }
-    tools.textContent = catalog.length ? '工具 ' + catalog.length : '工具';
-    tools.title = catalog.length ? modelToolCountLabel(catalog) : '查看工作区工具目录';
-    tools.setAttribute('aria-label', '查看工具目录。' + (catalog.length ? modelToolCountLabel(catalog) : '正在读取目录'));
     renderAccountMenu();
     for(const row of rows)for(const field of row.fields || [])field.update?.(value);
     const fieldControls=rows.flatMap(row=>(row.fields || []).flatMap(field=>field.controls));

@@ -1,4 +1,4 @@
-﻿param([switch]$SelfTest, [switch]$UiSelfTest, [switch]$DetectUiSelfTest)
+﻿param([switch]$SelfTest, [switch]$UiSelfTest, [switch]$DetectUiSelfTest, [switch]$BundleUiSelfTest, [string]$BundleRoot)
 
 # Development-only UI for the installer. It never installs runtimes or changes
 # Codex authentication. The installer remains the owner of planning, file
@@ -65,6 +65,57 @@ function Format-RuntimeObservation($Item, [string]$Name) {
     return $Name + '：无法核实，请重新检测或手动选择。'
 }
 
+function Get-BundlePackage([string]$Root, [string]$Year, [string]$Build) {
+    if (-not $Root) { return '' }
+    $folder = switch ($Year) {
+        '2024' { '2024' }
+        '2025' {
+            if ($Build -eq '25.0.2.419') { '2025-net8' }
+        }
+    }
+    if (-not $folder) { return '' }
+    $package = Join-Path (Join-Path $Root 'packages') $folder
+    if ([IO.File]::Exists((Join-Path $package 'buildx-package.json')) -and
+        [IO.File]::Exists((Join-Path $package 'buildx-confirmed-write.json'))) { return $package }
+    return ''
+}
+
+function Get-InstallMode([string]$Action, [string]$Year, [bool]$Internal) {
+    if ($Action -notin @('plan','apply')) { throw '未知安装动作。' }
+    if ($Year -eq '2025') {
+        if (-not $Internal) { throw 'Revit 2025 需要专用内部测试组件。' }
+        return "--$Action-revit2025-internal-test"
+    }
+    if ($Internal) { return "--$Action-internal-test" }
+    return "--$Action"
+}
+
+function Format-RevitTargets($Targets, [string]$Root = '') {
+    foreach ($target in @($Targets)) {
+        if ($null -eq $target -or -not $target.PSObject.Properties['version'] -or
+            [string]$target.version -notin @('2024','2025') -or
+            -not $target.PSObject.Properties['detected'] -or $target.detected -isnot [bool]) { continue }
+        $label = 'Revit ' + $target.version
+        if (-not $target.detected) {
+            if ($target.PSObject.Properties['reason'] -and $target.reason -eq 'revit_ambiguous') {
+                $label + ' · 发现多个安装路径，待核对'
+            } else { $label + ' · 未核实安装' }
+            continue
+        }
+        if ($target.PSObject.Properties['fileVersion'] -and [string]$target.fileVersion -match '^\d{2}(\.\d+){3}$') {
+            $label += ' (' + $target.fileVersion + ')'
+        }
+        if ($Root) {
+            $build = if ($target.PSObject.Properties['fileVersion']) { [string]$target.fileVersion } else { '' }
+            if (Get-BundlePackage $Root $target.version $build) { $label + ' · 已检测，需检查安装计划' }
+            else { $label + ' · 当前包缺少对应构建' }
+            continue
+        }
+        if ($target.version -eq '2024') { $label + ' · 已检测，需检查安装计划'; continue }
+        $label + ' · 已检测，等待 2025 专用插件'
+    }
+}
+
 if ($SelfTest) {
     if ((ConvertTo-WindowsArgument 'C:\Program Files\node.exe') -ne '"C:\Program Files\node.exe"') { throw 'Argument quoting failed.' }
     if ((ConvertTo-WindowsArgument 'C:\folder\') -ne '"C:\folder\\"') { throw 'Trailing slash quoting failed.' }
@@ -72,6 +123,8 @@ if ($SelfTest) {
     if (-not $rejected) { throw 'Invalid quote was accepted.' }
     if ((Format-RuntimeObservation ([pscustomobject]@{status='unavailable';code='CODEX_WRAPPER_ONLY';path=$null}) 'Codex') -notmatch '命令包装') { throw 'Wrapper state is inaccurate.' }
     if ((Format-RuntimeObservation ([pscustomobject]@{status='found';code=$null;path='C:\x\codex.exe'}) 'Codex') -notmatch '待验证') { throw 'Found state incorrectly claims readiness.' }
+    if ((Get-InstallMode 'plan' '2024' $true) -ne '--plan-internal-test' -or
+        (Get-InstallMode 'apply' '2025' $true) -ne '--apply-revit2025-internal-test') { throw 'Year-specific command routing failed.' }
     $testRoot = [IO.Path]::Combine([IO.Path]::GetTempPath(), 'buildx-setup-test-' + [Guid]::NewGuid().ToString('N'))
     $testNormal = [IO.Path]::Combine($testRoot, 'normal'); $testAlias = [IO.Path]::Combine($testRoot, 'WindowsApps')
     $normalNode = [IO.Path]::Combine($testNormal, 'node.exe'); $aliasNode = [IO.Path]::Combine($testAlias, 'node.exe')
@@ -119,6 +172,8 @@ $script:Timer = $null
 $script:Updating = $false
 $script:InitialDetectionAttempted = $false
 $script:AutoCodexPath = $null
+$script:BundleRoot = if ($BundleRoot) { [IO.Path]::GetFullPath($BundleRoot) } else { '' }
+$script:TargetYear = ''
 
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="BuildX 安装向导（开发候选）" Width="760" Height="760" MinWidth="660" MinHeight="600" WindowStartupLocation="CenterScreen">
@@ -126,7 +181,7 @@ $script:AutoCodexPath = $null
     <StackPanel Grid.Row="0" Margin="0,0,0,10">
       <TextBlock Text="BuildX 安装向导" FontSize="25" FontWeight="SemiBold"/>
       <TextBlock Text="本地开发候选：使用你已安装的 Codex，不会安装或升级其他软件。" TextWrapping="Wrap" Margin="0,5,0,0"/>
-      <TextBlock Text="当前候选尚未完成商业接入与全部功能验证；检测到缺项时不能安装。" TextWrapping="Wrap" Foreground="#8A5000" Margin="0,4,0,0"/>
+      <TextBlock x:Name="Scope" Text="当前候选尚未完成商业接入与全部功能验证；检测到缺项时不能安装。" TextWrapping="Wrap" Foreground="#8A5000" Margin="0,4,0,0"/>
     </StackPanel>
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel>
       <TextBlock Text="已有运行程序" FontWeight="Bold" FontSize="16" Margin="0,3,0,7"/>
@@ -138,10 +193,14 @@ $script:AutoCodexPath = $null
       <TextBlock Text="未找到时，请按官方说明安装，完成后点击上方“重新检测”；也可手动选择已有 codex.exe。" TextWrapping="Wrap" Margin="0,0,0,8"/>
       <TextBlock Text="Python 程序"/><DockPanel Margin="0,3,0,12"><Button x:Name="BrowsePython" DockPanel.Dock="Right" Content="选择…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="PythonPath" Padding="5"/></DockPanel>
       <TextBlock Text="安装位置" FontWeight="Bold" FontSize="16" Margin="0,0,0,7"/>
+      <StackPanel x:Name="TargetRow" Visibility="Collapsed" Margin="0,0,0,8">
+        <TextBlock Text="选择要安装的 Revit 版本。双版本分别检查与安装。"/>
+        <ComboBox x:Name="TargetRevit" DisplayMemberPath="label" AutomationProperties.Name="Revit 安装目标"/>
+      </StackPanel>
       <TextBlock Text="BuildX 候选组件目录"/><DockPanel Margin="0,3,0,7"><Button x:Name="BrowsePackage" DockPanel.Dock="Right" Content="选择…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="PackagePath" Padding="5"/></DockPanel>
       <TextBlock Text="新的 BuildX 安装目录"/><DockPanel Margin="0,3,0,7"><Button x:Name="BrowseInstall" DockPanel.Dock="Right" Content="选择父目录…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="InstallPath" Padding="5"/></DockPanel>
       <TextBlock Text="新的独立数据目录（聊天、资料引用、队列与回执；不会接管已有目录）" TextWrapping="Wrap"/><DockPanel Margin="0,3,0,7"><Button x:Name="BrowseData" DockPanel.Dock="Right" Content="选择父目录…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="DataPath" Padding="5"/></DockPanel>
-      <TextBlock Text="Revit 2024 Addins 目录（必须已存在）"/><DockPanel Margin="0,3,0,9"><Button x:Name="BrowseAddins" DockPanel.Dock="Right" Content="选择…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="AddinsPath" Padding="5"/></DockPanel>
+      <TextBlock Text="当前用户的 Revit Addins 目录（必须已存在）"/><DockPanel Margin="0,3,0,9"><Button x:Name="BrowseAddins" DockPanel.Dock="Right" Content="选择…" Padding="9,3" Margin="6,0,0,0"/><TextBox x:Name="AddinsPath" Padding="5"/></DockPanel>
       <Button x:Name="Plan" Content="检查安装计划" HorizontalAlignment="Left" Padding="12,5" Margin="0,0,0,8"/>
       <TextBlock x:Name="Result" Text="检查会列出缺项和冲突，不会安装程序。" TextWrapping="Wrap"/>
     </StackPanel></ScrollViewer>
@@ -151,7 +210,7 @@ $script:AutoCodexPath = $null
 '@
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $script:Window = [Windows.Markup.XamlReader]::Load($reader)
-foreach ($name in @('NodePath','CodexPath','PythonPath','PackagePath','InstallPath','DataPath','AddinsPath','BrowseNode','BrowseCodex','BrowsePython','BrowsePackage','BrowseInstall','BrowseData','BrowseAddins','Detect','InstallHelp','Plan','Install','Detection','Result','Progress')) {
+foreach ($name in @('NodePath','CodexPath','PythonPath','PackagePath','InstallPath','DataPath','AddinsPath','BrowseNode','BrowseCodex','BrowsePython','BrowsePackage','BrowseInstall','BrowseData','BrowseAddins','Detect','InstallHelp','Plan','Install','Detection','Result','Progress','Scope','TargetRow','TargetRevit')) {
     Set-Variable -Scope Script -Name $name -Value $script:Window.FindName($name)
 }
 $script:NodePath.Text = Find-ExistingNode
@@ -160,20 +219,66 @@ $script:InstallPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Program'
 $script:DataPath.Text = ''
 $script:AddinsPath.Text = Join-Path $env:APPDATA 'Autodesk\Revit\Addins\2024'
 
+function Test-InternalScope {
+    $package = $script:PackagePath.Text.Trim()
+    return $package.Length -gt 0 -and [IO.File]::Exists([IO.Path]::Combine($package, 'buildx-confirmed-write.json'))
+}
+function Update-ScopeLabel {
+    $script:Scope.Text = if ($script:BundleRoot) { '私有确认写入候选 · Windows x64 · 每个 Revit 版本使用对应组件，模型写入需逐次确认。' }
+        elseif (Test-InternalScope) { '私有确认写入候选 · 模型写入操作需逐次确认。' }
+        else { '当前候选尚未完成商业接入与全部功能验证；检测到缺项时不能安装。' }
+}
+Update-ScopeLabel
+if (Test-InternalScope) {
+    $script:InstallPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Revit2024-Program'
+    $script:DataPath.Text = Join-Path $env:LOCALAPPDATA 'BuildX-Revit2024-Data'
+}
+if ($script:BundleRoot) {
+    $script:TargetRow.Visibility = 'Visible'
+    $script:PackagePath.IsReadOnly = $true
+    $script:AddinsPath.IsReadOnly = $true
+    $script:BrowsePackage.Visibility = 'Collapsed'
+    $script:BrowseAddins.Visibility = 'Collapsed'
+    $script:PackagePath.Text = ''
+    $script:AddinsPath.Text = ''
+}
+
 function Get-Inputs {
     return @($script:PackagePath.Text.Trim(), $script:InstallPath.Text.Trim(), $script:AddinsPath.Text.Trim(),
         $script:NodePath.Text.Trim(), $script:PythonPath.Text.Trim(), $script:CodexPath.Text.Trim(), $script:DataPath.Text.Trim())
 }
-function Get-Fingerprint { return [string]::Join([char]0x1f, [string[]](Get-Inputs)) }
+function Get-Fingerprint { return [string]::Join([char]0x1f, [string[]](@($script:TargetYear,(Test-InternalScope)) + (Get-Inputs))) }
 function Clear-Plan {
     $script:PlanFingerprint = $null
     $script:Install.IsEnabled = $false
     if (-not $script:Updating) { $script:Result.Text = '输入已更改，请重新检查安装计划。' }
 }
 function Set-Busy([bool]$Busy) {
-    foreach ($item in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:DataPath,$script:AddinsPath,$script:BrowseNode,$script:BrowseCodex,$script:BrowsePython,$script:BrowsePackage,$script:BrowseInstall,$script:BrowseData,$script:BrowseAddins,$script:Detect,$script:Plan,$script:InstallHelp)) { $item.IsEnabled = -not $Busy }
+    foreach ($item in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:DataPath,$script:AddinsPath,$script:BrowseNode,$script:BrowseCodex,$script:BrowsePython,$script:BrowsePackage,$script:BrowseInstall,$script:BrowseData,$script:BrowseAddins,$script:Detect,$script:Plan,$script:InstallHelp,$script:TargetRevit)) { $item.IsEnabled = -not $Busy }
     $script:Install.IsEnabled = (-not $Busy -and $null -ne $script:PlanFingerprint -and $script:PlanFingerprint -eq (Get-Fingerprint))
 }
+function Update-BundleTargets($Targets) {
+    if (-not $script:BundleRoot) { return }
+    $previous = $script:TargetRevit.SelectedItem
+    $oldInstall = $script:InstallPath.Text
+    $oldData = $script:DataPath.Text
+    $choices = @(
+        foreach ($target in @($Targets)) {
+            if ($null -eq $target -or -not $target.PSObject.Properties['detected'] -or $target.detected -ne $true -or
+                -not $target.PSObject.Properties['version'] -or -not $target.PSObject.Properties['addinDirectory'] -or
+                [string]::IsNullOrWhiteSpace([string]$target.addinDirectory)) { continue }
+            $build = if ($target.PSObject.Properties['fileVersion']) { [string]$target.fileVersion } else { '' }
+            $package = Get-BundlePackage $script:BundleRoot $target.version $build
+            if ($package) { [pscustomobject]@{year=[string]$target.version; label=('Revit ' + $target.version + '  ' + $build).Trim(); package=$package; addins=[string]$target.addinDirectory} }
+        }
+    )
+    $script:TargetRevit.ItemsSource = $choices
+    if (-not $choices.Count) { return }
+    $same = if ($previous) { $choices | Where-Object { $_.label -eq $previous.label -and $_.package -eq $previous.package -and $_.addins -eq $previous.addins } | Select-Object -First 1 } else { $null }
+    $script:TargetRevit.SelectedItem = if ($same) { $same } else { $choices[0] }
+    if ($same) { $script:InstallPath.Text = $oldInstall; $script:DataPath.Text = $oldData }
+}
+
 function Choose-Executable($Target,[string]$Expected) {
     $dialog = New-Object Microsoft.Win32.OpenFileDialog
     $dialog.Title = '选择已有的 ' + $Expected
@@ -276,6 +381,11 @@ function Complete-Installer([string]$Action,[int]$ExitCode,[string]$Out,[string]
             $manualCodex = Update-DetectedCodex $result.runtimes.codex
         } finally { $script:Updating = $false }
         $script:Detection.Text = (Format-RuntimeObservation $result.runtimes.node 'Node') + "`n" + (Format-RuntimeObservation $result.runtimes.python 'Python') + "`n" + (Format-RuntimeObservation $result.runtimes.codex 'Codex')
+        if ($result.PSObject.Properties['revitTargets']) {
+            $targets = @(Format-RevitTargets $result.revitTargets $script:BundleRoot)
+            if ($targets.Count) { $script:Detection.Text += "`n" + ($targets -join "`n") }
+            Update-BundleTargets $result.revitTargets
+        }
         if ($manualCodex) { $script:Detection.Text += "`n已保留手动填写的 Codex 路径，安装计划仍会检查它。" }
         $script:Progress.Text = '检测完成；需要在检查计划时核实版本。'; return
     }
@@ -286,7 +396,13 @@ function Complete-Installer([string]$Action,[int]$ExitCode,[string]$Out,[string]
             $script:Progress.Text = '安装前需要确认。'
         } else {
             $script:PlanFingerprint = $null
-            $issues = @(); if ($result.blockers) { foreach ($issue in $result.blockers) { if ($issue.reason) { $issues += [string]$issue.reason } } }
+            $issues = @()
+            $blockers = if ($result.PSObject.Properties['installationScope'] -and $result.installationScope -eq 'cross-pc-test') { $result.internalBlockers } else { $result.blockers }
+            foreach ($issue in $blockers) {
+                if ($issue.reason -eq 'revit2025_host_runtime_evidence_unverified') {
+                    $issues += '未能确认 Revit 2025 的 API 文件与本测试包匹配，请核对完整版本和安装状态。'
+                } elseif ($issue.reason) { $issues += [string]$issue.reason }
+            }
             $script:Result.Text = '暂不能安装：' + [string]$result.reason + $(if ($issues.Count) { "`n待解决：" + [string]::Join('、', [string[]]$issues) } else { '' })
             $script:Progress.Text = '未安装。'
         }
@@ -314,6 +430,20 @@ $script:Timer.Add_Tick({
     } catch { $script:Timer.Stop(); $script:Worker = $null; $script:PlanFingerprint = $null; $script:Progress.Text = '操作结果无法确认，请检查后再决定下一步。'; Set-Busy $false }
 })
 foreach ($field in @($script:NodePath,$script:CodexPath,$script:PythonPath,$script:PackagePath,$script:InstallPath,$script:DataPath,$script:AddinsPath)) { $field.Add_TextChanged({ Clear-Plan }) }
+$script:PackagePath.Add_TextChanged({ Update-ScopeLabel })
+$script:TargetRevit.Add_SelectionChanged({
+    if (-not $script:BundleRoot) { return }
+    $target = $script:TargetRevit.SelectedItem
+    if ($null -eq $target) {
+        $script:TargetYear = ''; $script:PackagePath.Text = ''; $script:AddinsPath.Text = ''; Clear-Plan; return
+    }
+    $script:TargetYear = $target.year
+    $script:PackagePath.Text = $target.package
+    $script:AddinsPath.Text = $target.addins
+    $script:InstallPath.Text = Join-Path $env:LOCALAPPDATA ('BuildX-Revit' + $target.year + '-Program')
+    $script:DataPath.Text = Join-Path $env:LOCALAPPDATA ('BuildX-Revit' + $target.year + '-Data')
+    Clear-Plan
+})
 $script:CodexPath.Add_TextChanged({ if (-not $script:Updating) { $script:AutoCodexPath = $null } })
 $script:BrowseNode.Add_Click({ Choose-Executable $script:NodePath 'node.exe' })
 $script:BrowseCodex.Add_Click({ Choose-Executable $script:CodexPath 'codex.exe' })
@@ -330,26 +460,52 @@ $script:InstallHelp.Add_Click({
 })
 $script:Plan.Add_Click({
     Clear-Plan; $values = Get-Inputs
+    if ($script:BundleRoot -and (-not $script:TargetYear -or -not (Test-InternalScope))) { $script:Result.Text = '请先检测并选择有对应组件的 Revit 版本。'; return }
     if (@($values | Where-Object { [string]::IsNullOrWhiteSpace($_) }).Count) { $script:Result.Text = '请填写组件目录、安装位置与已有程序路径。'; return }
-    Start-Installer 'plan' (@('--plan') + $values)
+    $mode = Get-InstallMode 'plan' $script:TargetYear (Test-InternalScope)
+    Start-Installer 'plan' (@($mode) + $values)
 })
 $script:Install.Add_Click({
     if ($null -eq $script:PlanFingerprint -or $script:PlanFingerprint -ne (Get-Fingerprint)) { Clear-Plan; return }
     $question = '将在以下目录安装 BuildX：' + "`n" + $script:InstallPath.Text.Trim() + "`n`n" + '独立数据目录：' + "`n" + $script:DataPath.Text.Trim() + "`n`n" + '并在 Revit Addins 目录发布插件入口。是否继续？'
     if ([Windows.MessageBox]::Show($script:Window,$question,'确认安装',[Windows.MessageBoxButton]::YesNo,[Windows.MessageBoxImage]::Question) -ne [Windows.MessageBoxResult]::Yes) { return }
-    Start-Installer 'apply' (@('--apply') + (Get-Inputs))
+    $mode = Get-InstallMode 'apply' $script:TargetYear (Test-InternalScope)
+    Start-Installer 'apply' (@($mode) + (Get-Inputs))
 })
 $script:Window.Add_Closing({ param($sender,$eventArgs) if ($null -ne $script:Worker) { $eventArgs.Cancel = $true; $script:Progress.Text = '正在等待操作结果，请勿重复执行或关闭窗口。' } })
 $script:Window.Add_ContentRendered({ Invoke-InitialDetection })
+if ($BundleUiSelfTest) {
+    if (-not $script:BundleRoot) { throw 'Bundle test needs a controlled fixture root.' }
+    $detected = '{"schemaVersion":1,"runtimes":{"node":{"status":"missing"},"python":{"status":"missing"},"codex":{"status":"missing"}},"revitTargets":[{"version":"2024","detected":true,"fileVersion":"24.3.30.11","addinDirectory":"C:\\fixture\\Addins\\2024"},{"version":"2025","detected":true,"fileVersion":"25.0.2.419","addinDirectory":"C:\\fixture\\Addins\\2025"}]}'
+    Complete-Installer 'detect' 0 $detected ''
+    if ($script:TargetRevit.Items.Count -ne 2 -or $script:TargetYear -ne '2024' -or $script:AddinsPath.Text -ne 'C:\fixture\Addins\2024') { throw '2024 default and 2025 alternative were not detected.' }
+    Complete-Installer 'plan' 0 '{"ok":true,"readyToApply":true,"blockers":[]}' ''
+    Set-Busy $false
+    if (-not $script:Install.IsEnabled) { throw 'Controlled plan is not enabled.' }
+    $script:TargetRevit.SelectedIndex = 1
+    if ($script:TargetYear -ne '2025' -or $script:AddinsPath.Text -ne 'C:\fixture\Addins\2025' -or
+        $script:PackagePath.Text -notmatch '2025-net8$' -or $script:InstallPath.Text -notmatch '2025-Program$' -or
+        $script:DataPath.Text -notmatch '2025-Data$' -or $script:Install.IsEnabled) { throw '2025 paths or plan invalidation failed.' }
+    foreach ($otherBuild in @('25.3.0.46','25.5.0.57')) {
+        Complete-Installer 'detect' 0 ($detected.Replace('25.0.2.419',$otherBuild)) ''
+        if ($script:TargetRevit.Items.Count -ne 1 -or $script:TargetYear -ne '2024' -or
+            $script:Detection.Text -notmatch ([regex]::Escape($otherBuild) + '.*缺少对应构建') -or $script:Install.IsEnabled) { throw 'A different 2025 build was incorrectly matched to the payload.' }
+    }
+    Write-Output 'BuildX WPF bundle target mapping self-test passed.'
+    return
+}
 if ($UiSelfTest) {
     # Exercise the real XAML, event bindings and result mapper without showing a
     # window, launching a process, opening a URL, or touching any installation.
     $script:NodePath.Text = ''; $script:PythonPath.Text = ''; $script:CodexPath.Text = ''
     Invoke-InitialDetection
     if ($script:Worker -ne $null -or $script:Detection.Text -notmatch '手动选择') { throw 'Missing node should wait for the user.' }
-    $detected = '{"schemaVersion":1,"runtimes":{"node":{"status":"found","path":"C:\\test\\node.exe","code":null},"python":{"status":"missing","path":null,"code":"PYTHON_NOT_FOUND"},"codex":{"status":"unavailable","path":null,"code":"CODEX_WRAPPER_ONLY"}}}'
+    $detected = '{"schemaVersion":1,"runtimes":{"node":{"status":"found","path":"C:\\test\\node.exe","code":null},"python":{"status":"missing","path":null,"code":"PYTHON_NOT_FOUND"},"codex":{"status":"unavailable","path":null,"code":"CODEX_WRAPPER_ONLY"}},"revitTargets":[{"version":"2024","detected":true},{"version":"2025","detected":true}]}'
     Complete-Installer 'detect' 0 $detected ''
     if ($script:NodePath.Text -ne 'C:\test\node.exe' -or $script:Detection.Text -notmatch '命令包装' -or $script:Detection.Text -notmatch '待验证') { throw ('Detection mapping failed: ' + $script:NodePath.Text + ' / ' + $script:Detection.Text) }
+    if ($script:Detection.Text -notmatch 'Revit 2024 · 已检测，需检查安装计划' -or
+        $script:Detection.Text -notmatch 'Revit 2025 · 已检测，等待 2025 专用插件' -or
+        $script:Install.IsEnabled) { throw 'Version detection incorrectly changed installation readiness.' }
     $found = '{"schemaVersion":1,"runtimes":{"node":{"status":"found","path":"C:\\test\\node.exe"},"python":{"status":"missing"},"codex":{"status":"found","path":"C:\\old\\codex.exe"}}}'
     $ambiguous = '{"schemaVersion":1,"runtimes":{"node":{"status":"found","path":"C:\\test\\node.exe"},"python":{"status":"missing"},"codex":{"status":"ambiguous","code":"CODEX_PATH_AMBIGUOUS"}}}'
     Complete-Installer 'detect' 0 $found ''

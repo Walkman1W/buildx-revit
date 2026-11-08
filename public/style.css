@@ -29,3 +29,14 @@ footer{flex:none;padding:0 14px 10px;background:var(--paper)}.context-panel{marg
 .message.receipt-notice .body { padding: 10px 12px; color: var(--ink); background: #f0f1ef; border-radius: 6px; white-space: pre-wrap; }
 .dismiss-receipt-notice { border: 0; background: none; color: var(--muted); font-size: 11px; cursor: pointer; }
 .dismiss-receipt-notice[hidden] { display: none; }
+
+.context-actions{position:relative}
+.context-choice{flex:none}
+.selection-inline{min-width:0;max-width:55%}
+.selection-inline[hidden]{display:none}
+.context-panel .selection-inline>summary{display:flex;align-items:center;gap:4px;white-space:nowrap;color:#596b5d;cursor:pointer}
+.selection-inline>summary::-webkit-details-marker{display:none}
+#selection-inline-summary{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.selection-inline-chevron{flex:none;color:var(--accent)}
+.selection-inline[open] .selection-inline-chevron{transform:rotate(180deg)}
+.selection-inline-content{position:absolute;z-index:20;bottom:calc(100% + 6px);left:0;width:max-content;max-width:min(320px,100%);max-height:160px;overflow:auto;padding:8px 10px;border:1px solid #cfd9c9;border-radius:6px;background:#fff;box-shadow:0 3px 12px #20352226;white-space:pre-line;overflow-wrap:anywhere;color:#526457;font-size:10px;line-height:1.6}

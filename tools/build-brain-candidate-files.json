@@ -24,6 +24,7 @@
   "lib/codex-client.mjs",
   "lib/codex-confirmation.mjs",
   "lib/codex-profile.mjs",
+  "lib/confirmed-write-profile.mjs",
   "lib/command-sequence.mjs",
   "lib/command-store.mjs",
   "lib/customer-assets.mjs",

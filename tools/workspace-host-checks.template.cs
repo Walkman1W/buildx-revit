@@ -93,6 +93,9 @@ namespace RevitLocalCodex {
         internal static long ExactId(Dictionary<string,object> args,string key){return Convert.ToInt64(args[key]);}
         internal static long ExactSignedId(Dictionary<string,object> args,string key){return Convert.ToInt64(args[key]);}
     }
+    internal static class NativeParameterQueries {
+        // ORIGINAL_PARAMETER_READ_CLASSIFICATION
+    }
     internal sealed class TypeParameterWriteApproval {
         internal const string PermitArgument="__native_type_write_permit";
         internal sealed class Permit { }

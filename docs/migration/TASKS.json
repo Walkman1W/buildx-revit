@@ -99,6 +99,18 @@
       "evidence": "MANUAL-TYPE-PARAMETER-WRITE-VERIFICATION.zh-CN.md; manual-type-parameter-write-verification.json; 0.8.8-internal-manual-type-parameter-write, 149 runtime files and 298-source15 snapshot; actual 34-source API compilation, ZIP entry/extracted compiler/closure/MCP/manual-form checks; releaseReady:false; all previous candidates and external blockers retained",
       "milestone": "named_type_parameter_manual_and_chat_approval_internal_candidate_generated",
       "internalCandidateGenerated": true,
+      "dualConfirmedWrite": {
+        "version": "0.8.8-confirmed-write.1",
+        "base": "9b9b9c2",
+        "guide": "CONFIRMED-WRITE-DUAL-20261108.zh-CN.md",
+        "targets": ["Revit 2024 x64", "Revit 2025 x64 25.0.2.419"],
+        "writes": ["revit_set_parameter_value", "revit_set_type_parameter", "revit_create_group", "revit_convert_to_group"],
+        "revitApiCompileVerified": true,
+        "controlledDualInstallVerified": true,
+        "realRevitLoadVerified": false,
+        "realModelExecutionVerified": false,
+        "releaseReady": false
+      },
       "installable": false,
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false,

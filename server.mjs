@@ -1,3 +1,4 @@
+import {confirmedWriteProfile} from './lib/confirmed-write-profile.mjs';
 import path from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -26,6 +27,7 @@ import {resolveBuildxPaths,resolveBuildxPanelPort} from './lib/buildx-paths.mjs'
 import {CHAT_READ_RECEIPT_KEY_ENV,CHAT_READ_RECEIPT_PORT_ENV} from './lib/chat-read-receipts.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
+const confirmedWrite=confirmedWriteProfile(ROOT);
 const configuration=buildxRuntimeConfig();
 const installation=await readInstallationConfiguration(ROOT);
 const paths=resolveBuildxPaths(ROOT,installation);
@@ -43,7 +45,7 @@ const profile=MODEL_SERVER_PROFILE;
 const port=resolveBuildxPanelPort(installation),chatReadReceiptKey=randomBytes(32).toString('hex');
 const onTiming=data=>lifecycle.audit('phase-timing.jsonl',data,true);
 const timingControl=(control={})=>({...control,root:paths.workbenchRoot,onTiming:combineWorkbenchTiming(onTiming,control.onTiming)});
-const familyCapabilityOwner=createFamilyCapabilityOwner();
+const familyCapabilityOwner=confirmedWrite?null:createFamilyCapabilityOwner();
 const terminalWorkRoot=path.join(homedir(),'AppData','Local','BuildXTerminalWork');
 const accessServices=createAccessServices({root:paths.dataRoot,programRoot:paths.programRoot,stateDirectory:path.join(paths.historyDirectory,'access-permissions'),terminalWorkRoot});
 let terminalPython=installation?.pythonExecutable;
@@ -53,8 +55,8 @@ const modelTerminal=createModelTerminalService({dataRoot:paths.dataRoot,workRoot
   pythonExecutable:terminalPython,
   powershellExecutable:process.platform==='win32'&&process.env.SystemRoot?path.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'):undefined});
 const terminalAvailability=await modelTerminal.availability();
-const runtimeDependencies={skillCatalogMode:configuration.mode,familyCapabilityOwner,
+const runtimeDependencies={skillCatalogMode:configuration.mode,...familyCapabilityOwner?{familyCapabilityOwner}:{},
   spawn:(file,args,options)=>spawn(file,args,{...options,env:{...options.env,[CHAT_READ_RECEIPT_KEY_ENV]:chatReadReceiptKey,[CHAT_READ_RECEIPT_PORT_ENV]:String(port)}}),
   ...installation?{resolveRuntimes:()=>resolveInstallationRuntimes(installation)}:{}};
-const app=createPanelServer({root:ROOT,dataRoot:paths.dataRoot,port,profile,chatReadReceiptKey,codex:new CodexClient(ROOT,{profile,modelTerminal:terminalAvailability.available},runtimeDependencies),accessServices,modelTerminal,terminalAvailability,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
+const app=createPanelServer({confirmedWrite,root:ROOT,dataRoot:paths.dataRoot,port,profile,chatReadReceiptKey,codex:new CodexClient(ROOT,{profile,modelTerminal:!confirmedWrite&&terminalAvailability.available},runtimeDependencies),accessServices,modelTerminal:confirmedWrite?null:modelTerminal,terminalAvailability:confirmedWrite?null:terminalAvailability,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
 await runPanelService({app,lifecycle,root:ROOT,runtimeDirectory:paths.runtimeDirectory});

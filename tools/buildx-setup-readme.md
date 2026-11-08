@@ -1,5 +1,17 @@
 # BuildX Windows 安装向导开发候选
 
+## 私有双版本确认写入候选
+
+运行顶层 `BuildX-Setup.cmd`，选择检测到的 Revit 2024 或 2025 初始版。模型写入需用户确认；任意 C# 脚本、保存的脚本、终端、外部 Argus 和族操作不属于此候选。两个版本使用独立程序与数据目录，端口分别为 41876 和 41877。发现既有插件或数据时停止，请先人工备份并核对。
+
+构建时分别使用 `--build-confirmed-write-candidate` 和 `--build-revit2025-confirmed-write-candidate`。组件包含 `buildx-confirmed-write.json` 和与 DLL 摘要匹配的 `BUILDX_CONFIRMED_WRITE` 编译证据，不能包含旧只读标记。2025 需 Autodesk 签名 API 的 25.0.2.419 / 20240307_1300(x64) 证据且目标机哈希一致。继续使用客户已有 Codex，不捆绑或升级。私有安装范围和正式发布阻塞项分开列示；`releaseReady:false` 不变，真实 Revit 和客户机验收尚待完成。
+
+## 通用开发候选
+
+运行 `node tools/buildx-installer.mjs --detect` 可查看 `revitTargets`。向导分别显示从 Windows 注册信息与 x64 `Revit.exe` 核对出的 Revit 2024、2025 和完整文件版本。若同一年发现多个有效安装路径，标记为待核对。通用候选的安装预检按 Revit 2024 处理。
+
+双版本安装时，每个目标使用自己的插件 DLL、程序与数据目录，并将 `BuildX.addin` 写入当前用户的 `%APPDATA%\Autodesk\Revit\Addins\2024` 或 `%APPDATA%\Autodesk\Revit\Addins\2025`。并行运行需要独立本地服务端口。Revit 2025 原版运行在 .NET 8，2025.5 使用 .NET 10；构建和实机验证按目标的完整版本进行。[Autodesk 2025 迁移说明](https://help.autodesk.com/cloudhelp/2025/ENU/Revit-API/files/Revit_API_Developers_Guide/Introduction/Getting_Started/Using_the_Autodesk_Revit_API/Revit_API_Revit_API_Developers_Guide_Introduction_Getting_Started_Using_the_Autodesk_Revit_API_NET8_Update_html.html) · [Autodesk .NET 10 更新说明](https://help.autodesk.com/view/RVT/2025/ENU/?caas=caas/sfdcarticles/sfdcarticles/Revit--Requirements-for-products-affected-by-the-Microsoft--NET-10-transition.html)
+
 在候选包根目录双击 `BuildX-Setup.cmd` 可打开开发候选向导；从源码目录测试时可双击 `tools/buildx-setup.cmd`。向导需要同目录 `buildx-setup.ps1`、`buildx-installer.mjs` 及父目录的 `lib/local-runtimes.mjs`。当前候选尚不是完整安装包。
 
 窗口首次显示时，如果已从 PATH 找到可信的 `node.exe`，会自动执行一次只读检测；否则请手动选择已有的 `node.exe` 再点击“检测 / 重新检测已有程序”。找到 Codex 后会预填其路径；检查仅识别路径，不代表 Codex 已登录或版本、工具协议兼容，已有登录由 BuildX 启动后的账号和工具握手确认。若找不到可直接运行的 `codex.exe`，可点击官方安装说明，安装完成后点击“重新检测”，或手动选择已有程序。检测变为缺失或歧义时会清除上次自动填入的旧路径；手动输入或选择的路径会保留，并在安装计划中检查。不会自动安装或升级 Codex。CLI 安装仅提供命令包装、或新安装的 PATH 尚未被向导进程读取时，自动检测可能无法定位 `codex.exe`，需手动选择或重新打开向导；检测到多个无法确定的候选时不会猜选。
@@ -43,3 +55,6 @@
 此 Toolset 包依赖机器已有 .NET Framework 4.7.2+，官方不支持将其长期作为旧 MSBuild 的升级替代；当前只验证内部候选中的直接 `csc.exe /noconfig @rsp` 路径。离线测试可设置 `BUILDX_SCRIPT_COMPILER_DIR`、`BUILDX_SCRIPT_COMPILER`、`BUILDX_REVIT_API_DIR` 后运行 `npm run test:compiler`，真实 API 只参与编译引用，不会加载生成的用户脚本 DLL 或调用 Revit。没有显式选择 compiler/API 时相关案例明确跳过，不计为验收。
 
 安装预检 CLI 使用 `--plan <组件目录> <新程序目录> <已有Addins目录> <node.exe> <python.exe> <codex.exe> <新独立数据目录>`，只检查，不发布插件。真实 `--apply` 仍需本次具体安装授权，当前候选阻塞不会被构建成功自动解除。
+
+
+私有确认写入候选：`buildx-confirmed-write.json` 标明 `confirmed-write`，每次模型写入仍需用户确认。Revit 2024 与 2025 使用独立程序、数据目录和端口 41876、41877；不会接管旧数据。安装遇到已有插件入口时停止，请先人工备份并核对，不会自动替换。2025 仅支持经签名核验的 25.0.2.419 / 20240307_1300(x64)。`releaseReady:false` 保留，私有安装检查与正式发布阻塞项分别列示；真实 Revit 验收另行确认。

@@ -13,7 +13,7 @@ let streamConnected = false, streamRecoveryPending = false, recoveryWorkspace = 
 // Workspace is a display/capability ceiling supplied by this fixed-profile
 // endpoint. It never grants tool or write authority. A restricted page cannot
 // regain model context from a late status/snapshot or a reconnect response.
-let fixedWorkspace = null, modelContextAllowed = true, sourceToolCount = 0;
+let fixedWorkspace = null, modelContextAllowed = true, sourceToolCount = 0, confirmedWrite = false;
 let modelUiEnabled = false, modelAccount = null, modelConfirmation = null;
 let modelSelectionAvailable=false, modelChoices=[], selectedModel='', selectedEffort='', modelPickerError='', modelPickerLoading=false, modelPickerAttempted=false, modelPickerRevision=0;
 const modelPreferenceKey='buildx-model-preference-v1';
@@ -523,7 +523,7 @@ function restoreConversationDraft(id, data, preserveInitial = false) {
 function publishModelView() {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent('buildx-model-view', { detail: {
-    enabled: modelUiEnabled && modelContextAllowed, ready, commandsReady, busy,
+    enabled: modelUiEnabled && modelContextAllowed, ready, commandsReady, busy, confirmedWrite,
     blocked: busy || modelPermissionChecking() || pendingRequests.has('session') || commandPending(), account: modelAccount, confirmation: modelConfirmation,
     toolCatalog, ...(commandCatalog!==null?{commandCatalog}:{}), hasMessages: messages.length > 0, accountEpoch, contextEpoch, mcpCandidatesAvailable,
     history:{ ...historyState, available:historyEnabled(), activeId:activeConversationId || historyState.activeId },
@@ -688,7 +688,7 @@ function updateButtons() {
     const last=receiptProjection?.records.at(-1);steerFeedbackBinding=last?{conversationId}:null;steerFeedbackKind=last?.status??null;
     $('steer-feedback').hidden=!last;$('steer-feedback').textContent=last?.status==='accepted'?'最近的补充指令已由 Codex 接收，是否执行尚待确认。':last?.status==='not_sent'?'最近的补充指令未发送。':'';
   }
-  $('send').disabled = !ready || blocked || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text);
+  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text);
   $('steer').hidden = !(modelUiEnabled && steerAvailable && busy) || permissionChecking;
   $('steer').disabled = !binding || !text || text.length>16000 || pendingRequests.has('steer') || pendingRequests.has('interrupt') || visibleInputId!==null || ['pending','submitting'].includes(dynamicApproval?.state) || Boolean(attachmentRead) || pendingAttachments().length>0 || historyEnabled() && persistenceFailed() || receiptBlocked || isUncertainSteer(conversationId,text);
   $('prompt').readOnly = readOnly || switchingConversation;
@@ -703,7 +703,7 @@ function updateButtons() {
   for (const id of ['include-document', 'include-selection']) {
     $(id).disabled = !modelContextAllowed || readOnly || switchingConversation; if (!modelContextAllowed) $(id).checked = false;
   }
-  $('refresh-context').disabled = !modelContextAllowed || blocked || readOnly || pendingRequests.has('context') || !ready || !Object.values(contextFlags()).some(Boolean);
+  $('refresh-context').disabled = !modelContextAllowed || blocked || readOnly || pendingRequests.has('context') || !ready || !Object.values(contextFlags()).some(Boolean) || Boolean(selectionReadUnconfirmed);
   $('refresh-context').textContent = pendingRequests.has('context') ? '读取中…' : '刷新';
   $('skills-panel').hidden=!modelUiEnabled;
   $('skills-refresh').disabled=!skillsSupported||!ready||blocked||Boolean(skillRead)||!skillsConversation();
@@ -741,6 +741,7 @@ function renderTools(state) {
     : '当前尚未确认工具加载。目录中的功能不代表已连接或已运行。';
 }
 function status(state = {}) {
+  if (state.confirmedWrite === true) confirmedWrite = true;
   if (!applyWorkspace(state.workspace)) { if (customerWorkspace()) { ready = false; updateButtons(); } return false; }
   if(Object.hasOwn(state,'busyOperation'))serverBusyOperation=state.busyOperation==='model-permission-check'?'model-permission-check':null;
   else if(state.busy===false)serverBusyOperation=null;
@@ -952,15 +953,88 @@ function renderConversation() {
   });
   if (shouldScroll) scrollBottom();
 }
+// Selection preview is independent of the snapshot collected again on send.
+let selectionPreview = null, selectionPreviewRevision = 0, selectionPreviewInFlight = 0;
+// An abandoned read may still be executing in Revit. Keep this guard separate
+// from the checkbox and conversation, and only clear it on its own receipt.
+let selectionReadUnconfirmed = null;
+try { selectionReadUnconfirmed = JSON.parse(sessionStorage.getItem('buildx-selection-read-unconfirmed') || 'null'); } catch {}
+function saveSelectionReadUnconfirmed(value) {
+  selectionReadUnconfirmed = value;
+  try { if (value) sessionStorage.setItem('buildx-selection-read-unconfirmed', JSON.stringify(value)); else sessionStorage.removeItem('buildx-selection-read-unconfirmed'); } catch {}
+}
+function markSelectionReadUnconfirmed(owner) {
+  saveSelectionReadUnconfirmed({requestId:null, conversationId:owner.conversationId, contextEpoch:owner.contextEpoch, accountEpoch:owner.accountEpoch, identityKey:owner.identityKey, baselineError:owner.baselineError});
+}
+function observeSelectionReceipt(message) {
+  if (!selectionReadUnconfirmed || typeof message !== 'string') return;
+  if (message === selectionReadUnconfirmed.baselineError) return;
+  if (selectionReadUnconfirmed.conversationId !== activeConversationId || selectionReadUnconfirmed.contextEpoch !== contextEpoch || selectionReadUnconfirmed.accountEpoch !== accountEpoch || selectionReadUnconfirmed.identityKey !== commandIdentityKey()) return;
+  const id = message.match(/请求 ([0-9a-f-]{36})/i)?.[1];
+  if (!id) return;
+  if (/上下文读取未取得可核对的回执/.test(message) && !selectionReadUnconfirmed.requestId) saveSelectionReadUnconfirmed({...selectionReadUnconfirmed,requestId:id});
+  else if (selectionReadUnconfirmed.requestId === id && /原回执确认/.test(message)) saveSelectionReadUnconfirmed(null);
+}
+function selectionPreviewCurrent(owner) {
+  return owner && owner.revision === selectionPreviewRevision && owner.accountEpoch === accountEpoch &&
+    owner.contextEpoch === contextEpoch && owner.conversationId === activeConversationId &&
+    owner.identityKey === commandIdentityKey() && modelContextAllowed && $('include-selection').checked;
+}
+function releaseSelectionPreview(owner) {
+  if (!owner || owner.released) return;
+  owner.released=true; clearTimeout(owner.timer); owner.controller?.abort(); finishRequest(owner.request);
+  selectionPreviewInFlight=Math.max(0,selectionPreviewInFlight-1); updateButtons();
+}
+function clearSelectionPreview() { selectionPreviewRevision++; if (selectionPreview?.requestOwner && !selectionPreview.requestOwner.released) markSelectionReadUnconfirmed(selectionPreview.requestOwner); releaseSelectionPreview(selectionPreview?.requestOwner); selectionPreview = null; }
+async function readSelectionPreview() {
+  clearSelectionPreview();
+  if (!modelContextAllowed || !$('include-selection').checked) return;
+  if (selectionReadUnconfirmed) { renderContext(); updateButtons(); return; }
+  if (pendingRequests.has('context') || busy) { selectionPreview={revision:selectionPreviewRevision,accountEpoch,contextEpoch,conversationId:activeConversationId,identityKey:commandIdentityKey(),status:'error',error:'上下文读取正在进行，请稍候刷新。'}; renderContext(); return; }
+  const owner = {revision:selectionPreviewRevision, accountEpoch, contextEpoch, conversationId:activeConversationId, identityKey:commandIdentityKey(), baselineError:context?.error ?? null, contextBaseline:JSON.stringify(context), controller:new AbortController(), released:false};
+  owner.request=beginRequest('context');
+  selectionPreview = {...owner, requestOwner:owner, status:'loading'}; selectionPreviewInFlight++; renderContext(); updateButtons();
+  owner.timer=setTimeout(()=>{
+    if(selectionPreviewCurrent(owner)){markSelectionReadUnconfirmed(owner);selectionPreview={...owner,status:'unknown',error:'读取等待超时，原请求可能仍在执行；请查看上下文及原回执状态，不要重复读取。'};renderContext();}
+    releaseSelectionPreview(owner);
+  },15000);
+  try {
+    const result = await post('context', {includeDocument:false,includeSelection:true}, {signal:owner.controller.signal});
+    if (!selectionPreviewCurrent(owner) || owner.released || !ownsRequest(owner.request)) return;
+    context=result.context ?? null; selectionPreview = {...owner, status:'success', context};
+  } catch (error) {
+    if (!selectionPreviewCurrent(owner) || owner.released || !ownsRequest(owner.request)) return;
+    const unknown = !error.rejected || /回执尚未核实|原请求|未取得可核对的回执/.test(error.message||'');
+    if (unknown) markSelectionReadUnconfirmed(owner);
+    selectionPreview = {...owner, status:unknown?'unknown':'error', error:error.message || '读取失败'};
+  } finally { releaseSelectionPreview(owner); }
+  renderContext();
+}
 function renderContext() {
+  observeSelectionReceipt(context?.error);
+  const inline = $('selection-inline');
+  inline.hidden = !modelContextAllowed || !$('include-selection').checked;
+  if (inline.hidden) inline.open = false;
   if (!modelContextAllowed) {
     context = null;
     $('context-summary').textContent = sourceWorkspace() ? '源码工作台不读取模型上下文' : customerWorkspace() ? '聊天工作区不读取模型上下文' : '当前工作区未开放模型上下文';
     $('context-content').textContent = sourceWorkspace() ? '源码来源与工具返回保留在对话中。' : customerWorkspace() ? '对话仅包含本聊天工作区的消息。' : '请核对工作区配置。';
     return;
   }
-  const flags = contextFlags(), documentInfo = context?.document, selection = context?.selection;
-  const summaries = [], lines = [];
+  const flags = contextFlags(), documentInfo = context?.document;
+  const preview = selectionPreviewCurrent(selectionPreview) ? selectionPreview : null;
+  const selection = preview?.status === 'success' ? preview.context?.selection : null;
+  const ids = Array.isArray(selection?.elementIds) ? selection.elementIds : null;
+  const count = Number.isInteger(selection?.count) && selection.count >= 0 ? selection.count : (!selection?.truncated && ids ? ids.length : null);
+  let inlineText = selectionReadUnconfirmed ? '结果待核实' : preview?.status === 'loading' ? '读取中…' : preview?.status === 'unknown' ? '结果待核实' : preview?.status === 'error' ? '读取失败' : '尚未读取';
+  if (selection && !selectionReadUnconfirmed) {
+    const quantity = count === null ? '数量未知' : `${count} 项`;
+    inlineText = quantity + (ids?.length ? '：' + ids.join('、') : ids ? '：无 ID' : '：ID 未提供') + (selection.truncated ? '（部分）' : '');
+  }
+  $('selection-inline-summary').textContent = inlineText;
+  const summaries = [], lines = [], selectionLines = [inlineText];
+  const selectionDetail = text => { lines.push(text); selectionLines.push(text); };
+  if (flags.includeSelection && selectionReadUnconfirmed) selectionDetail('上一次选择读取的原回执尚未核实，暂不能再次读取；切换对话或取消勾选不会解除等待。');
   if (flags.includeDocument && documentInfo) {
     summaries.push(documentInfo.title || '当前文档');
     lines.push('模型：' + (documentInfo.title || '未提供标题'));
@@ -971,15 +1045,24 @@ function renderContext() {
     }
   } else if (flags.includeDocument) summaries.push('模型信息未取得');
   if (flags.includeSelection && selection) {
-    const count = Number.isInteger(selection.count) ? selection.count : Array.isArray(selection.elementIds) ? selection.elementIds.length : null;
     summaries.push(count === null ? '选择数量未知' : `选择 ${count} 项`);
     if (Array.isArray(selection.elementIds)) {
       lines.push('选中 ID：' + (selection.elementIds.join('、') || '无'));
-      if (selection.truncated) lines.push('选择回读已截断：当前仅展示 ' + selection.elementIds.length + ' / ' + count + ' 项，不代表全部对象。');
+      if (selection.truncated) selectionDetail('选择回读已截断：当前仅展示 ' + selection.elementIds.length + (count === null ? ' 项，总数未知' : ' / ' + count + ' 项') + '，不代表全部对象。');
     }
-  } else if (flags.includeSelection) summaries.push('选择信息未取得');
-  if ((flags.includeDocument || flags.includeSelection) && context?.capturedAt) lines.push('读取时间：' + context.capturedAt + '\n这是当时的上下文快照；模型变化后请刷新。');
-  if (context?.error) lines.push('读取提示：' + previewText(context.error));
+  } else if (flags.includeSelection) summaries.push(selectionReadUnconfirmed ? '选择结果待核实' : preview?.status === 'loading' ? '正在读取选择…' : preview?.status === 'unknown' ? '选择结果待核实' : preview?.status === 'error' ? '选择读取失败' : '选择信息未取得');
+  if (flags.includeSelection && !preview) selectionDetail('当前选择尚未读取；点击刷新可查看，发送时将重新读取。');
+  if (flags.includeSelection && ['error','unknown'].includes(preview?.status)) selectionDetail('选择读取提示：' + previewText(preview.error));
+  if (flags.includeSelection && preview?.status === 'unknown' && context?.selection && JSON.stringify(context)!==preview.contextBaseline) {
+    const later=context.selection, ids=Array.isArray(later.elementIds)?later.elementIds:[];
+    selectionDetail('服务当前上下文已刷新，无法确认是否来自原请求：选择 '+(Number.isInteger(later.count)?later.count:'数量未知')+' 项；ID：'+(ids.join('、')||'无'));
+    if(later.truncated)selectionDetail('服务当前上下文选择已截断，仅显示 '+ids.length+' 项。');
+    if(context.capturedAt)selectionDetail('服务当前上下文读取时间：'+context.capturedAt);
+  }
+  if (flags.includeSelection && preview?.status === 'success' && preview.context?.capturedAt) selectionDetail('选择读取时间：' + preview.context.capturedAt + '；发送时将重新读取当前选择。');
+  if (flags.includeDocument && context?.capturedAt) lines.push('读取时间：' + context.capturedAt + '\n这是当时的上下文快照；模型变化后请刷新。');
+  if (context?.error) { const text = '读取提示：' + previewText(context.error); lines.push(text); if (flags.includeSelection) selectionLines.push(text); }
+  $('selection-inline-content').textContent = selectionLines.join('\n');
   $('context-summary').textContent = summaries.join(' · ') || '未附加模型信息';
   $('context-content').textContent = lines.join('\n') || (flags.includeDocument || flags.includeSelection ? '尚未取得上下文。点击刷新，或随下一条消息读取。' : '勾选后可读取上下文，也可随下一条消息附加。');
 }
@@ -1153,7 +1236,7 @@ function applyConversation(data = {}, commandEvidence = false) {
     const priorCommandConversation = commandConversationId();
     const incomingId = typeof data.session.conversation?.id === 'string' ? data.session.conversation.id : null;
     const changedConversation = historyEnabled() && incomingId !== null && incomingId !== activeConversationId;
-    if(changedConversation || contextEpoch!==null && data.session.contextEpoch!==undefined && contextEpoch!==data.session.contextEpoch)closeImagePreview(false);
+    if(changedConversation || contextEpoch!==null && data.session.contextEpoch!==undefined && contextEpoch!==data.session.contextEpoch) { clearSelectionPreview(); closeImagePreview(false); }
     if(changedConversation || contextEpoch!==null && data.session.contextEpoch!==undefined && contextEpoch!==data.session.contextEpoch)clearModelReceipt();
     if(changedConversation || contextEpoch!==null && data.session.contextEpoch!==undefined && contextEpoch!==data.session.contextEpoch){clearModelPermission('对话或模型上下文已变化，权限尚未核实。');clearAccessPolicy('对话或模型上下文已变化，请重新读取访问范围。');}
     if(changedConversation || contextEpoch!==null && data.session.contextEpoch!==undefined && contextEpoch!==data.session.contextEpoch)libraryAttachmentEpoch++;
@@ -1435,7 +1518,7 @@ async function runCommand(detail) {
   const definition=commandCatalog?.find(command=>command.id===commandId);
   if(definition?.enabled===false||definition?.manualExecution===false||definition?.tool==='revit_set_type_parameter'&&definition.requiresTypeParameterReview!==true)return;
   if(definition?.readOnly===false&&detail?.confirmed!==true){
-    const grant=modelPermission,exempt=definition.effectKind==='model_transaction'&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===conversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now())&&(grant.level==='automatic'||parameters.mode!=='commit')&&!(grant.level==='rollback'&&parameters.mode==='commit');
+    const grant=modelPermission,exempt=!confirmedWrite&&definition.effectKind==='model_transaction'&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===conversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now())&&(grant.level==='automatic'||parameters.mode!=='commit')&&!(grant.level==='rollback'&&parameters.mode==='commit');
     if(!exempt)return;
   }
   commandRevision++;
@@ -1513,7 +1596,7 @@ async function inspectOriginalCabinetJob(detail) {
   finally{if(current())finishRequest(request);updateButtons();}
 }
 async function send(text, { clearDraft = true } = {}) {
-  const trimmed = text.trim(); if (!ready || busy || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(lastSession?.conversation?.id) || isUncertainSteer(lastSession?.conversation?.id,trimmed)) return;
+  const trimmed = text.trim(); if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(lastSession?.conversation?.id) || isUncertainSteer(lastSession?.conversation?.id,trimmed)) return;
   cancelDraftTimer();
   invalidateRequests();
   const request = beginRequest('turn', { draftRevision, draft: $('prompt').value, submittedContext:contextFlags(), waitingForDraft:Boolean(draftSaveWork), accountEpoch, conversationId:activeConversationId, skillsConversation:skillsConversation(), skillIds:Object.freeze([...skillSelection]), model:modelUiEnabled&&modelSelectionAvailable?selectedModel:undefined, effort:modelUiEnabled&&modelSelectionAvailable&&selectedEffort?selectedEffort:undefined, attachments:Object.freeze(pendingAttachments().slice()) });
@@ -1703,11 +1786,13 @@ $('reconnect').addEventListener('click', async () => {
   catch (error) { if (ownsRequest(request) && request.commandRevision === commandRevision) notice(error.message); }
   finally { finishRequest(request); updateButtons(); }
 });
-for (const id of ['include-document', 'include-selection']) $(id).addEventListener('change', () => { if (!modelContextAllowed) $(id).checked = false; renderContext(); updateButtons(); if (historyEnabled()) { draftRevision++; scheduleDraftSave(); } });
+for (const id of ['include-document', 'include-selection']) $(id).addEventListener('change', () => { if (!modelContextAllowed) $(id).checked = false; if (id === 'include-selection') { if ($(id).checked) { void readSelectionPreview(); } else clearSelectionPreview(); } renderContext(); updateButtons(); if (historyEnabled()) { draftRevision++; scheduleDraftSave(); } });
 $('refresh-context').addEventListener('click', async () => {
+  if (selectionReadUnconfirmed) return;
   if (!modelContextAllowed || busy || commandPending() || pendingRequests.has('session') || pendingRequests.has('context')) return;
-  invalidateRequests(); const request = beginRequest('context'); notice(); updateButtons();
-  try { const result = await post('context', contextFlags()); if (ownsRequest(request) && request.commandRevision === commandRevision) { context = result.context ?? null; renderContext(); } }
+  if ($('include-selection').checked) { void readSelectionPreview(); return; }
+  invalidateRequests(); clearSelectionPreview(); const request = beginRequest('context', {accountEpoch, contextEpoch, conversationId:activeConversationId, identityKey:commandIdentityKey(), previewRevision:selectionPreviewRevision}); notice(); updateButtons();
+  try { const flags = contextFlags(); const result = await post('context', flags); if (ownsRequest(request) && request.commandRevision === commandRevision) { context = result.context ?? null; if (flags.includeSelection && $('include-selection').checked && request.previewRevision === selectionPreviewRevision && request.accountEpoch === accountEpoch && request.contextEpoch === contextEpoch && request.conversationId === activeConversationId && request.identityKey === commandIdentityKey()) { clearSelectionPreview(); selectionPreview = {revision:selectionPreviewRevision, accountEpoch, contextEpoch, conversationId:activeConversationId, identityKey:commandIdentityKey(), status:'success', context}; } renderContext(); } }
   catch (error) { if (ownsRequest(request) && request.commandRevision === commandRevision) notice(error.message); }
   finally { finishRequest(request); updateButtons(); }
 });

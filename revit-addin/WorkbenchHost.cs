@@ -1,3 +1,6 @@
+#if BUILDX_CONFIRMED_WRITE && BUILDX_NATIVE_READONLY_TEST
+#error Confirmed write and read-only modes are mutually exclusive.
+#endif
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -649,6 +652,37 @@ namespace RevitLocalCodex
             return error;
         }
 
+#if BUILDX_CONFIRMED_WRITE
+        private DateTime confirmedWriteDeadline;
+        private void CheckConfirmedWrite(UIApplication uiapp, Document original, Dictionary<string, object> args, AccessPolicy.Binding access)
+        {
+            if (DateTime.UtcNow >= confirmedWriteDeadline) throw new InvalidOperationException("Request expired; changes were not committed.");
+            Document current = uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
+            var source = new BuildX.FamilyRevit.RevitProjectDocumentSource(Thread.CurrentThread.ManagedThreadId);
+            if (original == null || source.SameOpenDocument(original, current) != true) throw new InvalidOperationException("Active document changed; write rejected.");
+            RequireProjectEdit(current, ExpectedDocument(args), access);
+        }
+        private void ConfirmNativeWrite(UIApplication uiapp, Document doc, string operation, Dictionary<string, object> args, AccessPolicy.Binding access)
+        {
+            CheckConfirmedWrite(uiapp, doc, args, access);
+            var shown = new Dictionary<string, object>();
+            foreach (string key in new[] { "expected_document", "mode", "element_id", "parameter_id", "type_id", "value", "value_unit", "name", "element_ids", "expected_instance_ids", "changes" })
+                if (args.ContainsKey(key)) shown[key] = args[key];
+            string detail = json.Serialize(shown);
+            if (detail.Length > 12000) throw new InvalidOperationException("Write confirmation details exceed the safe display limit.");
+            var dialog = new TaskDialog("BuildX 模型修改确认");
+            string action = operation == "create_group" ? "创建模型组" : operation == "set_type_parameter" ? "修改类型参数" : "修改实例参数";
+            string mode = Text(args, "mode", "rollback") == "commit" ? "应用" : "回滚预览";
+            dialog.MainInstruction = "确认" + mode + " · " + action;
+            dialog.MainContent = "模型 " + doc.Title + "\n请核对下方参数。应用后需要手动保存模型。";
+            dialog.ExpandedContent = detail;
+            dialog.CommonButtons = TaskDialogCommonButtons.Yes | TaskDialogCommonButtons.No;
+            dialog.DefaultButton = TaskDialogResult.No;
+            if (dialog.Show() != TaskDialogResult.Yes) throw new InvalidOperationException("User declined model write.");
+            CheckConfirmedWrite(uiapp, doc, args, access);
+        }
+#endif
+
         private void ProcessOne(UIApplication uiapp, SchedulerObservation observation, DateTime executeEnteredUtc, long executeEnteredTicks)
         {
             // Preserve the accepted request across the asynchronous Raise/Execute
@@ -687,6 +721,9 @@ namespace RevitLocalCodex
                     rejectionReason = "expired";
                     throw new InvalidOperationException("Request expired before execution; no operation was run.");
                 }
+#if BUILDX_CONFIRMED_WRITE
+                confirmedWriteDeadline = expires;
+#endif
                 string operation = Text(request, "operation");
                 var args = request.ContainsKey("args") ? request["args"] as Dictionary<string, object> : null;
                 bool atomicRead = AtomicReadRequested(request, operation);
@@ -861,6 +898,10 @@ namespace RevitLocalCodex
 
         private object Dispatch(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access)
         {
+#if BUILDX_CONFIRMED_WRITE
+            if (operation != "status" && !WorkbenchActions.IsRead(operation) && !CadGeometryQueries.IsRead(operation) && operation != "preview_schematic" && operation != "preview_project_parameter_binding" && operation != "set_selection" && operation != "select_by_unique_ids" && operation != "set_parameter_value" && operation != "set_type_parameter" && operation != "create_group")
+                throw new InvalidOperationException("Operation is not enabled in confirmed-write mode.");
+#endif
             InitializeFamilyApprovalObserver(uiapp);
             Document doc = uiapp.ActiveUIDocument == null ? null : uiapp.ActiveUIDocument.Document;
             if (operation == "status") return Status(doc, access);
@@ -939,6 +980,9 @@ namespace RevitLocalCodex
             RequireProjectEdit(doc, ExpectedDocument(args), access);
             string mode = Text(args, "mode", "rollback");
             if (mode != "commit" && mode != "rollback") throw new InvalidOperationException("Mode must be commit or rollback.");
+#if BUILDX_CONFIRMED_WRITE
+            ConfirmNativeWrite(uiapp, doc, operation, args, access);
+#endif
             string sourcePath = doc.PathName, sourceTitle = doc.Title;
             object value;
             using (TransactionGroup group = new TransactionGroup(doc, "Local Codex: " + operation))
@@ -956,6 +1000,9 @@ namespace RevitLocalCodex
                     // A user can revoke the UI-published scope while a long
                     // callback is running. Never commit under an obsolete grant.
                     if (mode == "commit") RequireProjectEdit(doc, ExpectedDocument(args), access);
+#if BUILDX_CONFIRMED_WRITE
+                    CheckConfirmedWrite(uiapp, doc, args, access);
+#endif
                     TransactionStatus completion = mode == "commit" ? group.Assimilate() : group.RollBack();
                     if (completion != (mode == "commit" ? TransactionStatus.Committed : TransactionStatus.RolledBack)) throw new InvalidOperationException("Revit did not finish the transaction group: " + completion);
                 }
@@ -1053,7 +1100,11 @@ namespace RevitLocalCodex
         {
             RequireDocument(doc, expected);
             if (string.IsNullOrWhiteSpace(expected)) throw new InvalidOperationException("Writes require a saved project document.");
+#if BUILDX_CONFIRMED_WRITE
+            AccessPolicy.RequireEdit(Root, access, doc.PathName, false, doc.IsReadOnly, doc.IsFamilyDocument, doc.IsLinked, requireProjectScope: true);
+#else
             AccessPolicy.RequireEdit(Root, access, doc.PathName, IsAllowed(doc.PathName), doc.IsReadOnly, doc.IsFamilyDocument, doc.IsLinked);
+#endif
         }
 
         private bool IsAllowed(string documentPath)

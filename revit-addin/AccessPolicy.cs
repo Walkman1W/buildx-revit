@@ -113,12 +113,13 @@ namespace RevitLocalCodex
             return String.Equals(directory, full, StringComparison.OrdinalIgnoreCase) || full.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
         }
         internal static Decision Evaluate(string root, Binding binding, string documentPath, bool legacyAllowed,
-            bool readOnly, bool familyDocument, bool linkedDocument)
+            bool readOnly, bool familyDocument, bool linkedDocument, bool requireProjectScope = false)
         {
             var decision = new Decision { Allowed = false, Reason = "not_saved", Policy = null };
             if (String.IsNullOrWhiteSpace(documentPath)) return decision;
             if (binding == null)
             {
+                if (requireProjectScope) { decision.Reason = "project_policy_required"; return decision; }
                 decision.Allowed = legacyAllowed; decision.Reason = legacyAllowed ? "legacy_allowed" : "outside_legacy_allowlist";
             }
             else
@@ -128,6 +129,7 @@ namespace RevitLocalCodex
                     Projection projection = Read(root, binding);
                     decision.Policy = new { id = projection.Binding.Id, revision = projection.Binding.Revision,
                         accountScope = projection.Binding.AccountScope, mode = projection.Mode };
+                    if (requireProjectScope && projection.Mode != "project-write") { decision.Reason = "project_policy_required"; return decision; }
                     if (projection.Mode == "read-only") { decision.Reason = "policy_read_only"; return decision; }
                     PlainPath(documentPath, false);
                     decision.Allowed = projection.Mode == "full-access" || projection.Roots.Any(path => Contains(path, documentPath));
@@ -141,9 +143,9 @@ namespace RevitLocalCodex
             return decision;
         }
         internal static void RequireEdit(string root, Binding binding, string documentPath, bool legacyAllowed,
-            bool readOnly, bool familyDocument, bool linkedDocument)
+            bool readOnly, bool familyDocument, bool linkedDocument, bool requireProjectScope = false)
         {
-            Decision decision = Evaluate(root, binding, documentPath, legacyAllowed, readOnly, familyDocument, linkedDocument);
+            Decision decision = Evaluate(root, binding, documentPath, legacyAllowed, readOnly, familyDocument, linkedDocument, requireProjectScope);
             if (!decision.Allowed) throw new InvalidOperationException("Current access scope does not permit editing this project: " + decision.Reason + ".");
         }
     }

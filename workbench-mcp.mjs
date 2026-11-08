@@ -1,3 +1,6 @@
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {confirmedWriteProfile} from './lib/confirmed-write-profile.mjs';
 import readline from 'node:readline';
 import {invokeWorkbench,READONLY_WORKBENCH_TOOL_NAMES,workbenchFailureEvidence} from './lib/workbench-client.mjs';
 import {PANEL_WORKBENCH_TOOLS,LEGACY_PANEL_WORKBENCH_TOOLS} from './lib/panel-tools.mjs';
@@ -16,7 +19,8 @@ const flags=process.argv.slice(2);
 if(flags.length!==0&&(flags.length!==1||!['--read-only','--workspace'].includes(flags[0]))){
   process.stderr.write('Usage: node workbench-mcp.mjs [--read-only|--workspace]\n');process.exit(2);
 }
-const readOnly=flags[0]==='--read-only',workspace=flags[0]==='--workspace',readOnlyNames=new Set(READONLY_WORKBENCH_TOOL_NAMES);
+const guarded=confirmedWriteProfile(path.dirname(fileURLToPath(import.meta.url)));
+const readOnly=flags[0]==='--read-only',workspace=flags[0]==='--workspace'||guarded&&!readOnly,readOnlyNames=new Set(READONLY_WORKBENCH_TOOL_NAMES);
 const receiptBridge=workspace?await import('./lib/chat-read-receipts.mjs'):null;
 const receiptProducer=receiptBridge?.createChatReadReceiptProducer({
   key:process.env[receiptBridge.CHAT_READ_RECEIPT_KEY_ENV],port:Number(process.env[receiptBridge.CHAT_READ_RECEIPT_PORT_ENV])

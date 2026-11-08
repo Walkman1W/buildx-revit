@@ -4,9 +4,32 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {createHash} from 'node:crypto';
-import {buildCandidate,planInstall,applyInstall,inspectDataLayout,validateRuntimeVersionOutputs} from './tools/buildx-installer.mjs';
+import {spawnSync} from 'node:child_process';
+import {buildCandidate,planInstall,applyInstall,inspectDataLayout,validateRuntimeVersionOutputs,detectRevitTargets} from './tools/buildx-installer.mjs';
 const hash=data=>createHash('sha256').update(data).digest('hex');
 const sha=/^[a-f0-9]{64}$/;
+test('Revit version discovery separates registered x64 targets and never promises installation',async()=>{
+  const rows=[
+    {version:'2024',executable:'C:\\Revit24\\Revit.exe',fileVersion:'24.3.30.11'},
+    {version:'2025',executable:'C:\\Revit25\\Revit.exe',fileVersion:'25.5.0.1'},
+  ];
+  const run=async(_file,args)=>{
+    const script=Buffer.from(args.at(-1),'base64').toString('utf16le');
+    assert.match(script,/Revit 2024/);assert.match(script,/Revit 2025/);
+    return {stdout:JSON.stringify(rows)};
+  };
+  const result=await detectRevitTargets({platform:'win32',appData:'C:\\Users\\Example\\AppData\\Roaming',run,inspectExecutable:async file=>!file.includes('Revit25')});
+  assert.equal(result[0].detected,true);assert.equal(result[0].supportedByPackage,true);assert.equal(result[0].installable,false);assert.equal(result[0].reason,'installation_preflight_required');
+  assert.equal(result[1].detected,false);assert.equal(result[1].supportedByPackage,false);assert.equal(result[1].installable,false);assert.equal(result[1].reason,'revit_unverified');
+  assert.match(result[1].addinDirectory,/Autodesk\\Revit\\Addins\\2025$/);
+  const both=await detectRevitTargets({platform:'win32',appData:'C:\\Users\\Example',run,inspectExecutable:async()=>true});
+  assert.deepEqual(both.map(x=>x.detected),[true,true]);
+  assert.equal(both[1].fileVersion,'25.5.0.1');assert.equal(both[1].installable,false);assert.equal(both[1].reason,'plugin_build_unavailable');
+  rows.push({...rows[1],executable:'D:\\Other\\Revit.exe'});
+  const ambiguous=await detectRevitTargets({platform:'win32',run,inspectExecutable:async()=>true});
+  assert.equal(ambiguous[1].detected,false);assert.equal(ambiguous[1].reason,'revit_ambiguous');
+  const failed=await detectRevitTargets({platform:'win32',run:async()=>{throw new Error('unknown');}});assert.deepEqual(failed.map(x=>x.detected),[false,false]);
+});
 async function fixture(t){
   const base=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-installer-test-'));
   t.after(async()=>{const parent=path.resolve(os.tmpdir()),target=path.resolve(base);assert.equal(path.dirname(target),parent);assert.match(path.basename(target),/^buildx-installer-test-/);await fs.rm(target,{recursive:true,force:true});});
@@ -25,7 +48,36 @@ test('sandbox install plans before writing, copies only verified files and publi
   const config=JSON.parse(await fs.readFile(path.join(f.options.installRoot,'buildx-installation.json'),'utf8'));assert.equal(config.schemaVersion,2);assert.equal(config.dataRoot,f.options.dataRoot);assert.equal(config.installationId,result.installationId);assert.equal(config.nodeExecutable,f.options.nodeExecutable);assert.equal(config.pythonExecutable,f.options.pythonExecutable);assert.equal(config.codexExecutable,f.options.codexExecutable);
   assert.equal(JSON.parse(await fs.readFile(path.join(f.options.dataRoot,'buildx-data-owner.json'),'utf8')).installationId,result.installationId);
   await assert.rejects(fs.stat(path.join(f.options.installRoot,'workbench')),{code:'ENOENT'});
-  const addinXml=await fs.readFile(result.addin,'utf8');assert.match(addinXml,/LocalCodexRevit\.dll/);assert.match(addinXml,/<VendorDescription>buildbrain 建筑智脑公司<\/VendorDescription>/);assert.match(addinXml,/<VendorId>LCLX<\/VendorId>/);assert.match(addinXml,/<AddInId>62680901-6718-4cbc-a115-9383f35b782c<\/AddInId>/);await assert.rejects(applyInstall(f.options),{code:'INSTALL_EXISTS'});
+  assert.match(await fs.readFile(result.addin,'utf8'),/LocalCodexRevit\.dll/);await assert.rejects(applyInstall(f.options),{code:'INSTALL_EXISTS'});
+});
+test('internal test requires a hashed confirmed-write marker and cannot promote a test fixture',async t=>{
+  const f=await fixture(t),options={...f.options,installationScope:'cross-pc-test',probeEnvironment:async()=>({ok:true,webView2:{},revit2024:{}}),probeRuntimes:async()=>({pypdfAvailable:true})};
+  await assert.rejects(planInstall(options),{code:'TEST_SCOPE_INVALID'});
+  const marker=Buffer.from('{"schemaVersion":1,"scope":"confirmed-write"}\n');
+  await fs.writeFile(path.join(f.pkg,'buildx-confirmed-write.json'),marker);
+  f.manifest.files.push({path:'buildx-confirmed-write.json',sha256:hash(marker)});
+  await fs.writeFile(path.join(f.pkg,'buildx-package.json'),JSON.stringify(f.manifest));
+  await assert.rejects(planInstall(options),{code:'TEST_HOST_UNVERIFIED'});
+  f.manifest.buildEvidence={dllSha256:f.manifest.files.find(x=>x.path==='revit-addin/bin/LocalCodexRevit.dll').sha256,compilerOptions:['/define:BUILDX_CONFIRMED_WRITE']};
+  await fs.writeFile(path.join(f.pkg,'buildx-package.json'),JSON.stringify(f.manifest));
+  assert.equal((await planInstall(options)).readyToApply,false);
+  await fs.writeFile(path.join(f.pkg,'buildx-confirmed-write.json'),'{}');
+  await assert.rejects(planInstall(options),{code:'PACKAGE_CHANGED'});
+});
+test('internal CLI refuses an Addins directory outside the current Revit user profile', {skip:process.platform!=='win32'},()=>{
+  const result=spawnSync(process.execPath,[path.join(process.cwd(),'tools','buildx-installer.mjs'),'--plan-internal-test','C:\\package','C:\\program','C:\\wrong-addins','C:\\node.exe','C:\\python.exe','C:\\codex.exe','C:\\data'],{encoding:'utf8'});
+  assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stderr).code,'ADDINS_DIRECTORY_INVALID');
+});
+test('2025 plan refuses a 2024 candidate even when both years are detected',async t=>{
+  const f=await fixture(t);f.manifest.stage='candidate';f.manifest.target={platform:'win32',architecture:'x64',revit:'2024'};
+  await fs.writeFile(path.join(f.pkg,'buildx-package.json'),JSON.stringify(f.manifest));
+  await assert.rejects(planInstall({...f.options,installationScope:'cross-pc-test',revitVersion:'2025'}),{code:'REVIT_TARGET_MISMATCH'});
+});
+test('2025 candidate cannot be generated without verified native build evidence',async t=>{
+  const f=await fixture(t),plugin=path.join(f.base,'plugin25');await fs.mkdir(plugin);
+  const output=path.join(f.base,'candidate25');
+  await assert.rejects(buildCandidate({output,pluginDirectory:plugin,revitVersion:'2025',testScope:'confirmed-write'}),{code:'TEST_HOST_UNVERIFIED'});
+  await assert.rejects(fs.stat(output),{code:'ENOENT'});
 });
 test('data layout inspection is read-only and exposes overlap and unknowns',async t=>{
   const f=await fixture(t),data=path.join(f.base,'existing-project-history');await fs.mkdir(data);const marker=path.join(data,'preserve.txt');await fs.writeFile(marker,'original');

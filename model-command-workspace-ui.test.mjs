@@ -10,21 +10,18 @@ const state={workspace:{kind:'model',supportsModelContext:true},ready:false,comm
   connectionGeneration:1,codexAccount:{accountRevision:1,status:'unavailable'}};
 async function setup(t){const ui=await createInputUi();t.after(()=>ui.close());ui.emit('state',state);ui.emit('conversation',{busy:false,session:session()});await flush();return ui;}
 
-test('workspace tool count uses the registered Revit catalog and survives count-only reconnect updates',async t=>{
+test('commands retain the registered Revit catalog without a dedicated tools button',async t=>{
   const ui=await setup(t),catalog=panelProfile(MODEL_SERVER_PROFILE).catalog;
   const reads=catalog.filter(tool=>tool.readOnly).length, count=catalog.length;
   const label=`Revit 工具总数 ${count} 项 · 只读查询 ${reads} 项 · 其他操作 ${count-reads} 项`;
   ui.emit('state',{...state,toolCount:reads,toolCatalog:[...catalog,catalog[0],{name:'<invalid>'}]});
-  const badge=ui.get('model-tools-toggle'),drawerCount=ui.get('tool-count');
-  assert.equal(badge.textContent,`工具 ${count}`);
-  assert.equal(badge.title,label);
+  const drawerCount=ui.get('tool-count');
+  assert.equal(ui.document.body.querySelectorAll('.model-tools-count').length,0);
   assert.equal(drawerCount.textContent,label);
   assert.equal(ui.get('tool-list').childElementCount,catalog.length);
   ui.emit('state',{...state,toolCount:0});
-  assert.equal(badge.textContent,`工具 ${count}`);
   assert.equal(drawerCount.textContent,label);
   ui.emit('state',{...state,toolCount:0,toolCatalog:[]});
-  assert.equal(badge.textContent,'工具');
   assert.equal(drawerCount.textContent,'正在读取目录');
 });
 
