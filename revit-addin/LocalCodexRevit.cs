@@ -25,10 +25,16 @@ using Color = System.Windows.Media.Color;
 using WpfVisibility = System.Windows.Visibility;
 
 [assembly: AssemblyTitle("BuildX")]
+#if NET8_0_OR_GREATER
+[assembly: AssemblyDescription("BuildX workspace for Revit 2025")]
+#else
 [assembly: AssemblyDescription("BuildX workspace for Revit 2024")]
+#endif
 [assembly: AssemblyVersion("0.8.8.0")]
 [assembly: AssemblyFileVersion("0.8.8.0")]
+#if !NET8_0_OR_GREATER
 [assembly: TargetFramework(".NETFramework,Version=v4.8")]
+#endif
 
 namespace RevitLocalCodex
 {

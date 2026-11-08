@@ -6,7 +6,17 @@
 
 构建该包时，使用 `revit-addin/build.ps1 -IsolatedBuild -NativeReadonlyTest` 编译宿主，并运行 `node tools/buildx-installer.mjs --build-native-readonly-candidate <新目录> <插件输出目录> <版本>`。专用 CLI 安装入口是 `--plan-internal-test` 和 `--apply-internal-test`，参数与普通预检和安装一致。内部测试继续标记为 `releaseReady:false`。
 
+## 双版本内部只读测试包
+
+双版本包的顶层 `BuildX-Setup.cmd` 发现目标电脑已安装的 Revit 2024 和 Revit 2025 初始版 `25.0.2.419`，按用户选择调用对应安装计划。两版使用各自的程序目录、数据目录、Addins 目录和服务端口。试装依赖和步骤见[双版本安装说明](../docs/migration/CROSS-PC-DUAL-20261108.zh-CN.md)。
+
+`packages/2024` 使用 `--build-native-readonly-candidate` 构建。`packages/2025-net8` 使用 `revit-addin/2025/build.ps1` 和 `--build-revit2025-readonly-candidate` 构建，API 文件仅用于构建与目标机核验。将 `tools/buildx-dual-package-entry.cmd` 复制为顶层 `BuildX-Setup.cmd`，保留两个完整组件目录。2025 组件单独安装时，安装器命令使用 `--plan-revit2025-internal-test` 和 `--apply-revit2025-internal-test`。
+
 ## 通用开发候选
+
+运行 `node tools/buildx-installer.mjs --detect` 可查看 `revitTargets`。向导分别显示从 Windows 注册信息与 x64 `Revit.exe` 核对出的 Revit 2024、2025 和完整文件版本。若同一年发现多个有效安装路径，标记为待核对。通用候选的安装预检按 Revit 2024 处理。
+
+双版本安装时，每个目标使用自己的插件 DLL、程序与数据目录，并将 `BuildX.addin` 写入当前用户的 `%APPDATA%\Autodesk\Revit\Addins\2024` 或 `%APPDATA%\Autodesk\Revit\Addins\2025`。并行运行需要独立本地服务端口。Revit 2025 原版运行在 .NET 8，2025.5 使用 .NET 10；构建和实机验证按目标的完整版本进行。[Autodesk 2025 迁移说明](https://help.autodesk.com/cloudhelp/2025/ENU/Revit-API/files/Revit_API_Developers_Guide/Introduction/Getting_Started/Using_the_Autodesk_Revit_API/Revit_API_Revit_API_Developers_Guide_Introduction_Getting_Started_Using_the_Autodesk_Revit_API_NET8_Update_html.html) · [Autodesk .NET 10 更新说明](https://help.autodesk.com/view/RVT/2025/ENU/?caas=caas/sfdcarticles/sfdcarticles/Revit--Requirements-for-products-affected-by-the-Microsoft--NET-10-transition.html)
 
 在候选包根目录双击 `BuildX-Setup.cmd` 可打开开发候选向导；从源码目录测试时可双击 `tools/buildx-setup.cmd`。向导需要同目录 `buildx-setup.ps1`、`buildx-installer.mjs` 及父目录的 `lib/local-runtimes.mjs`。当前候选尚不是完整安装包。
 

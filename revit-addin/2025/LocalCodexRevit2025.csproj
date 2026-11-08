@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>LocalCodexRevit</AssemblyName>
+    <PlatformTarget>x64</PlatformTarget>
+    <DefineConstants>BUILDX_NATIVE_READONLY_TEST</DefineConstants>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\*.cs" />
+    <Compile Include="..\..\family-core\*.cs" />
+    <Compile Include="..\..\family-core\revit\*.cs" />
+    <Compile Include="JsonCompatibility.cs" />
+
+    <EmbeddedResource Include="..\..\public\bim-x-logo.png" LogicalName="RevitLocalCodex.BimXLogo" />
+    <Reference Include="RevitAPI"><HintPath>$(RevitDirectory)\RevitAPI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="RevitAPIUI"><HintPath>$(RevitDirectory)\RevitAPIUI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Microsoft.Web.WebView2.Core"><HintPath>$(WebView2PackageDirectory)\lib\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll</HintPath></Reference>
+    <Reference Include="Microsoft.Web.WebView2.Wpf"><HintPath>$(WebView2PackageDirectory)\lib\netcoreapp3.0\Microsoft.Web.WebView2.Wpf.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

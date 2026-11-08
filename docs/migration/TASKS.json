@@ -100,6 +100,16 @@
         "customerMachineVerified": false,
         "releaseReady": false
       },
+      "crossPcDualReadonlyTest": {
+        "version": "0.8.8-cross-pc-dual-test.1",
+        "guide": "CROSS-PC-DUAL-20261108.zh-CN.md",
+        "targets": ["Revit 2024 x64", "Revit 2025 x64 25.0.2.419"],
+        "revitApiCompileVerified": true,
+        "controlledDualInstallVerified": true,
+        "realRevitLoadVerified": false,
+        "customerMachineVerified": false,
+        "releaseReady": false
+      },
       "installable": false,
       "realRevitLoadVerified": false,
       "realModelExecutionVerified": false,
