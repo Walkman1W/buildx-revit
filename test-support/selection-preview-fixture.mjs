@@ -17,20 +17,30 @@ import {READONLY_WORKBENCH_TOOL_NAMES} from '../lib/workbench-client.mjs';
 const root=fileURLToPath(new URL('..',import.meta.url));
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
-class FixtureCodex extends EventEmitter{
-  constructor({profile,autoReply,replyDelayMs,autoInterrupt}){
-    super();this.autoReply=autoReply;this.replyDelayMs=replyDelayMs;this.autoInterrupt=autoInterrupt;
-    if([MODEL_READONLY_SESSION_PROFILE,MODEL_WORKSPACE_SESSION_PROFILE].includes(profile))Object.defineProperty(this,'profile',{value:Object.freeze({id:profile,toolNames:profile===MODEL_WORKSPACE_SESSION_PROFILE?Object.freeze(MODEL_AI_READ_TOOLS.map(tool=>tool.name)):READONLY_WORKBENCH_TOOL_NAMES,supportsTurnAttachments:true})});
+export class FixtureCodex extends EventEmitter{
+  constructor({profile,autoReply,replyDelayMs,autoInterrupt,dynamicTools,familyLifecycleDynamicTools,cold=false,threadPrefix='isolated-model-thread-',trustedProfile}){
+    super();this.autoReply=autoReply;this.replyDelayMs=replyDelayMs;this.autoInterrupt=autoInterrupt;this.threadPrefix=threadPrefix;
+    if(trustedProfile!==undefined){
+      if(!trustedProfile||!Object.isFrozen(trustedProfile)||trustedProfile.id!==profile)throw new Error('Invalid fixture profile');
+      Object.defineProperty(this,'profile',{value:trustedProfile});
+    }else if([MODEL_READONLY_SESSION_PROFILE,MODEL_WORKSPACE_SESSION_PROFILE].includes(profile))Object.defineProperty(this,'profile',{value:Object.freeze({
+      id:profile,toolNames:profile===MODEL_WORKSPACE_SESSION_PROFILE?Object.freeze(MODEL_AI_READ_TOOLS.map(tool=>tool.name)):READONLY_WORKBENCH_TOOL_NAMES,
+      supportsTurnAttachments:true,...(dynamicTools?{dynamicTools:Object.freeze([...dynamicTools])}:{}),
+      ...(familyLifecycleDynamicTools?{familyLifecycleDynamicTools:Object.freeze([...familyLifecycleDynamicTools])}:{})
+    })});
     this.state={ready:true,error:false,mode:profile==='model'||[MODEL_READONLY_SESSION_PROFILE,MODEL_WORKSPACE_SESSION_PROFILE].includes(profile)?'document-workbench':profile,
       message:'Codex 已连接',toolCount:profile===MODEL_WORKSPACE_SESSION_PROFILE?MODEL_AI_READ_TOOLS.length:profile===MODEL_READONLY_SESSION_PROFILE?4:profile==='customer-chat'?0:profile==='source-development'?6:PANEL_TOOL_CATALOG.length,
       connectionGeneration:1,codexAccount:{status:'verified',connectionGeneration:1,accountRevision:0,
         observationSequence:1,observedAt:new Date().toISOString(),stableAccountId:null,workspaceId:null}};
-    this.turns=[];this.interrupts=[];this.threads=0;this.timers=new Set();this.closed=false;
+    if(cold)this.state={...this.state,ready:false,toolCount:0,connectionGeneration:0,connectionStatus:'closed',
+      codexAccount:{...this.state.codexAccount,status:'unverified',connectionGeneration:0,observationSequence:0}};
+    this.turns=[];this.interrupts=[];this.threads=0;this.timers=new Set();this.closed=cold;
   }
   later(action,delay=this.replyDelayMs){const timer=setTimeout(()=>{this.timers.delete(timer);if(!this.closed)action();},delay);this.timers.add(timer);}
   async start(){
     this.closed=false;const generation=this.state.connectionGeneration+1;
     this.state={...this.state,ready:true,error:false,message:'Codex 已连接',connectionGeneration:generation,
+      ...(this.state.connectionStatus==='closed'?{connectionStatus:'ready',toolCount:this.profile.toolNames.length}:{}),
       codexAccount:{...this.state.codexAccount,status:'verified',connectionGeneration:generation,
         accountRevision:this.state.codexAccount.accountRevision+1,observationSequence:this.state.codexAccount.observationSequence+1,observedAt:new Date().toISOString()}};
     this.emit('state',this.state);
@@ -40,7 +50,7 @@ class FixtureCodex extends EventEmitter{
     this.state={...this.state,codexAccount:meta};
     return {...meta,type:'chatgpt',email:'local-codex@example.invalid',planType:'free'};
   }
-  async newThread(){return 'isolated-model-thread-'+(++this.threads);}
+  async newThread(){return this.threadPrefix+(++this.threads);}
   notify(method,turn,extra={}){this.emit('notification',method,{threadId:turn.threadId,turnId:turn.turnId,...extra});}
   finish(turn,status='completed',text='已收到只读查询回执。'){
     if(typeof turn==='number')turn=this.turns[turn];
@@ -68,15 +78,17 @@ class FixtureCodex extends EventEmitter{
   async close(){for(const timer of this.timers)clearTimeout(timer);this.timers.clear();this.closed=true;return {closed:true};}
 }
 
-export async function createModelWorkspaceFixture({profile='model',required=profile!=='source-development',requireLicense=false,autoReply=false,replyDelayMs=350,autoInterrupt=false,historyDirectory,historyOptions={},historyDependencies={},codexClient=null,requestTimeoutMs=5000,invokeReadonlyCommand=null,viewerService=null,projectPollMs=30000,projectHistoryFactory=null,cabinetFixtureTesting=false,materialIndexFactory=null,materialOpener=null,accessServices=null,modelPermissionServices=null,invokeAtomicContextRead=null}={}){
+export async function createModelWorkspaceFixture({profile='model',required=profile!=='source-development',requireLicense=false,autoReply=false,replyDelayMs=350,autoInterrupt=false,historyDirectory,historyOptions={},historyDependencies={},codexClient=null,requestTimeoutMs=5000,invokeReadonlyCommand=null,viewerService=null,projectPollMs=30000,projectHistoryFactory=null,cabinetFixtureTesting=false,materialIndexFactory=null,materialOpener=null,accessServices=null,modelPermissionServices=null,invokeAtomicContextRead=null,managedInference=null,managedInferenceFactory=null,inferenceGrantFixture=null,
+  dynamicTools,invokeManagedWorkbenchRead,readContextFailure,contextReceiptPollDelays,inferenceModeFactory,managedWorkbenchPilotSwitch}={}){
   if(!['model',MODEL_READONLY_SESSION_PROFILE,MODEL_WORKSPACE_SESSION_PROFILE,'source-development','customer-chat'].includes(profile))throw new Error('Unknown fixture profile');
   if(profile==='source-development'&&required)throw new Error('Source fixture cannot require customer identity');
   const authCalls=[],workbenchCalls=[],audits=[];
   let licenseStatus='trial';
   const user={id:'11111111-1111-1111-1111-111111111111',email:'demo@example.invalid'};
   const otherUser={id:'22222222-2222-2222-2222-222222222222',email:'other@example.invalid'};
-  const accountAuth=required?createBuildxAuth({url:'https://abcdefghijklmnopqrst.supabase.co',publishableKey:'sb_publishable_abcdefghijklmnopqrst',fetchImpl:async(url,options)=>{
+  const accountAuth=required?createBuildxAuth({url:'https://abcdefghijklmnopqrst.supabase.co',publishableKey:'sb_publishable_abcdefghijklmnopqrst',...(inferenceGrantFixture?{inferenceGrantOrigin:'https://inference.example.test'}:{}),fetchImpl:async(url,options)=>{
     authCalls.push({path:new URL(url).pathname,method:options.method});
+    if(inferenceGrantFixture&&new URL(url).origin==='https://inference.example.test')return inferenceGrantFixture(options,new URL(url).pathname);
     if(url.includes('/token?')){const other=JSON.parse(options.body).email===otherUser.email;return Response.json({access_token:'fixture-access'+(other?'-other':''),refresh_token:'fixture-refresh'+(other?'-other':''),token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600});}
     if(url.endsWith('/user'))return Response.json(options.headers.Authorization.endsWith('-other')?otherUser:user);
     if(url.includes('/logout?scope=local'))return new Response(null,{status:204});
@@ -84,7 +96,8 @@ export async function createModelWorkspaceFixture({profile='model',required=prof
     if(url.endsWith('/rpc/buildx_license_status'))return Response.json({status:licenseStatus,startsAt:null,endsAt:null});
     throw new Error('Unexpected isolated auth route');
   }}):null;
-  const codex=codexClient??new FixtureCodex({profile,autoReply,replyDelayMs,autoInterrupt});
+  if(managedInferenceFactory)managedInference=managedInferenceFactory(accountAuth);
+  const codex=codexClient??new FixtureCodex({profile,autoReply,replyDelayMs,autoInterrupt,dynamicTools});
   let document={title:'项目参考.rvt',path:'D:\\isolated-samples\\project.rvt',activeViewId:12},elementIds=[42,84];
   const invokeWorkbench=async(name,args)=>{
     workbenchCalls.push({name,args:structuredClone(args)});
@@ -94,7 +107,9 @@ export async function createModelWorkspaceFixture({profile='model',required=prof
     throw new Error('Unexpected isolated model query');
   };
   const historyStore=historyDirectory?createPanelChatStore({...historyOptions,stateDirectory:historyDirectory},historyDependencies):null;
-  const options={root,codex,port:0,accountAuth,requireAccount:required,requireLicense,projectPollMs,projectHistoryFactory,cabinetFixtureTesting,invokeWorkbench,...(invokeAtomicContextRead?{invokeAtomicContextRead}:{}),audit:(file,data)=>audits.push({file,data}),historyStore,...(invokeReadonlyCommand?{invokeReadonlyCommand}:{}),...(viewerService?{viewerService}:{}),...(materialIndexFactory?{materialIndexFactory}:{}),...(materialOpener?{materialOpener}:{}),...(accessServices?{accessServices}:{}),...(modelPermissionServices?{modelPermissionServices}:{})};
+  const options={root,codex,port:0,accountAuth,requireAccount:required,requireLicense,managedInference,projectPollMs,projectHistoryFactory,cabinetFixtureTesting,invokeWorkbench,...(invokeAtomicContextRead?{invokeAtomicContextRead}:{}),audit:(file,data)=>audits.push({file,data}),historyStore,...(invokeReadonlyCommand?{invokeReadonlyCommand}:{}),...(viewerService?{viewerService}:{}),...(materialIndexFactory?{materialIndexFactory}:{}),...(materialOpener?{materialOpener}:{}),...(accessServices?{accessServices}:{}),...(modelPermissionServices?{modelPermissionServices}:{}),
+    ...(invokeManagedWorkbenchRead?{invokeManagedWorkbenchRead}:{}),readContextFailure,contextReceiptPollDelays,inferenceModeFactory,
+    ...(managedWorkbenchPilotSwitch===undefined?{}:{managedWorkbenchPilotSwitch})};
   const app=profile==='customer-chat'?createPanelServerCore({...options,requireAccount:true,selection:createCustomerChatProfile().panel}):createPanelServer({...options,profile});
   const {origin}=await app.listen(),controllers=new Set();
   const status=async cookie=>{

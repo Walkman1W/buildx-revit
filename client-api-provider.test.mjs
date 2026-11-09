@@ -17,6 +17,7 @@ function fixture(options={}){
   const providerId=provider.describe().identity.providerId;
   const children=[],diagnostics=[];let launch,client;
   const spawn=(executable,args,env)=>{
+    if(options.spawnFails)throw new Error('private spawn error');
     launch={executable,args,env};const child=new EventEmitter();child.stdout=new EventEmitter();child.stderr=new EventEmitter();child.stdin=new EventEmitter();
     child.messages=[];child.stdin.writable=true;
     child.stdin.write=(line,cb)=>{
@@ -24,7 +25,8 @@ function fixture(options={}){
       queueMicrotask(()=>{cb?.();if(message.id===undefined||!message.method)return;
         if(message.method==='thread/start'&&options.deferThread){child.deferredThreadId=message.id;return;}
         let result={};
-        if(message.method==='thread/start')result={thread:{id:'fixture-thread'},model:options.model??'example-model',modelProvider:options.provider??providerId};
+        const selectedProvider=args.find(value=>value.startsWith('model_provider='));
+        if(message.method==='thread/start')result={thread:{id:'fixture-thread'},model:options.model??'example-model',modelProvider:options.provider??JSON.parse(selectedProvider.slice('model_provider='.length))};
         if(message.method==='mcpServerStatus/list')result={data:[{name:'fixture',runtimeStatus:'connected',tools:{fixture_read:{}}}]};
         if(message.method==='turn/start')result={turn:{id:'fixture-turn'}};
         child.stdout.emit('data',Buffer.from(JSON.stringify({id:message.id,result})+'\n'));
@@ -32,11 +34,69 @@ function fixture(options={}){
     };
     child.stdin.end=()=>queueMicrotask(()=>{child.emit('exit',0,null);child.emit('close',0,null);});child.kill=()=>true;children.push(child);return child;
   };
-  client=new CodexClientCore(process.cwd(),profile,{spawn,apiProvider:provider,resolveRuntimes:()=>({codex:process.execPath,python:'fake'}),
+  client=new CodexClientCore(process.cwd(),profile,{spawn,...options.factory?{apiProviderFactory:options.factory}:{apiProvider:provider},resolveRuntimes:()=>({codex:process.execPath,python:'fake'}),
     readConfiguredNames:()=>[],closeTimeoutMs:10,killTimeoutMs:10});
   client.on('diagnostic',value=>diagnostics.push(value));
   return {client,children,diagnostics,providerId,get launch(){return launch;}};
 }
+
+const testProvider=()=>createApiProviderLaunch({
+  baseUrl:'http://127.0.0.1:23119/v1',model:'example-model',apiKey:fakeKey,allowLoopbackHttp:true
+});
+
+test('closing during managed preparation releases the late lease without spawning',async()=>{
+  let complete,entered,opens=0,closes=0;
+  const opening=new Promise(resolve=>{complete=resolve;});
+  const started=new Promise(resolve=>{entered=resolve;});
+  const f=fixture({factory:Object.freeze({open(){opens++;entered();return opening;}})});
+  const first=assert.rejects(f.client.start(),{code:'CODEX_CLEANUP_REQUIRED'});
+  const second=assert.rejects(f.client.start(),{code:'CODEX_CLEANUP_REQUIRED'});
+  await started;
+  const closing=f.client.close();
+  complete(Object.freeze({provider:testProvider(),close:async()=>{closes++;return {closed:true};}}));
+  assert.equal((await closing).closed,true);
+  await Promise.all([first,second]);
+  assert.equal(opens,1);
+  assert.equal(closes,1);
+  assert.equal(f.children.length,0);
+});
+
+test('managed reconnect waits for relay cleanup and uses a fresh generation and provider',async t=>{
+  let opens=0,canClose=false;
+  const factory=Object.freeze({async open(){
+    opens++;
+    return Object.freeze({provider:testProvider(),close:async()=>({closed:canClose})});
+  }});
+  const f=fixture({factory});
+  t.after(async()=>{canClose=true;await f.client.close();});
+  await Promise.all([f.client.start(),f.client.start()]);
+  const before=f.client.state;
+  assert.equal(before.ready,true);
+  assert.equal(opens,1);
+  await assert.rejects(f.client.close(),{code:'CODEX_CLEANUP_UNCONFIRMED'});
+  assert.equal(f.client.state.cleanupPending,true);
+  await assert.rejects(f.client.start(),{code:'CODEX_CLEANUP_REQUIRED'});
+  assert.equal(opens,1);
+  canClose=true;
+  assert.equal((await f.client.close()).closed,true);
+  await f.client.start();
+  assert.equal(opens,2);
+  assert.equal(f.children.length,2);
+  assert.ok(f.client.state.connectionGeneration>before.connectionGeneration);
+  assert.notEqual(f.client.state.codexAccount.providerRevision,before.codexAccount.providerRevision);
+  assert.equal(f.client.state.ready,true);
+});
+
+test('failed managed spawn releases its lease and hides raw errors',async()=>{
+  let closes=0;
+  const f=fixture({spawnFails:true,factory:Object.freeze({async open(){
+    return Object.freeze({provider:testProvider(),close:async()=>{closes++;return {closed:true};}});
+  }})});
+  await assert.rejects(f.client.start(),{code:'CODEX_SPAWN_ERROR'});
+  assert.equal(closes,1);
+  assert.doesNotMatch(f.client.state.message,/private spawn error/);
+  assert.equal((await f.client.close()).closed,true);
+});
 
 test('API provider selection verifies local thread identity but never claims model availability',async t=>{
   const f=fixture();t.after(()=>f.client.close());await Promise.all([f.client.start(),f.client.start()]);

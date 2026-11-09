@@ -12,7 +12,7 @@ import {StdioClientTransport} from '@modelcontextprotocol/client/stdio';
 import {createPanelServer} from './lib/panel-server.mjs';
 import {createCodexSessionProfile,MODEL_WORKSPACE_SESSION_PROFILE} from './lib/codex-profile.mjs';
 import {createPanelChatStore} from './lib/chat-store.mjs';
-import {CHAT_READ_RECEIPT_KEY_ENV,CHAT_READ_RECEIPT_META,CHAT_READ_RECEIPT_PATH,CHAT_READ_RECEIPT_PORT_ENV} from './lib/chat-read-receipts.mjs';
+import {CHAT_READ_RECEIPT_KEY_ENV,CHAT_READ_RECEIPT_META,CHAT_READ_RECEIPT_PATH,CHAT_READ_RECEIPT_PORT_ENV,createChatReadReceiptInbox} from './lib/chat-read-receipts.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url)),tool='revit_get_phases',hostSession='a'.repeat(32);
 class Codex extends EventEmitter{
@@ -74,6 +74,13 @@ for(const status of ['expired','received'])test('the original MCP receipt become
   assert.equal(result.structuredContent.buildxToolOutcome.outcome,'unconfirmed');
   const proof=result._meta?.[CHAT_READ_RECEIPT_META];assert.ok(proof);
   const {requestId}=proof,filename=requestId+'.json';
+  const inbox=createChatReadReceiptInbox(f.key,new Set([tool]));
+  t.after(()=>inbox.close());
+  assert.equal(inbox.hasPending(),false);
+  assert.equal(inbox.observe(proof,()=>{}),true);
+  assert.equal(inbox.hasPending(),true);
+  assert.equal(inbox.receive({proof,status}),true);
+  assert.equal(inbox.hasPending(),false);
   assert.deepEqual(await fs.readdir(path.join(queue,'inbox')),[filename]);
   const invalid={proof:{...proof,requestId:randomUUID()},status:'received'};
   assert.equal((await f.post(CHAT_READ_RECEIPT_PATH,{proof,status:'received'},{'X-BuildX-Read-Receipt-Key':randomBytes(32).toString('hex')})).status,403);

@@ -69,7 +69,8 @@ const pumpNetwork={operation:'get_pipe_network',name:'revit_get_pipe_network',ar
 
 // Use the unchanged MCP entry, SDK and real filesystem queue. A controlled peer
 // supplies all model data, so these timings describe transport only.
-async function fixture(t,{olderHost=false,missingOperations=new Set(),extraCalls=[],corrupt}={}){
+async function fixture(t,{olderHost=false,missingOperations=new Set(),extraCalls=[],corrupt,
+  mcpMode='--workspace',activeDocument=()=>document}={}){
   await fs.mkdir(artifacts,{recursive:true});
   const stage=await fs.mkdtemp(path.join(artifacts,'aec-pilot-mcp-'));
   const queue=path.join(stage,'workbench','queue');
@@ -102,7 +103,8 @@ async function fixture(t,{olderHost=false,missingOperations=new Set(),extraCalls
   const descriptors=new Map([...byOperation,...extraCalls.map(call=>[call.operation,call])]);
   const capabilities={atomicReadSnapshot:true,nativeModelQueriesVersion:1,
     nativeModelQueryOperations:olderHost?baseOperations:[...baseOperations,...[...descriptors.keys()].filter(op=>!missingOperations.has(op))]};
-  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId:session,pid:process.pid,version,...capabilities}));
+  const setHostSession=sessionId=>fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId,pid:process.pid,version,...capabilities}));
+  await setHostSession(session);
   pump=(async()=>{
     while(!stopped){
       for(const filename of await fs.readdir(inbox)){
@@ -117,13 +119,18 @@ async function fixture(t,{olderHost=false,missingOperations=new Set(),extraCalls
         assert.equal(request.targetSession,session);
         assert.equal(filename,request.id+'.json');
         assert.ok(!requests.has(request.id),'duplicate request ID');
-        const result={operation:request.operation,hostSession:session,atomicReadSnapshot:true,
-          snapshot:{hostSession:session,hostVersion:version,document,capabilities:structuredClone(capabilities)},
-          value:{operation:request.operation,hostSession:session,document:{title:document.title,path:document.path},
-            modifiedByOperation:false,value:structuredClone(descriptor.value)}};
+        const observed=activeDocument();
+        const snapshot={hostSession:session,hostVersion:version,document:observed,capabilities:structuredClone(capabilities)};
+        const result={operation:request.operation,hostSession:session,atomicReadSnapshot:true,snapshot,
+          value:request.operation==='status'?{...snapshot}:
+            {operation:request.operation,hostSession:session,document:{title:observed.title,path:observed.path},
+              modifiedByOperation:false,value:structuredClone(descriptor.value)}};
         corrupt?.(result,descriptor);
         const temp=path.join(outbox,filename+'.tmp');
-        await fs.writeFile(temp,JSON.stringify({id:request.id,ok:true,result,completedUtc:new Date().toISOString()}));
+        const mismatched=request.operation==='get_selection'&&request.args.expected_document!==observed.path;
+        const receipt=mismatched?{ok:false,hostSession:session,error:{code:'DOCUMENT_MISMATCH',message:observed.path},
+          execution:{phase:'validation',started:false,reason:null}}:{ok:true,result};
+        await fs.writeFile(temp,JSON.stringify({id:request.id,...receipt,completedUtc:new Date().toISOString()}));
         requests.set(request.id,{request,peerMs:performance.now()-started});
         await fs.rename(temp,path.join(outbox,filename));
       }
@@ -133,11 +140,11 @@ async function fixture(t,{olderHost=false,missingOperations=new Set(),extraCalls
   // Attach a handler immediately. The cleanup hook still propagates a failure.
   pump.catch(()=>{});
 
-  const transport=new StdioClientTransport({command:process.execPath,args:[path.join(stage,'workbench-mcp.mjs'),'--workspace'],cwd:stage,stderr:'pipe'});
+  const transport=new StdioClientTransport({command:process.execPath,args:[path.join(stage,'workbench-mcp.mjs'),mcpMode],cwd:stage,stderr:'pipe'});
   transport.stderr.on('data',chunk=>stderr.push(chunk.toString()));
   client=new Client({name:'buildx-aec-pilot-verification',version:'1.0.0'},{capabilities:{}});
   await client.connect(transport);
-  return {client,inbox,requests,stderr};
+  return {client,inbox,outbox,requests,stderr,setHostSession};
 }
 
 function toolCall(client,descriptor){
@@ -278,4 +285,77 @@ test('malformed, forged and mismatched pilot successes stay unconfirmed without 
     assert.equal(result.structuredContent.buildxToolOutcome.outcome,'unconfirmed',descriptor.name);
     assert.equal(f.requests.size,before+1,descriptor.name);
   }
+});
+
+test('the managed MCP candidate sends only selected fields and binds reads to the exact local document',async t=>{
+  const local={...document,title:'Private model fixture',path:'D:\\fixture\\private-model.rvt'};
+  const selectedId='9223372036854775807',items=Array.from({length:200},(_,index)=>({
+    element_id:index===199?selectedId:index+1,name:'Private element fixture'
+  }));
+  const selectionValue={total:201,returned:200,truncated:true,items};
+  let observed=null,wrongReceipt=false;
+  const f=await fixture(t,{
+    mcpMode:'--managed-readonly',activeDocument:()=>observed,
+    extraCalls:[{operation:'status'},{operation:'get_selection',value:selectionValue}],
+    corrupt(result,{operation}){if(wrongReceipt&&operation==='get_selection')result.value.hostSession='f'.repeat(32);}
+  });
+  const status=()=>toolCall(f.client,{name:'revit_workbench_status',args:{}});
+  const select=args=>toolCall(f.client,{name:'revit_get_selection',args});
+  const modelOutput=(result,value)=>{
+    assert.equal(result.isError,false);
+    assert.deepEqual(result.structuredContent,value);
+    assert.deepEqual(JSON.parse(result.content[0].text),value);
+    assert.equal(result._meta,undefined);
+  };
+  const failure=(result,outcome)=>{
+    assert.equal(result.isError,true);
+    assert.equal(result.structuredContent.buildxToolOutcome.outcome,outcome);
+    const serialized=JSON.stringify(result);
+    for(const marker of ['fixture','private-model.rvt',session,'DOCUMENT_MISMATCH']){
+      assert.equal(serialized.includes(marker),false,marker);
+    }
+  };
+  const {tools}=await f.client.listTools();
+  assert.deepEqual(tools.map(tool=>tool.name),['revit_workbench_status','revit_get_selection']);
+  assert.deepEqual(Object.keys(tools[1].inputSchema.properties),['document_ref']);
+  modelOutput(await status(),{documentOpen:false,documentRef:null});
+  observed=document;
+  modelOutput(await status(),{documentOpen:true,documentRef:null});
+  observed=local;
+  const first=await status(),firstRef=first.structuredContent?.documentRef;
+  assert.match(firstRef,/^[0-9a-f-]{36}$/);
+  modelOutput(first,{documentOpen:true,documentRef:firstRef});
+  failure(await select({expected_document:local.path}),'not_started');
+  assert.equal(f.requests.size,3);
+  const selection=await select({document_ref:firstRef});
+  modelOutput(selection,{count:201,returned:200,truncated:true,elementIds:items.map(item=>String(item.element_id))});
+  const [[id,{request}]]=[...f.requests].slice(-1);
+  assert.deepEqual(request.args,{expected_document:local.path});
+  const original=JSON.parse(await fs.readFile(path.join(f.outbox,id+'.json'),'utf8'));
+  assert.deepEqual(original.result.value.value,selectionValue);
+  assert.equal(original.result.snapshot.document.path,local.path);
+
+  const nextRef=(await status()).structuredContent.documentRef;
+  assert.notEqual(firstRef,nextRef);
+  failure(await select({document_ref:firstRef}),'not_started');
+  assert.equal(f.requests.size,5);
+  observed={...local,path:'D:\\fixture\\other-private-model.rvt'};
+  failure(await select({document_ref:nextRef}),'not_started');
+  assert.equal(f.requests.size,6);
+  failure(await select({document_ref:nextRef}),'not_started');
+  assert.equal(f.requests.size,6);
+  const currentRef=(await status()).structuredContent.documentRef;
+  wrongReceipt=true;
+  failure(await select({document_ref:currentRef}),'unconfirmed');
+  assert.equal(f.requests.size,8);
+  failure(await select({document_ref:currentRef}),'not_started');
+  assert.equal(f.requests.size,8);
+  wrongReceipt=false;
+  const priorHostRef=(await status()).structuredContent.documentRef;
+  await f.setHostSession('c'.repeat(32));
+  failure(await select({document_ref:priorHostRef}),'not_started');
+  assert.equal(f.requests.size,9);
+  await f.setHostSession(session);
+  failure(await select({document_ref:priorHostRef}),'not_started');
+  assert.equal(f.requests.size,9);
 });

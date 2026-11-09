@@ -238,3 +238,43 @@ test('real isolated BuildX Codex client uses gateway default budget, model strea
       if(!child||exitConfirmed)await rm(dir,{recursive:true,force:true});
     }
   });
+
+test('accounting observes complete split SSE without changing bytes',async t=>{
+  let done;const finished=new Promise(resolve=>{done=resolve;});let started;
+  const owner=Object.freeze({begin:async x=>{started=x;return 'reservation';},finish:async x=>done(x)});
+  const payload='data: '+JSON.stringify({type:'response.completed',response:{id:'resp_fixture',usage:{input_tokens:12,output_tokens:4,total_tokens:16}}})+'\n\ndata: [DONE]\n\n';
+  const f=await fixture({gateway:{accountingOwner:owner},fetchImpl:async()=>new Response(new ReadableStream({start(c){for(const part of [payload.slice(0,17),payload.slice(17)])c.enqueue(new TextEncoder().encode(part));c.close();}}),{headers:{'content-type':'text/event-stream'}})});t.after(f.close);
+  const response=await request(f.url+'/v1/responses');assert.equal(await response.text(),payload);
+  const result=await finished;assert.equal(result.state,'settled');assert.equal(result.requestId,started.requestId);assert.equal(result.context,'reservation');assert.equal(result.responseId,'resp_fixture');assert.deepEqual(result.usage,{inputTokens:12,outputTokens:4,totalTokens:16});
+});
+
+test('accounting marks missing or interrupted usage for reconciliation',async t=>{
+  for(const payload of ['data: {"type":"response.completed"','data: [DONE]\n\n']){
+    let done;const finished=new Promise(resolve=>{done=resolve;});
+    const owner=Object.freeze({begin:()=>({}),finish:x=>done(x)});
+    const f=await fixture({gateway:{accountingOwner:owner},fetchImpl:async()=>new Response(payload,{headers:{'content-type':'text/event-stream'}})});
+    const response=await request(f.url+'/v1/responses');assert.equal(await response.text(),payload);
+    assert.equal((await finished).state,'pending_reconciliation');await f.close();
+  }
+});
+
+test('accounting captures JSON usage and rejects untrusted owner',async t=>{
+  let done;const finished=new Promise(resolve=>{done=resolve;});
+  const owner=Object.freeze({begin:()=>null,finish:x=>done(x)});
+  const payload=JSON.stringify({id:'resp_json',usage:{input_tokens:3,output_tokens:2,total_tokens:5}});
+  const f=await fixture({gateway:{accountingOwner:owner},fetchImpl:async()=>new Response(payload,{headers:{'content-type':'application/json'}})});t.after(f.close);
+  assert.equal(await (await request(f.url+'/v1/responses')).text(),payload);assert.equal((await finished).state,'settled');
+  assert.throws(()=>createServerApiGateway({upstreamBaseUrl:'https://provider.example/v1',apiKey:fakeKey,authorizationOwner:auth,accountingOwner:{begin(){},finish(){}}}));
+});
+
+test('an exhausted reservation is rejected before dispatch',async t=>{
+  let requests=0;
+  const owner=Object.freeze({
+    begin(){throw Object.assign(new Error('test quota'),{code:'MANAGED_INFERENCE_DENIED'});},
+    finish(){assert.fail('no reservation was made');}
+  });
+  const f=await fixture({gateway:{accountingOwner:owner},fetchImpl:async()=>{requests++;return new Response();}});t.after(f.close);
+  const response=await request(f.url+'/v1/responses');
+  assert.equal(response.status,429);
+  assert.equal(requests,0);
+});

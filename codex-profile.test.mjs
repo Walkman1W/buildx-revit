@@ -4,11 +4,15 @@ import { EventEmitter } from 'node:events';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { CodexClient } from './lib/codex-client.mjs';
+import { CodexClientCore } from './lib/codex-client-core.mjs';
+import { createApiProviderLaunch, ISOLATED_API_FIXTURE_KEY } from './lib/api-provider-launch.mjs';
 import { createCodexSessionProfile, buildSourceInvestigatorInstructions,
-  SOURCE_SESSION_PROFILE, MODEL_SESSION_PROFILE } from './lib/codex-profile.mjs';
+  SOURCE_SESSION_PROFILE, MODEL_SESSION_PROFILE, MODEL_WORKSPACE_SESSION_PROFILE, MANAGED_WORKBENCH_PILOT_PROFILE } from './lib/codex-profile.mjs';
 import { buildAssistantInstructions } from './lib/assistant-instructions.mjs';
+import { MANAGED_WORKBENCH_DYNAMIC_TOOL } from './lib/managed-workbench-reads.mjs';
 import { NATIVE_MODEL_QUERY_NAMES as READ_TOOLS } from './lib/native-model-queries.mjs';
-import { LEGACY_PANEL_WORKBENCH_TOOLS as PANEL_WORKBENCH_TOOLS, LEGACY_PANEL_TOOL_NAMES as ALL_PANEL_TOOLS } from './lib/panel-tools.mjs';
+import { LEGACY_PANEL_WORKBENCH_TOOLS as PANEL_WORKBENCH_TOOLS, LEGACY_PANEL_TOOL_NAMES as ALL_PANEL_TOOLS,
+  MODEL_AI_READ_TOOLS } from './lib/panel-tools.mjs';
 import { SOURCE_TOOLS } from './lib/source-tools.mjs';
 
 const root = process.cwd();
@@ -74,6 +78,75 @@ test('only named profile options are accepted and a profile getter is captured o
     { profile: SOURCE_SESSION_PROFILE, shell: true }, { profile: SOURCE_SESSION_PROFILE, [Symbol('extra')]: true },
     { get profile() { throw new Error('untrusted'); } }])
     assert.throws(() => new CodexClient(root, value));
+});
+
+test('managed workbench pilot freezes its single read capability and stays out of public profile selection', () => {
+  const profile=MANAGED_WORKBENCH_PILOT_PROFILE;
+  assert.equal(profile.id,MODEL_WORKSPACE_SESSION_PROFILE);
+  assert.equal(profile.requiresManagedProvider,true);
+  assert.equal(profile.supportsTurnAttachments,false);
+  assert.equal(profile.supportsUserInput,false);
+  for(const part of [profile,profile.groups,profile.toolNames,profile.dynamicTools])assert.ok(Object.isFrozen(part));
+  assert.deepEqual(profile.groups,[]);
+  assert.deepEqual(profile.toolNames,[]);
+  assert.equal(profile.dynamicTools.length,1);
+  assert.equal(profile.dynamicTools[0],MANAGED_WORKBENCH_DYNAMIC_TOOL);
+  assert.equal(profile.familyLifecycleDynamicTools,undefined);
+  for(const options of [{profile},{profile:profile.service},
+    {profile:MODEL_WORKSPACE_SESSION_PROFILE,requiresManagedProvider:true}]){
+    assert.throws(()=>createCodexSessionProfile(root,options));
+    assert.throws(()=>new CodexClient(root,options));
+  }
+  const workspace=createCodexSessionProfile(root,{profile:MODEL_WORKSPACE_SESSION_PROFILE});
+  assert.notEqual(workspace.requiresManagedProvider,true);
+  assert.deepEqual(workspace.toolNames,MODEL_AI_READ_TOOLS.map(tool=>tool.name));
+  assert.equal(workspace.groups[0].name,'revit_workbench');
+  assert.equal(workspace.supportsTurnAttachments,true);
+  assert.equal(workspace.dynamicTools.some(tool=>tool.name===MANAGED_WORKBENCH_DYNAMIC_TOOL.name),false);
+});
+
+test('managed workbench pilot disables configured MCP and built-in execution capabilities', () => {
+  const profile=MANAGED_WORKBENCH_PILOT_PROFILE;
+  const configured=['revit_workbench','revit_local','external_server','custom-mcp'];
+  const args=profile.buildLaunchArgs(configured),config=overrides(args);
+  assert.deepEqual(args.slice(0,4),['app-server','--listen','stdio://','--strict-config']);
+  assert.deepEqual([...config].filter(([key])=>key.startsWith('mcp_servers.')),
+    configured.map(name=>[`mcp_servers.${name}.enabled`,'false']));
+  for(const feature of ['shell_tool','code_mode','code_mode_host','default_mode_request_user_input',
+    'tool_call_mcp_elicitation','view_image','goals']){
+    assert.equal(config.get(`features.${feature}`),'false');
+    assert.equal(args.includes(`features.${feature}=true`),false);
+  }
+  assert.equal(config.get('web_search'),'"disabled"');
+  assert.equal(config.get('project_doc_max_bytes'),'0');
+  assert.equal(config.get('features.skip_host_skill_discovery'),'true');
+  assert.doesNotThrow(()=>profile.buildLaunchArgs([]));
+  for(const unsafe of [null,{},['bad.name'],['bad\nname'],['x=y'],[1]]){
+    assert.throws(()=>profile.buildLaunchArgs(unsafe));
+  }
+});
+
+test('managed workbench pilot needs a frozen managed runtime factory at construction', () => {
+  const profile=MANAGED_WORKBENCH_PILOT_PROFILE;
+  assert.throws(()=>new CodexClientCore(root,profile),/托管/);
+  const apiProvider=createApiProviderLaunch({
+    baseUrl:'http://127.0.0.1:23119/v1',model:'example-model',apiKey:ISOLATED_API_FIXTURE_KEY,allowLoopbackHttp:true
+  });
+  assert.throws(()=>new CodexClientCore(root,profile,{apiProvider}),/托管/);
+  const open=()=>assert.fail('the constructor must not open a provider');
+  assert.throws(()=>new CodexClientCore(root,profile,{apiProviderFactory:{open}}),/冻结/);
+  assert.throws(()=>new CodexClientCore(root,profile,{apiProviderFactory:Object.freeze({open})}),/请求策略/);
+  const dependencies={apiProviderFactory:Object.freeze({open,requestPolicy:profile.managedRequestPolicy})};
+  assert.throws(()=>new CodexClientCore(root,Object.freeze({...profile,requiresManagedProvider:'true'}),dependencies),/冻结/);
+  const client=new CodexClientCore(root,profile,dependencies);
+  assert.equal(client.profile,profile);
+  assert.equal(client.state.ready,false);
+  assert.equal(client.state.connectionGeneration,0);
+  const sent=[];
+  client.child={stdin:{write:line=>sent.push(JSON.parse(line))}};
+  client.on('user-input-request',()=>assert.fail('the pilot must not open a panel prompt'));
+  client.dispatch({id:7,method:'item/tool/requestUserInput',params:{}});
+  assert.deepEqual(sent,[{id:7,error:{code:-32601,message:profile.denialMessage}}]);
 });
 
 test('source launch configuration disables every configured MCP and enables only the fixed source entry and whitelist', () => {

@@ -65,6 +65,20 @@ async function setup(options={}){
   return {get,requests,historyRequests,emit,conversation,input,submit,click,respond,reject,stream,suggestions,context,window,setAccount:value=>{account=value;},setConfirmation:value=>{confirmation=value;},accountEvent:async name=>{window.dispatchEvent(new UiEvent(name));await flush();},selectHistory:async id=>{window.dispatchEvent(new UiEvent('buildx-history-select',{detail:{conversationId:id}}));await flush();}};
 }
 
+test('managed inference uses its own readiness state without a local Codex confirmation',async()=>{
+  const account={required:true,configured:true,signedIn:true,user:{id:'fixture-user'}};
+  const workspace={kind:'model',supportsModelContext:true};
+  const confirmation={required:false,phase:'not_applicable',localConnectionConfirmed:false};
+  const ui=await setup({account,workspace,confirmation});
+  const state={ready:true,error:false,account,workspace,codexConfirmation:confirmation,inferenceMode:'buildx-managed'};
+  ui.emit('state',{...state,managedInferenceReady:false});
+  assert.equal(vm.runInContext('ready',ui.context),false);
+  ui.emit('state',{...state,managedInferenceReady:true});
+  assert.equal(vm.runInContext('ready',ui.context),true);
+  ui.emit('state',{...state,managedInferenceReady:false});
+  assert.equal(vm.runInContext('ready',ui.context),false);
+});
+
 test('selection preview reads only selection and send requests fresh context',async()=>{
  const ui=await setup(); const checkbox=ui.get('include-selection'); checkbox.checked=true; checkbox.dispatchEvent(new UiEvent('change')); await flush();
  const req=ui.requests.find(r=>r.url==='/api/context'); assert.ok(req); assert.equal(req.body.includeDocument,false); assert.equal(req.body.includeSelection,true);

@@ -3,7 +3,8 @@ import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
-import {CodexClient} from './lib/codex-client.mjs';
+import {mkdir} from 'node:fs/promises';
+import {createPanelInferenceComposition} from './lib/panel-inference-composition.mjs';
 import {MODEL_SERVER_PROFILE} from './lib/panel-profile.mjs';
 import {MODEL_READONLY_SESSION_PROFILE} from './lib/codex-profile.mjs';
 import {invokeWorkbench,invokeAtomicWorkbenchRead,invokeReadonlyPanelCommand,combineWorkbenchTiming,READONLY_WORKBENCH_TOOL_NAMES} from './lib/workbench-client.mjs';
@@ -30,6 +31,7 @@ import {CHAT_READ_RECEIPT_KEY_ENV,CHAT_READ_RECEIPT_PORT_ENV} from './lib/chat-r
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 const nativeReadonlyTest=await isNativeReadonlyTest(ROOT);
 const configuration=buildxRuntimeConfig();
+if(nativeReadonlyTest&&configuration.managedDeployment)throw new Error('内部只读安装测试不启用托管推理。');
 const installation=await readInstallationConfiguration(ROOT);
 const paths=resolveBuildxPaths(ROOT,installation);
 const lifecycle=createPanelAudit(paths.runtimeDirectory);
@@ -64,8 +66,14 @@ const runtimeDependencies={skillCatalogMode:configuration.mode,...familyCapabili
   spawn:(file,args,options)=>spawn(file,args,{...options,env:{...options.env,[CHAT_READ_RECEIPT_KEY_ENV]:chatReadReceiptKey,[CHAT_READ_RECEIPT_PORT_ENV]:String(port)}}),
   ...installation?{resolveRuntimes:()=>resolveInstallationRuntimes(installation)}:{}};
 const dispatchCommand=nativeReadonlyTest?invokeReadonlyPanelCommand:invokeModelCommand;
+const codexHome=configuration.managedDeployment?path.join(paths.runtimeDirectory,'managed-codex'):null;
+if(codexHome)await mkdir(codexHome,{recursive:true});
+const {codex,managedInference}=createPanelInferenceComposition({
+  root:ROOT,profile,modelTerminal:nativeReadonlyTest?undefined:terminalAvailability?.available===true,
+  runtimeDependencies,accountAuth:configuration.accountAuth,managedDeployment:configuration.managedDeployment,codexHome
+});
 const app=createPanelServer({root:ROOT,dataRoot:paths.dataRoot,port,profile,nativeReadonlyTest,chatReadReceiptKey,
-  codex:new CodexClient(ROOT,{profile,...nativeReadonlyTest?{}:{modelTerminal:terminalAvailability?.available===true}},runtimeDependencies),accessServices,modelTerminal,terminalAvailability,
+  codex,managedInference,accessServices,modelTerminal,terminalAvailability,
   invokeWorkbench:(name,args,control)=>invokeWorkbench(name,args,toolControl(name,control)),
   invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,toolControl(name,control)),
   invokeReadonlyCommand:(command,parameters,control)=>dispatchCommand(command,parameters,timingControl(control)),

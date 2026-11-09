@@ -122,6 +122,17 @@ test('candidate build excludes runtime state and cannot authorize actual install
   for(const asset of ['public/register.html','public/register.css'])assert.ok(packageManifest.files.some(item=>item.path===asset),asset);
   assert.match(await fs.readFile(path.join(out,'public','register.html'),'utf8'),/href="\/register\.css"/);
   assert.ok(packageManifest.files.some(x=>x.path==='lib/native-model-queries.mjs'));
+  for(const module of ['panel-inference-composition','managed-codex-runtime','managed-codex-provider','managed-inference-relay','managed-panel-inference','managed-workbench-reads']){
+    const entry=packageManifest.files.find(item=>item.path===`lib/${module}.mjs`);
+    assert.ok(entry,module);
+    assert.equal(entry.sha256,hash(await fs.readFile(path.join(out,entry.path))));
+  }
+  const disabledManaged=spawnSync(process.execPath,['server.mjs'],{
+    cwd:out,env:{SystemRoot:process.env.SystemRoot,BUILDX_MODE:'customer',BUILDX_INFERENCE_MODE:'buildx-managed'},
+    encoding:'utf8',timeout:5000
+  });
+  assert.equal(disabledManaged.status,1);
+  assert.match(disabledManaged.stderr,/托管推理部署尚未核准/);
   for(const old of ['lib/aec-model-adapter.mjs','lib/aec-read-relay.py','lib/aec-read-contracts.json','tools/refresh-aec-contracts.mjs'])assert.ok(!packageManifest.files.some(x=>x.path===old));
   for(const filename of ['package-lock.json','THIRD-PARTY-NOTICES.md','buildx-installation.example.json','BuildX-Setup.cmd','tools/buildx-setup.cmd','tools/buildx-setup.ps1','tools/buildx-installer.mjs','lib/project-knowledge-parser.py','lib/access-lock-recovery.mjs','lib/access-lock-recovery.cs','lib/project-knowledge.mjs','lib/project-history.mjs','lib/project-agent-bridge.mjs','lib/buildx-skills.mjs','.agents/skills/buildx-project-research/SKILL.md','lib/command-sequence.mjs','lib/model-viewer-service.mjs','public/project-knowledge-ui.mjs','public/model-viewer.mjs','public/model-viewer-ui.mjs','public/model-viewer.css','public/account-license.mjs','public/command-form-source.mjs','public/personal-command-fields.mjs','public/command-fields.mjs','public/command-choice-field.mjs','public/parameter-change-field.mjs','licenses/webview2/LICENSE.txt','licenses/webview2/NOTICE.txt'])assert.ok(packageManifest.files.some(item=>item.path===filename),`candidate includes ${filename}`);
   const plan=await planInstall({...f.options,packageRoot:out});assert.equal(plan.readyToApply,false);await assert.rejects(applyInstall({...f.options,packageRoot:out}),{code:'NOT_READY'});

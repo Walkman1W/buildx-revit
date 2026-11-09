@@ -808,9 +808,12 @@ function status(state = {}) {
   if (state.busy === false) commandStopUnavailable = false;
   interruption(state);
   const recoveryConnectionReady=!streamRecoveryPending||streamConnected&&state.error!==true&&(recoveryWorkspace===null||state.workspace?.kind===recoveryWorkspace);
+  const modelConnectionConfirmed = modelUiEnabled && state.inferenceMode === 'buildx-managed'
+    ? state.managedInferenceReady === true
+    : state.codexConfirmation?.localConnectionConfirmed === true;
   ready = Boolean(state.ready && recoveryConnectionReady && (customerWorkspace()
     ? state.account?.configured === true && state.account.required === true && state.account.signedIn === true && state.codexConfirmation?.localConnectionConfirmed === true
-    : !state.account?.required || state.account.signedIn && state.codexConfirmation?.localConnectionConfirmed === true));
+    : !state.account?.required || state.account.signedIn && modelConnectionConfirmed));
   commandsReady=directCommandsAvailable&&recoveryConnectionReady&&(typeof state.commandsReady==='boolean'?state.commandsReady:ready);
   $('status-dot').className = 'dot ' + (ready ? 'ready' : state.error ? 'error' : '');
   $('status-text').textContent = streamRecoveryPending&&!streamConnected&&state.ready ? '后台已就绪，正在恢复面板连接…' : state.message || '正在连接 Codex…';
