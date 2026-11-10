@@ -31,13 +31,41 @@ function Test-RealNode([string]$Value) {
     } catch { return $false }
 }
 
+function Test-BootstrapNode([string]$Value) {
+    if (-not (Test-RealNode $Value)) { return $false }
+    $process = New-Object Diagnostics.Process
+    try {
+        $info = New-Object Diagnostics.ProcessStartInfo
+        $info.FileName = $Value
+        $info.Arguments = '-p "JSON.stringify({version:process.versions.node,arch:process.arch})"'
+        $info.UseShellExecute = $false
+        $info.CreateNoWindow = $true
+        $info.RedirectStandardOutput = $true
+        $info.RedirectStandardError = $true
+        $process.StartInfo = $info
+        if (-not $process.Start()) { return $false }
+        $output = $process.StandardOutput.ReadToEndAsync()
+        $errors = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(5000)) {
+            $process.Kill()
+            return $false
+        }
+        if (-not $output.Wait(1000) -or -not $errors.Wait(1000) -or $process.ExitCode -ne 0) { return $false }
+        $runtime = $output.Result | ConvertFrom-Json -ErrorAction Stop
+        if ($runtime.arch -ne 'x64' -or $runtime.version -notmatch '^(\d+)\.(\d+)\.(\d+)$') { return $false }
+        $major = [int]$Matches[1]; $minor = [int]$Matches[2]
+        return $major -gt 22 -or ($major -eq 22 -and $minor -ge 17)
+    } catch { return $false }
+    finally { $process.Dispose() }
+}
+
 function Find-ExistingNode {
     foreach ($entry in ([string]$env:Path -split ';')) {
         $directory = $entry.Trim().Trim('"')
         if ([string]::IsNullOrWhiteSpace($directory) -or -not [IO.Path]::IsPathRooted($directory)) { continue }
         try {
             $candidate = [IO.Path]::GetFullPath([IO.Path]::Combine($directory, 'node.exe'))
-            if (Test-RealNode $candidate) { return $candidate }
+            if (Test-BootstrapNode $candidate) { return $candidate }
         } catch { continue }
     }
     return ''

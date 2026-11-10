@@ -302,7 +302,7 @@ export async function detectRevitTargets({platform=process.platform,appData=proc
   const versions=['2024','2025'], candidates=new Map(versions.map(version=>[version,new Map()]));
   if(platform==='win32')try{
     const script=String.raw`$ErrorActionPreference='Stop'
-$versions=@{'Autodesk Revit 2024'='2024';'Autodesk Revit 2025'='2025'}
+$versions=@{'Autodesk Revit 2024'='2024';'Autodesk Revit 2025'='2025';'Revit 2024'='2024';'Revit 2025'='2025'}
 $rows=@(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*' | ForEach-Object {
   if (-not $_.DisplayName -or -not $_.InstallLocation -or -not $versions.ContainsKey($_.DisplayName)) { return }
   $version=$versions[$_.DisplayName]

@@ -30,6 +30,34 @@ test('Revit version discovery separates registered x64 targets and never promise
   assert.equal(ambiguous[1].detected,false);assert.equal(ambiguous[1].reason,'revit_ambiguous');
   const failed=await detectRevitTargets({platform:'win32',run:async()=>{throw new Error('unknown');}});assert.deepEqual(failed.map(x=>x.detected),[false,false]);
 });
+test('Revit discovery accepts both registered display-name formats', {skip:process.platform!=='win32'}, async()=>{
+  for(const prefix of ['', 'Autodesk ']){
+    const registrations=[
+      {DisplayName:prefix+'Revit 2024',InstallLocation:'C:\\Revit24'},
+      {DisplayName:prefix+'Revit 2025',InstallLocation:'C:\\Revit25'},
+    ];
+    const run=async(_file,args)=>{
+      const script=Buffer.from(args.at(-1),'base64').toString('utf16le');
+      const rows=JSON.stringify(registrations).replaceAll("'","''");
+      const fixture=[
+        "$testRows = ConvertFrom-Json '"+rows+"'",
+        'function Get-ItemProperty { param([Parameter(Position=0)][string]$Path) return $testRows }',
+        'function Get-Item {',
+        '  param([string]$LiteralPath)',
+        "  $major = if ($LiteralPath -like '*Revit24*') { 24 } else { 25 }",
+        '  [pscustomobject]@{ FullName=$LiteralPath; PSIsContainer=$false; VersionInfo=[pscustomobject]@{ FileMajorPart=$major; FileMinorPart=0; FileBuildPart=2; FilePrivatePart=419 } }',
+        '}',
+      ].join('\n');
+      const encoded=Buffer.from(fixture+'\n'+script,'utf16le').toString('base64');
+      const processResult=spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-EncodedCommand',encoded],{encoding:'utf8'});
+      assert.equal(processResult.status,0,processResult.stderr);
+      return {stdout:processResult.stdout};
+    };
+    const result=await detectRevitTargets({platform:'win32',run,inspectExecutable:async()=>true});
+    assert.deepEqual(result.map(item=>item.detected),[true,true]);
+    assert.deepEqual(result.map(item=>item.executable),['C:\\Revit24\\Revit.exe','C:\\Revit25\\Revit.exe']);
+  }
+});
 async function fixture(t){
   const base=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-installer-test-'));
   t.after(async()=>{const parent=path.resolve(os.tmpdir()),target=path.resolve(base);assert.equal(path.dirname(target),parent);assert.match(path.basename(target),/^buildx-installer-test-/);await fs.rm(target,{recursive:true,force:true});});
