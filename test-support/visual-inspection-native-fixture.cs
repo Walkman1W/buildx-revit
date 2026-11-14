@@ -232,6 +232,14 @@ internal static class NativeVisualFixture
         Assert((bool)result["success"] && !owner.CleanupPending && doc.Elements.Count == 4, "named restoration retries original owned cleanup");
         result = Execute(owner, app, "capture_view", new Dictionary<string, object> { { "expected_document", doc.PathName }, { "view_id", 12 } });
         Assert((bool)result["success"] && (string)Child(result, "restoration")["status"] == "unchanged", "direct capture leaves view state unchanged");
+        string originalName = doc.ActiveView.Name;
+        doc.ActiveView.Name = new string('x', 180);
+        exportsBefore = doc.Exports;
+        result = Execute(owner, app, "capture_view", new Dictionary<string, object> { { "expected_document", doc.PathName } });
+        Assert((string)result["code"] == "VISUAL_EXPORT_PATH_TOO_LONG" && doc.Exports == exportsBefore && !owner.CleanupPending,
+            "overlong export path rejects before entering the Revit API");
+        Assert(doc.ActiveView.Name == new string('x', 180), "preflight preserves the source view name");
+        doc.ActiveView.Name = originalName;
         doc.ActiveView.Outline.Max = new UV(1, 3);
         result = Execute(owner, app, "capture_view", new Dictionary<string, object> { { "expected_document", doc.PathName } });
         Assert((bool)result["success"] && doc.LastFit == FitDirectionType.Vertical, "portrait view fits requested long edge");

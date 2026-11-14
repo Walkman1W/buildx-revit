@@ -1,4 +1,4 @@
-import { markdownBlocks, toolStatus, messageStatus, previewText, sessionMessages, legacyDelta, modelToolEntries, modelToolCountLabel, receiptNoticeState, receiptDismissalStore } from './chat-view.mjs';
+import { markdownBlocks, toolStatus, messageStatus, previewText, sessionMessages, legacyDelta, modelToolEntries, modelToolCountLabel, receiptNoticeState, receiptDismissalStore, skillReadFailureMessage } from './chat-view.mjs';
 
 const $ = id => document.getElementById(id);
 let client;
@@ -140,7 +140,7 @@ async function loadSkills(){
     if(observedSkillsRevision!==null&&observedSkillsRevision>result.revision){clearSkills('技能列表已变化，请重新读取。');return;}
     skillRevision=result.revision;skillChoices=result.skills;renderSkills();
     $('skills-message').textContent=skillChoices.length?'选择后仅作用于下一条消息；工具依赖状态以当前核实结果为准。':'当前没有发现可用的 Skills。';
-  }catch{if(skillRead===owner){clearSkills('技能列表未能核实，请重新读取。');updateButtons();}}
+  }catch(error){if(skillRead===owner){clearSkills(skillReadFailureMessage(error));updateButtons();}}
   finally{if(skillRead===owner){skillRead=null;renderSkills();}updateButtons();}
 }
 function nearBottom() { const view = $('messages'); return view.scrollHeight - view.scrollTop - view.clientHeight < 88; }

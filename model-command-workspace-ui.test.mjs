@@ -28,7 +28,7 @@ test('commands retain the registered Revit catalog without a dedicated tools but
 test('create command stays directly below search and remains available with no matching or saved commands',async t=>{
   const ui=await setup(t),list=ui.get('model-command-list'),search=list.querySelectorAll('.model-command-filter')[0],create=ui.get('model-create-command'),area=list.querySelectorAll('.command-create-area')[0],items=list.querySelectorAll('.model-command-items')[0];
   ui.document.body.querySelectorAll('.model-tab')[1].click();
-  assert.equal(list.hidden,false);assert.deepEqual(list.children.slice(0,3),[search,area,items]);assert.equal(items.contains(create),false);
+  assert.equal(list.hidden,false);assert.deepEqual(list.children.slice(0,4),[search,list.querySelectorAll('.model-command-scopes')[0],area,items]);assert.equal(items.contains(create),false);
   assert.match(area.textContent,/C# 命令/);assert.equal(create.contains(ui.get('model-create-command-kind')),false);
   search.value='不存在的命令-unique';search.dispatchEvent(new UiEvent('input'));
   assert.equal(items.children.every(row=>row.hidden),true);assert.equal(create.hidden,false);
@@ -108,7 +108,7 @@ test('schema-driven inputs parse typed values, preserve defaults and reject malf
 test('local receipt inspection remains available while AI is offline',async t=>{
   const ui=await setup(t);
   ui.emit('conversation',{busy:false,session:session(),command:{commandId:'document',conversationId:'chat-a',executionId:'late-native',status:'unknown',canInspectReceipt:true}});
-  const inspect=ui.document.body.querySelectorAll('.model-command-inspect')[0];assert.equal(inspect.hidden,false);assert.equal(inspect.disabled,false);
+  const inspect=ui.document.body.querySelectorAll('.model-command-item').find(item=>item.dataset.commandId==='document').querySelectorAll('.model-command-inspect')[0];assert.equal(inspect.hidden,false);assert.equal(inspect.disabled,false);
   inspect.click();await flush();assert.equal(ui.requests[0].url,'/api/command/check');await ui.respond(ui.requests[0],{ok:true});
 });
 test('cabinet acknowledgement requires terminal projection and binds exact execution and revision',async t=>{
@@ -133,9 +133,9 @@ test('cabinet unknown result exposes only server-bound read-only job recovery',a
 
 test('editing a write parameter clears the earlier parameter confirmation',async t=>{
   const ui=await setup(t);
-  const groups=ui.document.body.querySelectorAll('.model-command-confirm');
+  const groups=ui.document.body.querySelectorAll('.model-command-item').find(item=>item.dataset.commandId==='revit_execute_csharp').querySelectorAll('.model-command-confirm');
   const confirmation=groups[0].children[0];confirmation.checked=true;
-  // The first write in the named catalog is the script runner.
+  // Select by identity; display order is independent of permission ownership.
   ui.get('model-command-revit_execute_csharp-code').dispatchEvent(new UiEvent('input'));
   assert.equal(confirmation.checked,false);
 });
@@ -272,4 +272,45 @@ test('a changed account identity invalidates an imported draft even if the conve
   assert.match(save.textContent,/来源所属身份或对话已变化/);
   for(const [key,value] of Object.entries({command_id:'chat-draft',name:'候选',description:'说明'}))ui.get('model-command-revit_save_command-'+key).value=value;
   save.querySelectorAll('.model-command-confirm')[0].children[0].checked=true;save.querySelectorAll('.model-command-run')[0].click();await flush();assert.equal(ui.requests.length,0);
+});
+
+test('personal commands are first without changing the execution catalog or running anything',async t=>{
+ const ui=await setup(t);const groups=ui.document.body.querySelectorAll('.model-command-group');
+ assert.equal(groups[0].querySelectorAll('.model-command-group-title')[0].textContent,'我的命令');
+ assert.ok(groups[0].querySelectorAll('.model-command-item').some(item=>item.dataset.commandId==='revit_list_commands'));
+ assert.equal(ui.requests.length,0);
+});
+
+test('unknown personal name offers explicit read and loaded names remain searchable with honest scope',async t=>{
+ const ui=await setup(t);const search=ui.document.body.querySelectorAll('.model-command-filter')[0];
+ search.value='项目信息汇报';search.dispatchEvent(new UiEvent('input'));
+ assert.equal(ui.get('model-command-empty').hidden,false);assert.match(ui.get('model-command-empty-text').textContent,/尚未读取/);
+ ui.get('model-command-load-personal').click();await flush();
+ assert.equal(ui.requests.length,1);assert.equal(ui.requests[0].body.commandId,'revit_list_commands');
+ assert.deepEqual(ui.requests[0].body.parameters,{offset:0,limit:100});
+ await ui.respond(ui.requests[0],{ok:true,executionId:'list-1'});
+ const record={command_id:'report',revision:'a'.repeat(64),name:'项目信息汇报',schema_version:3};
+ ui.emit('conversation',{busy:false,session:session(),command:{commandId:'revit_list_commands',conversationId:'chat-a',executionId:'list-1',status:'completed',result:{data:{value:{commands:[record],total:1,offset:0,limit:100,has_more:false}}}}});await flush();
+ const cards=ui.document.body.querySelectorAll('.model-command-stored-version');
+ assert.equal(cards.length,1);assert.equal(cards[0].hidden,false);assert.match(cards[0].textContent,/只读步骤命令/);assert.equal(ui.get('model-command-empty').hidden,true);
+ search.value='无此个人命令';search.dispatchEvent(new UiEvent('input'));
+ assert.equal(ui.get('model-command-empty').hidden,false);assert.match(ui.get('model-command-empty-text').textContent,/已读取/);
+ ui.emit('state',{...state,busy:true});ui.get('model-command-load-personal').click();await flush();assert.equal(ui.requests.length,1);
+});
+
+test('session favorites and personal filter do not invoke tools or cross identity',async t=>{
+ const ui=await setup(t),items=()=>ui.document.body.querySelectorAll('.model-command-item');
+ const documentRow=items().find(item=>item.dataset.commandId==='document');documentRow.querySelectorAll('.model-command-favorite')[0].click();
+ const filters=ui.document.body.querySelectorAll('.model-command-scope');filters.find(item=>item.dataset.scope==='favorites').click();
+ assert.equal(documentRow.hidden,false);assert.equal(items().filter(item=>!item.hidden).length,1);assert.equal(ui.requests.length,0);
+ filters.find(item=>item.dataset.scope==='personal').click();assert.equal(documentRow.hidden,true);assert.equal(items().find(item=>item.dataset.commandId==='revit_list_commands').hidden,false);
+ ui.emit('state',{...state,account:{required:true,signedIn:true,user:{id:'other-account',email:'fixture@example.invalid'}}});filters.find(item=>item.dataset.scope==='favorites').click();
+ assert.equal(items().every(item=>item.hidden),true);assert.match(ui.get('model-command-empty-text').textContent,/没有匹配的会话收藏/);assert.equal(ui.requests.length,0);
+});
+
+test('same result from a new execution visibly changes completion receipt without replay',async t=>{
+ const ui=await setup(t);const publish=id=>ui.emit('conversation',{busy:false,session:session(),command:{commandId:'levels',conversationId:'chat-a',executionId:id,status:'completed',result:{data:{items:[]}}}});
+ publish('levels-first');const row=ui.document.body.querySelectorAll('.model-command-item').find(item=>item.dataset.commandId==='levels');
+ assert.match(row.querySelectorAll('.model-command-completion-stamp')[0].textContent,/levels-first/);publish('levels-second');
+ assert.match(row.querySelectorAll('.model-command-completion-stamp')[0].textContent,/levels-second/);assert.doesNotMatch(row.textContent,/levels-first/);assert.equal(ui.requests.length,0);
 });

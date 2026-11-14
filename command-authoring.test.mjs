@@ -112,7 +112,7 @@ test('without history, edits made while creation waits are not replaced by the s
 
 test('the actual model profile teaches personal command creation through the existing save contract',()=>{
   const profile=createModelWorkspaceSessionProfile(process.cwd()),instructions=profile.buildInstructions();
-  for(const text of ['创建个人命令','自然对话','必要输入','适用模型','操作范围','C# 方法体','parameters 字典','string（文本）','number（数值）','integer（整数）','boolean（是/否）','revit_save_command','用户确认保存后','准确 revision','未执行不得声称已验证','不授权运行它','明确授权','rollback'])assert.ok(instructions.includes(text),text);
+  for(const text of ['起草个人命令','自然对话','必要输入','适用模型','操作范围','C# 方法体或只读 steps 和 parameters 类型声明','buildx_model_operation_schema({tool:"revit_save_command"})','用户确认保存后','准确 revision','未执行不得声称已验证','不授权运行它','明确授权','rollback'])assert.ok(instructions.includes(text),text);
   assert.equal(profile.toolNames.includes('revit_save_command'),false);
   assert.equal(profile.dynamicTools.filter(tool=>tool.name==='buildx_model_operation').length,1);
   const readonly=createReadonlyWorkbenchSessionProfile(process.cwd());

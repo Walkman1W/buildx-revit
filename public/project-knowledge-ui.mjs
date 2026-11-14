@@ -156,7 +156,7 @@ export function mountProjectFiles({root, document:doc=document, request, onChang
       card.append(bar,node('p','project-files-root-path',item.path));roots.append(card);
     }
     if(!value.roots.length)roots.append(node('p','project-files-empty','还没有添加文件或文件夹。'));
-    const projectMessage=value.projectStatus==='unsaved'?'当前项目尚未保存，暂时没有项目目录。':value.projectStatus==='unavailable'?'当前项目目录暂不可用。':value.projectStatus?.message;
+    const projectMessage=value.projectStatus==='unsaved'?'当前项目尚未保存，暂时没有项目目录。':value.projectStatus==='unavailable'?'当前项目目录尚未核实，可能仍在等待 Revit 回执；这不表示目录不存在。' :value.projectStatus?.message;
     const storageMessage=value.storageStatus==='unavailable'?(value.storageMessage||'资料库地址无法保存，重启后可能丢失。'):'';
     status.textContent=[projectMessage||'文件按需读取；原文件保留在原位置。',storageMessage].filter(Boolean).join(' ');
   }

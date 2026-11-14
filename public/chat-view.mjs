@@ -149,3 +149,15 @@ export function legacyDelta(messages, text, messageId = 'legacy-assistant') {
   else next.push({ id: messageId, role: 'assistant', text: String(text ?? ''), status: 'streaming', tools: [] });
   return next;
 }
+
+// Fixed local feedback only: never expose arbitrary transport/account diagnostics.
+export function skillReadFailureMessage(error){
+ const known=new Map([
+ ['请等待当前操作结束。','当前操作尚未结束，技能读取未开始。请等待原操作回执，再重新读取技能；不要重复执行原命令。'],
+ ['请先连接并确认本机 Codex。','本机 Codex 连接尚未确认，请先检查本机连接，再重新读取技能。'],
+ ['对话已变化，请重新读取技能。','对话已变化，本次技能结果已弃用，请重新读取。'],
+ ['账号、连接、资料库或对话已变化，请重新读取技能。','账号、连接或资料库已变化，本次技能结果已弃用，请重新读取。'],
+ ['此工作区未开放技能读取。','此工作区未开放技能读取，请切换到模型工作区。']
+ ]);
+ return error?.rejected===true&&known.has(error.message)?known.get(error.message):'技能列表未能核实，请重新读取。';
+}

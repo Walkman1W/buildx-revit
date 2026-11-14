@@ -139,7 +139,7 @@ namespace RevitLocalCodex
                                 inspectionView = View3D.CreateIsometric(doc, viewType.Id);
                                 // Record provenance immediately, before subsequent API setters can fail.
                                 owned.Views.Add(new OwnedView { Id = inspectionView.Id.Value, UniqueId = inspectionView.UniqueId });
-                                inspectionView.Name = "BuildX inspection " + requestId + " " + orientation;
+                                inspectionView.Name = "B" + Guid.NewGuid().ToString("N");
                                 inspectionView.DetailLevel = ViewDetailLevel.Fine;
                                 inspectionView.DisplayStyle = DisplayStyle.Shading;
                                 CopyPhase(sourceView, inspectionView, BuiltInParameter.VIEW_PHASE);
@@ -287,7 +287,7 @@ namespace RevitLocalCodex
             RequireStorageCapacity(1, Math.Min(ImageBytes, remainingBytes));
             string artifactId = Guid.NewGuid().ToString("D");
             string requestDirectory = Path.Combine(root, "visual-captures", hostSession, requestId);
-            string stagingDirectory = Path.Combine(requestDirectory, "staging-" + artifactId);
+            string stagingDirectory = Path.Combine(requestDirectory, "s" + Guid.Parse(artifactId).ToString("N"));
             // Only generated descendants are admitted, and none may redirect
             // output through a directory junction or symbolic link.
             OwnedDirectory(root);
@@ -305,9 +305,13 @@ namespace RevitLocalCodex
                 ExportRange = ExportRange.SetOfViews, ZoomType = ZoomFitType.FitToPage, PixelSize = pixels,
                 FitDirection = fit, ImageResolution = ImageResolution.DPI_150,
                 HLRandWFViewsFileType = ImageFileType.PNG, ShadowViewsFileType = ImageFileType.PNG,
-                FilePath = Path.Combine(stagingDirectory, "render") };
+                FilePath = Path.Combine(stagingDirectory, "r") };
             options.SetViewsAndSheets(new List<ElementId> { view.Id });
-            doc.ExportImage(options);
+            // Revit controls its generated suffix; this conservative preflight cannot prove its final name.
+            if (options.FilePath.Length + view.Name.Length + 32 > 240)
+                throw new VisualFailure("VISUAL_EXPORT_PATH_TOO_LONG", "The export path and view name leave insufficient room for the Revit-generated filename; no export was attempted.");
+            try { doc.ExportImage(options); }
+            catch (PathTooLongException) { throw new VisualFailure("VISUAL_EXPORT_PATH_TOO_LONG", "Revit could not export using the generated path; generated files, if any, were retained."); }
             string[] actual = Directory.GetFiles(stagingDirectory, "*.png", SearchOption.TopDirectoryOnly);
             if (actual.Length != 1) throw new VisualFailure("VISUAL_IMAGE_FILE_UNCONFIRMED", "Revit did not produce exactly one PNG for the requested view.");
             FileInfo file = new FileInfo(actual[0]);
@@ -453,7 +457,7 @@ namespace RevitLocalCodex
         private static void OwnedDirectory(string directory)
         {
             Directory.CreateDirectory(directory);
-            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("Visual output directories must not be links or junctions.");
+            if ((VisualNativeStorage.AttributesRequired(directory) & 1024) != 0) throw new InvalidOperationException("Visual output directories must not be links or junctions.");
         }
         private sealed class StorageCoverage { internal int Entries, Images; internal long Bytes; }
         private void RequireStorageCapacity(int addedImages, long addedBytes)
@@ -462,8 +466,8 @@ namespace RevitLocalCodex
             var coverage = new StorageCoverage();
             try
             {
-                if (Directory.Exists(captureRoot)) ScanStorage(captureRoot, 0, coverage);
-                else if (File.Exists(captureRoot)) throw new InvalidOperationException("Visual capture root is not a directory.");
+                int rootAttributes = VisualNativeStorage.Attributes(captureRoot);
+                if (rootAttributes != -1) { if ((rootAttributes & 16) == 0) throw new InvalidOperationException("Visual capture root is not a directory."); ScanStorage(captureRoot, 0, coverage); }
             }
             catch (VisualFailure) { throw; }
             catch { throw new VisualFailure("VISUAL_STORAGE_UNVERIFIED", "Visual evidence capacity could not be verified; no capture was admitted and existing evidence was retained."); }
@@ -472,36 +476,40 @@ namespace RevitLocalCodex
         }
         private static void ScanStorage(string directory, int depth, StorageCoverage coverage)
         {
-            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            if ((VisualNativeStorage.AttributesRequired(directory) & 1024) != 0)
                 throw new VisualFailure("VISUAL_STORAGE_UNVERIFIED", "Visual evidence contains a linked directory; capacity was not adopted.");
-            foreach (string entry in Directory.EnumerateFileSystemEntries(directory))
+            foreach (VisualNativeStorage.Entry entry in VisualNativeStorage.Enumerate(directory))
             {
                 if (++coverage.Entries > StorageEntries)
                     throw new VisualFailure("VISUAL_STORAGE_LIMIT", "Visual evidence exceeded its 4096-entry capacity scan; existing evidence was retained.");
-                FileAttributes attributes = File.GetAttributes(entry);
+                FileAttributes attributes = (FileAttributes)entry.Attributes;
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                     throw new VisualFailure("VISUAL_STORAGE_UNVERIFIED", "Visual evidence contains a link; capacity was not adopted.");
-                string name = Path.GetFileName(entry);
+                string name = entry.Name;
                 bool isDirectory = (attributes & FileAttributes.Directory) != 0;
                 if (isDirectory)
                 {
                     bool known = depth == 0 ? name.Length == 32 && name.All(character => character >= '0' && character <= '9' || character >= 'a' && character <= 'f') :
-                        depth == 1 ? IsGuid(name) : depth == 2 && name.StartsWith("staging-", StringComparison.Ordinal) && IsGuid(name.Substring(8));
+                        depth == 1 ? IsGuid(name) : depth == 2 && ((name.StartsWith("staging-", StringComparison.Ordinal) && IsGuid(name.Substring(8))) || (name.StartsWith("s", StringComparison.Ordinal) && IsGuidN(name.Substring(1))));
                     if (!known) throw new VisualFailure("VISUAL_STORAGE_UNVERIFIED", "Visual evidence contains an unknown directory; capacity was not adopted.");
-                    ScanStorage(entry, depth + 1, coverage);
+                    ScanStorage(directory + "\\" + name, depth + 1, coverage);
                 }
                 else
                 {
                     bool canonical = depth == 2 && name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) && IsGuid(name.Substring(0, name.Length - 4));
-                    bool staging = depth == 3 && name.StartsWith("render", StringComparison.Ordinal) && name.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+                    string parentName = directory.Substring(directory.LastIndexOf('\\') + 1);
+                    bool staging = depth == 3 && name.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                        ((parentName.StartsWith("staging-", StringComparison.Ordinal) && name.StartsWith("render", StringComparison.Ordinal)) ||
+                         (parentName.StartsWith("s", StringComparison.Ordinal) && IsGuidN(parentName.Substring(1)) && name.StartsWith("r", StringComparison.Ordinal)));
                     if (!canonical && !staging) throw new VisualFailure("VISUAL_STORAGE_UNVERIFIED", "Visual evidence contains an unknown file; capacity was not adopted.");
-                    long bytes = new FileInfo(entry).Length;
+                    long bytes = entry.Length;
                     if (++coverage.Images > StorageImages || bytes > StorageBytes || coverage.Bytes > StorageBytes - bytes)
                         throw new VisualFailure("VISUAL_STORAGE_LIMIT", "Visual evidence exceeded its 512 PNG / 128 MiB capacity; existing evidence was retained.");
                     coverage.Bytes += bytes;
                 }
             }
         }
+        private static bool IsGuidN(string value) { Guid id; return Guid.TryParseExact(value, "N", out id); }
         private static bool IsGuid(string value) { Guid id; return Guid.TryParseExact(value, "D", out id); }
         private static bool Finite(double number) { return !Double.IsNaN(number) && !Double.IsInfinity(number) && Math.Abs(number) <= 1e9; }
     }

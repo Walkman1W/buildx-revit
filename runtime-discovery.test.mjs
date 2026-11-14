@@ -6,6 +6,7 @@ import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {detectLocalRuntimes,resolveLocalRuntimes} from './lib/local-runtimes.mjs';
+import {CodexClient} from './lib/codex-client.mjs';
 
 async function fixture(t){
   const home=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-detect-'));
@@ -51,7 +52,7 @@ test('an earlier npm wrapper makes a later executable ambiguous instead of silen
   f.env.Path=[f.bin,path.dirname(exe)].join(path.delimiter);
   assert.deepEqual(detectLocalRuntimes(f.options).runtimes.codex,{status:'ambiguous',path:null,code:'CODEX_PATH_AMBIGUOUS'});
   await f.file('bin/python.exe');
-  assert.equal(resolveLocalRuntimes(f.options).codex,exe);
+  assert.throws(()=>resolveLocalRuntimes(f.options),{code:'CODEX_PATH_AMBIGUOUS'});
   f.env.Path=[path.dirname(exe),f.bin].join(path.delimiter);
   assert.equal(detectLocalRuntimes(f.options).runtimes.codex.path,exe);
 });
@@ -77,9 +78,12 @@ test('installer refuses a manually selected WindowsApps Python alias before runn
 test('an npm wrapper and a desktop executable are ambiguous without an explicit choice',async t=>{
   const f=await fixture(t);await f.file('bin/codex.cmd');
   const desktop=await f.file('local/OpenAI/Codex/bin/0123456789abcdef/codex.exe');
+  await f.file('bin/python.exe');
+  assert.throws(()=>resolveLocalRuntimes(f.options),{code:'CODEX_PATH_AMBIGUOUS'});
   assert.deepEqual(detectLocalRuntimes(f.options).runtimes.codex,{status:'ambiguous',path:null,code:'CODEX_PATH_AMBIGUOUS'});
   f.env.BUILDX_CODEX_EXE=desktop;
   assert.equal(detectLocalRuntimes(f.options).runtimes.codex.path,desktop);
+  assert.equal(resolveLocalRuntimes(f.options).codex,desktop);
 });
 test('multiple desktop executables stay ambiguous; selected path is shared with runtime',async t=>{
   const f=await fixture(t);
@@ -103,4 +107,37 @@ test('installer --detect exposes the same independent discovery without side eff
   assert.deepEqual(result.runtimes.codex,{status:'found',path:codex,code:null});
   assert.deepEqual(result.runtimes.python,{status:'found',path:python,code:null});
   assert.equal(Object.hasOwn(result,'account'),false);
+});
+
+// Same contract for detection, direct resolver and app-server runtime dependency.
+test('stale explicit Codex paths fail closed even when another source is available',async t=>{
+  const f=await fixture(t);await f.file('bin/codex.exe');await f.file('bin/python.exe');
+  f.env.BUILDX_CODEX_EXE=await f.file('selected/codex.exe');
+  assert.equal(resolveLocalRuntimes(f.options).codex,f.env.BUILDX_CODEX_EXE);
+  await fs.unlink(f.env.BUILDX_CODEX_EXE);
+  assert.deepEqual(detectLocalRuntimes(f.options).runtimes.codex,{status:'invalid',path:null,code:'CODEX_PATH_INVALID'});
+  assert.throws(()=>resolveLocalRuntimes(f.options),{code:'CODEX_PATH_INVALID'});
+});
+
+test('wrapper ambiguity cannot be bypassed by the obsolete strictWrapper option',async t=>{
+  const f=await fixture(t);await f.file('bin/codex.cmd');await f.file('bin/python.exe');
+  await f.file('local/OpenAI/Codex/bin/0123456789abcdef/codex.exe');
+  const options={...f.options,strictWrapper:false};
+  assert.equal(detectLocalRuntimes(options).runtimes.codex.code,'CODEX_PATH_AMBIGUOUS');
+  assert.throws(()=>resolveLocalRuntimes(options),error=>error.code==='CODEX_PATH_AMBIGUOUS'&&error.message.includes('BUILDX_CODEX_EXE'));
+});
+
+test('production client rejects ambiguous runtime before spawn or account access',async t=>{
+  const f=await fixture(t);await f.file('bin/codex.cmd');await f.file('bin/python.exe');
+  await f.file('local/OpenAI/Codex/bin/0123456789abcdef/codex.exe');
+  let spawnCalls=0;
+  const client=new CodexClient(process.cwd(),{}, {
+    resolveRuntimes:()=>resolveLocalRuntimes(f.options),
+    spawn:()=>{spawnCalls++;throw new Error('must not spawn');},
+    readConfiguredNames:()=>[]
+  });
+  t.after(()=>client.close());
+  await assert.rejects(client.start(),{code:'CODEX_PATH_AMBIGUOUS'});
+  assert.equal(spawnCalls,0);
+  assert.equal(client.state.ready,false);
 });

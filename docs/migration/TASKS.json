@@ -4,6 +4,24 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-REVIT-INTEGRATION-BASELINE-20261114",
+      "title": "读写版共同集成基线",
+      "status": "source_verified",
+      "acceptance": "固定可复现源码基线，保留现有改动和候选已证实热修，核对权限与回执边界",
+      "evidence": "STATUS.md; baseline parent ec10ce6; candidate SHA-256 audit; 336/336 offline regression, 20/20 visual tests, Revit 2024 API x64 compilation",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
+    },
+    {
+      "id": "BX-LOCAL-RUNTIME-20261114",
+      "title": "本地 Codex 预检与运行时选择一致",
+      "status": "source_verified",
+      "acceptance": "多来源拒绝猜选；显式路径一致；失效路径不回退；不修改用户账号或安装配置",
+      "evidence": "LOCAL-RUNTIME-SELECTION-20261114.zh-CN.md; 133/133 regression; actual host detection and runtime both CODEX_PATH_AMBIGUOUS",
+      "realRevitLoadVerified": false,
+      "customerMachineVerified": false
+    },
+    {
       "id": "BX-001",
       "title": "白名单提取源码并核对哈希",
       "status": "completed",

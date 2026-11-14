@@ -34,7 +34,7 @@ test('command result presentation exposes actual coverage and never turns unknow
   assert.deepEqual(modelCommandPresentation({...command,status:'unknown',error:{message:'回执尚未取得'}}),{status:'结果待核对',error:'查询结果尚未确认，请核对后再运行。',diagnostic:'回执尚未取得',requestIds:[],summary:'',columns:[],rows:[],document:''});
   assert.equal(modelCommandPresentation({status:'bogus'}),null);
   assert.equal(modelCommandPresentation({status:'completed',commandId:'selection',result:{data:{total:0,returned:0,items:[]}}}).summary,'当前没有选择构件');
-  assert.deepEqual(modelCommandPresentation({status:'completed',commandId:'levels',result:{data:{total:1,items:[{name:'一层',elevation_mm:0}]}}}).rows,[['一层','0']]);
+  assert.deepEqual(modelCommandPresentation({status:'completed',commandId:'levels',result:{data:{total:1,items:[{name:'一层',elevation_mm:0}]}}}).rows,[['一层','0.00']]);
 });
 
 test('unknown uses a short action message while retaining full diagnostics and native request IDs',() => {

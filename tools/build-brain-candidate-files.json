@@ -152,6 +152,7 @@
   "revit-addin/build.ps1",
   "revit-addin/AccessPolicy.cs",
   "revit-addin/VisualInspection.cs",
+  "revit-addin/VisualNativeStorage.cs",
   "family-core/CabinetPlan.cs",
   "family-core/FamilyJobOperationPolicy.cs",
   "family-core/revit/FamilyLifecycleApproval.cs",

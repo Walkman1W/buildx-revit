@@ -32,10 +32,11 @@ class UiEvent{
 function session(epoch=0,messages=[]){return {messages,context:{document:null,selection:null,capturedAt:null},contextEpoch:epoch,historyTruncated:false};}
 
 async function setup(options={}){
+  const statusProjection=options.omitStatusBusy?{}:{busy:options.statusBusy??false};
   const elements=new Map();const get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
   const configuredWorkspace=options.workspace,configuredHistory=options.historyAvailable,configuredDirect=options.directCommandsAvailable;
   const suggestions=[new Element('button')];suggestions[0].dataset.prompt='检查当前模型';
-  const requests=[],historyRequests=[];let identity=0,account=options.account,confirmation=Object.hasOwn(options,'confirmation')?options.confirmation:{localConnectionConfirmed:true};const window=new Element('window');
+  const requests=[],historyRequests=[];let identity=0,account=options.account??{required:false,signedIn:false},confirmation=Object.hasOwn(options,'confirmation')?options.confirmation:{localConnectionConfirmed:true};const window=new Element('window');
   class FakeEventSource{
     static instances=[];
     constructor(url){this.url=url;this.events=new Map();FakeEventSource.instances.push(this);}
@@ -44,7 +45,7 @@ async function setup(options={}){
     close(){this.closed=true;}
   }
   const sandbox={__chatView:chatView,window,document:{getElementById:get,querySelectorAll:()=>suggestions,createElement:tag=>new Element(tag),createTextNode:text=>{const node=new Element('#text');node.textContent=text;return node;},createDocumentFragment:()=>new Element('#fragment')},sessionStorage:{getItem:()=>null,setItem(){}},crypto:{randomUUID:()=>++identity===1?'id-1':`00000000-0000-4000-8000-${String(identity).padStart(12,'0')}`},Event:UiEvent,CustomEvent:UiEvent,EventSource:FakeEventSource,navigator:{clipboard:{writeText:async()=>{}}},setTimeout,clearTimeout,queueMicrotask,fetch:async(url,options)=>{
-    if(url==='/api/status')return {ok:true,json:async()=>({csrf:'offline-csrf',ready:!account?.required||account.signedIn,error:false,message:'离线 UI 传输',toolCount:31,toolCatalog:[],account,codexConfirmation:confirmation,workspace:configuredWorkspace,historyAvailable:configuredHistory,directCommandsAvailable:configuredDirect})};
+    if(url==='/api/status')return {ok:true,json:async()=>({csrf:'offline-csrf',...statusProjection,ready:!account?.required||account.signedIn,error:false,message:'离线 UI 传输',toolCount:31,toolCatalog:[],account,codexConfirmation:confirmation,workspace:configuredWorkspace,historyAvailable:configuredHistory,directCommandsAvailable:configuredDirect})};
     if(url.startsWith('/api/chats?')){const response=deferred();historyRequests.push({url,...response});return response.promise;}
     const response=deferred();requests.push({url,body:JSON.parse(options.body),...response});return response.promise;
   }};
@@ -663,3 +664,22 @@ test('model user-input form presents choices, preserves edits on repeated snapsh
   radio.checked=true;radio.dispatchEvent(new UiEvent('change'));assert.equal(other.value,'');form.dispatchEvent(new UiEvent('submit'));await flush();const post=ui.requests.find(item=>item.url==='/api/user-input');assert.ok(post);assert.equal(post.body.requestId,'request-token');assert.equal(post.body.answers.q,'选区');
   await ui.respond(post);ui.emit('conversation',{busy:false,workspace:{kind:'model',supportsModelContext:true},session:session(),userInput:null});assert.equal(box.hidden,true);
 });
+
+test('skills busy rejection stays actionable and does not resend a command',async()=>{
+ const conversationId='11111111-1111-4111-8111-111111111111';
+ const ui=await setup({workspace:{kind:'model',supportsModelContext:true},historyAvailable:true,initialSession:{...session(),conversation:{id:conversationId,readOnly:false}}});
+ ui.emit('state',{workspace:{kind:'model',supportsModelContext:true},ready:true,historyAvailable:true,skillsAvailable:true,skillsRevision:0,connectionGeneration:1,codexAccount:{accountRevision:0}});
+ await ui.click('skills-refresh');const request=ui.requests.find(item=>item.url==='/api/skills');assert.ok(request);
+ await ui.respond(request,{error:'请等待当前操作结束。'},false);
+ assert.match(ui.get('skills-message').textContent,/原操作回执/);assert.equal(ui.get('skills-list').children.length,0);
+ assert.equal(ui.requests.filter(item=>item.url==='/api/command'||item.url==='/api/turn').length,0);
+});
+
+for(const [label,extra] of [['busy',{statusBusy:true}],['unknown',{omitStatusBusy:true}]]){
+ test('reconnect does not post when service busy state is '+label,async()=>{
+  const ui=await setup({...extra,workspace:{kind:'model',supportsModelContext:true},directCommandsAvailable:true});
+  await ui.click('reconnect');
+  assert.equal(ui.requests.filter(request=>request.url==='/api/reconnect').length,0);
+  assert.match(ui.get('error-notice').textContent,/没有请求重连/);
+ });
+}
