@@ -691,7 +691,7 @@ function updateButtons() {
     const last=receiptProjection?.records.at(-1);steerFeedbackBinding=last?{conversationId}:null;steerFeedbackKind=last?.status??null;
     $('steer-feedback').hidden=!last;$('steer-feedback').textContent=last?.status==='accepted'?'最近的补充指令已由 Codex 接收，是否执行尚待确认。':last?.status==='not_sent'?'最近的补充指令未发送。':'';
   }
-  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text) || uncertainTurns.has(conversationId);
+  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text) || turnSendBlocked(conversationId);
   $('steer').hidden = !(modelUiEnabled && steerAvailable && busy) || permissionChecking;
   $('steer').disabled = !binding || !text || text.length>16000 || pendingRequests.has('steer') || pendingRequests.has('interrupt') || visibleInputId!==null || ['pending','submitting'].includes(dynamicApproval?.state) || Boolean(attachmentRead) || pendingAttachments().length>0 || historyEnabled() && persistenceFailed() || receiptBlocked || isUncertainSteer(conversationId,text);
   $('prompt').readOnly = readOnly || switchingConversation;
@@ -1611,6 +1611,10 @@ function turnReceipt(conversation, request){
   if(['interrupted','failed'].includes(receipt.status))return 'not_sent';
   return null;
 }
+function turnSendBlocked(conversationId){
+  const request=pendingRequests.get('turn');
+  return uncertainTurns.has(conversationId)||Boolean(request?.posted&&request.requestId&&request.conversationId===conversationId);
+}
 function rememberUncertainTurn(request){
   if(!request?.posted||request.accountEpoch!==accountEpoch||!request.conversationId||turnReceipt(lastSession?.conversation,request))return;
   uncertainTurns.set(request.conversationId,request);
@@ -1639,7 +1643,7 @@ function consumeSubmittedInputs(request){
 }
 async function send(text, { clearDraft = true } = {}) {
   const trimmed=text.trim(),conversationId=skillsConversation();
-  if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(conversationId) || isUncertainSteer(conversationId,trimmed) || uncertainTurns.has(conversationId)) return;
+  if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(conversationId) || isUncertainSteer(conversationId,trimmed) || turnSendBlocked(conversationId)) return;
   cancelDraftTimer();
   invalidateRequests();
   const request = beginRequest('turn', { requestId:conversationId?crypto.randomUUID():null, clearDraft, draftRevision, draft: $('prompt').value, submittedContext:contextFlags(), waitingForDraft:Boolean(draftSaveWork), accountEpoch, conversationId, skillIds:Object.freeze([...skillSelection]), model:modelUiEnabled&&modelSelectionAvailable?selectedModel:undefined, effort:modelUiEnabled&&modelSelectionAvailable&&selectedEffort?selectedEffort:undefined, attachments:Object.freeze(pendingAttachments().slice()) });
