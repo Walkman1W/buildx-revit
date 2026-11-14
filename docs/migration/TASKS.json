@@ -4,6 +4,15 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-REVIT-INTEGRATION-20261114",
+      "title": "个人命令、Revit 排队与对话资料库集成",
+      "status": "source_verified",
+      "acceptance": "支线从共同基线独立交付，逐项合并和回归，保持逐次写入确认、原回执与未知结果防重",
+      "evidence": "STATUS.md; chat 1983093; command UX 2dfd492; Revit queue b78f0b7; code f746863; 514/514 offline tests, 117/117 controlled host checks, isolated Revit 2024 API x64 compilation",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
+    },
+    {
       "id": "BX-REVIT-INTEGRATION-BASELINE-20261114",
       "title": "读写版共同集成基线",
       "status": "source_verified",
