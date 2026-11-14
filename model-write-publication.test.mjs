@@ -43,7 +43,7 @@ const retained={sourceDocument,expectedHostSession:sourceDocument.session,retain
 
 test('write timeout retains its exact original request owner and validates late receipt facts',async t=>{
   const f=await fixture(t);let error;
-  try{await invokeWorkbench('revit_move_elements',moveArgs,{root:f.root,timeout:25,...retained});}catch(e){error=e;}
+  try{await invokeWorkbench('revit_move_elements',moveArgs,{root:f.root,timeout:500,...retained});}catch(e){error=e;}
   const facts=workbenchFailureEvidence(error);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(facts.receiptOwner);
   const id=facts.requestIds[0],responseFile=path.join(f.root,'queue','outbox',id+'.json'),owner=facts.receiptOwner;
   assert.equal(owner.inspect().value.status,'pending');assert.equal(owner.inspect().value.terminal,false);
@@ -150,7 +150,7 @@ test('native script failure publishes its observed group rollback and the transp
 test('long old and native script diagnostics retain ended facts and bounded recovery evidence',{skip:!nativeProducerAvailable},async t=>{
   const producer=await loadNativeReadProducer(t),f=await fixture(t),diagnostic='C# compilation failed: '+('user-script.cs(3): error CS0103: Unknown identifier.\n'.repeat(300));
   const args={expected_document:sourceDocument.path,code:'invalid source',mode:'commit'};
-  const thrown=await invokeWorkbench('revit_execute_csharp',args,{root:f.root,timeout:25,...retained}).then(()=>assert.fail('Expected pending script'),error=>error);
+  const thrown=await invokeWorkbench('revit_execute_csharp',args,{root:f.root,timeout:500,...retained}).then(()=>assert.fail('Expected pending script'),error=>error);
   const facts=workbenchFailureEvidence(thrown),id=facts.requestIds[0],owner=facts.receiptOwner,responseFile=path.join(f.root,'queue','outbox',id+'.json');
   const failure={id,ok:false,hostSession:sourceDocument.session,error:{code:'InvalidOperationException',message:diagnostic},execution:{started:true,phase:'dispatch',reason:null},completedUtc:new Date().toISOString()};
   await fs.writeFile(responseFile,JSON.stringify(failure));
@@ -178,14 +178,14 @@ test('long old and native script diagnostics retain ended facts and bounded reco
 
 test('a write with ambiguous rename retains its original owner and is never reported not started',async t=>{
   const f=await fixture(t),rename=fs.rename;t.mock.method(fs,'rename',async(...args)=>{await rename(...args);throw new Error('unknown publication');});
-  let error;try{await invokeWorkbench('revit_move_elements',moveArgs,{root:f.root,timeout:25,...retained});}catch(e){error=e;}
+  let error;try{await invokeWorkbench('revit_move_elements',moveArgs,{root:f.root,timeout:500,...retained});}catch(e){error=e;}
   const facts=workbenchFailureEvidence(error);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(facts.receiptOwner);assert.equal(facts.receiptOwner.inspect().value.status,'pending');assert.equal(facts.receiptOwner.close().value.closed,true);
 });
 
 test('revocation after publication cannot be claimed to have cancelled the write',async t=>{
   const f=await fixture(t);let allowed=true,published=0,caught;
   try{await invokeWorkbench('revit_move_elements',{expected_document:'C:\\sample.rvt',element_ids:[3],delta_mm:{x:1,y:0,z:0},mode:'commit'},
-    {root:f.root,timeout:25,shouldContinue:()=>allowed,onTiming:event=>{if(event.phase==='published'){published++;allowed=false;}}});}
+    {root:f.root,timeout:500,shouldContinue:()=>allowed,onTiming:event=>{if(event.phase==='published'){published++;allowed=false;}}});}
   catch(error){caught=error;}
   assert.equal(published,1);assert.ok(caught);assert.equal(caught.interruptedBeforeEnqueue,undefined);
   const evidence=workbenchFailureEvidence(caught);assert.equal(evidence.outcome,'unconfirmed');assert.equal(evidence.requestIds.length,1);

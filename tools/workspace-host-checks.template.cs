@@ -216,6 +216,17 @@ namespace RevitLocalCodex {
             var request=new { id=wrongId?Guid.NewGuid().ToString():id,targetSession=wrongSession?new string('b',32):session,operation="status",args=new {private_input="MUST_NOT_ENTER_TIMING"},createdUtc=DateTime.UtcNow.AddSeconds(-2).ToString("o"),expiresUtc=expiry };
             File.WriteAllText(Path.Combine(queue,"inbox",id+".json"),malformed?"{":json.Serialize(request));return id;
         }
+        private void ExpireQueuedRequest(string id) {
+            string file=Path.Combine(queue,"inbox",id+".json");
+            var request=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(file));
+            request["expiresUtc"]=DateTime.UtcNow.AddSeconds(-1).ToString("o");
+            File.WriteAllText(file,json.Serialize(request));
+        }
+        private void AddCancellation(string id,string targetSession) {
+            Directory.CreateDirectory(Path.Combine(queue,"cancel"));
+            var marker=new {schema_version=1,request_id=id,target_session=targetSession};
+            File.WriteAllText(Path.Combine(queue,"cancel",id+".json"),json.Serialize(marker));
+        }
         private static double Milliseconds(Dictionary<string,object> timing,string key) { double value=Convert.ToDouble(timing[key]);if(double.IsNaN(value)||double.IsInfinity(value)||value<0)throw new Exception("Invalid duration "+key);return value; }
         private static void Utc(Dictionary<string,object> timing,string key) { DateTime value;if(!(timing[key] is string)||!DateTime.TryParseExact((string)timing[key],"o",null,System.Globalization.DateTimeStyles.RoundtripKind,out value)||value.Kind!=DateTimeKind.Utc)throw new Exception("Invalid UTC "+key); }
         private object CheckPublication(string name) {
@@ -243,12 +254,13 @@ namespace RevitLocalCodex {
             bool success=name=="matched-success"||name=="pending-result"||name=="different-next-request"||name=="unobserved-execute";
             bool dispatch=success||name=="dispatch-failure";
             string id=name=="different-next-request"?"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb":Guid.NewGuid().ToString();
-            string expiry=name=="expired"?DateTime.UtcNow.AddMinutes(-1).ToString("o"):name=="invalid-deadline"?"not-a-deadline":DateTime.UtcNow.AddMinutes(1).ToString("o");
+            string expiry=name=="invalid-deadline"?"not-a-deadline":DateTime.UtcNow.AddMinutes(1).ToString("o");
             AddRequest(id,expiry,name=="wrong-session",name=="wrong-id",name=="malformed-json");dispatchFailure=name=="dispatch-failure";
             if(name=="pending-result")externalEvent.Result=ExternalEventRequest.Pending;
             if(name!="unobserved-execute") { PollQueue(null);if(!eventPending||externalEvent.Raises!=1)throw new Exception("Event was not raised");Thread.Sleep(35); }
             string observedId=id;
             if(name=="different-next-request")AddRequest("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",expiry,false,false,false);
+            if(name=="expired")ExpireQueuedRequest(id);
             Execute(null);
             var response=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(queue,"outbox",id+".json")));
             if((bool)response["ok"]!=success||Convert.ToString(response["id"])!=id||DispatchCalls!=(dispatch?1:0))throw new Exception("Original outcome/dispatch boundary changed: "+name);
@@ -278,6 +290,129 @@ namespace RevitLocalCodex {
             if(eventPending||busy||pendingObservation!=null)throw new Exception("Scheduler owner not released");
             return new {name,passed=true,dispatchCalls=DispatchCalls,response};
         }
+        private string RequireUnstartedReceipt(string id,string code,string reason,string phase) {
+            string filename=id+".json";
+            string processing=Path.Combine(queue,"processing",filename),outbox=Path.Combine(queue,"outbox",filename);
+            if(File.Exists(Path.Combine(queue,"inbox",filename))||!File.Exists(processing)||!File.Exists(outbox))
+                throw new Exception("Unstarted request did not settle before the accepted callback arrived: "+code);
+            string original=File.ReadAllText(outbox);
+            var response=json.Deserialize<Dictionary<string,object>>(original);
+            var error=(Dictionary<string,object>)response["error"];
+            var execution=(Dictionary<string,object>)response["execution"];
+            var timing=(Dictionary<string,object>)response["timing"];
+            if(Convert.ToString(response["id"])!=id||Convert.ToString(response["hostSession"])!=session||(bool)response["ok"]||(bool)execution["started"]||
+                Convert.ToString(execution["phase"])!=phase||Convert.ToString(error["code"])!=code||Convert.ToString(execution["reason"])!=reason)
+                throw new Exception("Unexpected unstarted execution or identity facts");
+            if(Convert.ToString(timing["requestId"])!=id||Convert.ToString(timing["hostSession"])!=session||
+                timing.ContainsKey("dispatchMs")&&timing["dispatchMs"]!=null)throw new Exception("Unstarted receipt has invalid timing identity or dispatch facts");
+            if(phase=="queue") {
+                if(Convert.ToInt32(timing["schemaVersion"])!=2||timing.ContainsKey("executeEnteredUtc"))throw new Exception("Background settlement invented callback timing");
+                Utc(timing,"settledUtc");
+            } else {
+                if(Convert.ToInt32(timing["schemaVersion"])!=1)throw new Exception("The actual callback lost its original timing schema");
+                Utc(timing,"executeEnteredUtc");
+            }
+            return original;
+        }
+        private void RequireSettlementCorrelation(string receipt,bool matched) {
+            var response=json.Deserialize<Dictionary<string,object>>(receipt);
+            var timing=(Dictionary<string,object>)response["timing"];
+            if(Convert.ToString(timing["schedulerCorrelation"])!=(matched?"matched":"unmatched"))throw new Exception("Expiry or cancellation was attributed to the wrong callback");
+            if(matched) {
+                Utc(timing,"observedUtc");Utc(timing,"raiseReturnedUtc");
+                if(Convert.ToString(timing["raiseResult"])!="Accepted"||Milliseconds(timing,"observedToSettlementMs")<0)
+                    throw new Exception("The accepted callback observation was lost");
+            } else {
+                foreach(string key in new[]{"observedUtc","raiseReturnedUtc","observedToSettlementMs","raiseResult"})
+                    if(timing.ContainsKey(key)&&timing[key]!=null)throw new Exception("The request borrowed unrelated callback evidence");
+            }
+        }
+        public object CheckBackgroundSettlement(string name) {
+            File.Reset();
+            foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
+            bool initiallyExpired=name=="queue-initially-expired",behind=name=="queue-later-expired",cancel=name=="queue-cancel-before-callback",foreign=name=="queue-foreign-cancel-marker";
+            bool cancelAtExecute=name=="queue-cancel-at-execute";
+            string id=Guid.NewGuid().ToString(),filename=id+".json",expires=DateTime.UtcNow.AddMinutes(1).ToString("o");
+            string previous=behind?Guid.NewGuid().ToString():null;
+            string observed=previous??id;
+            string outbox=Path.Combine(queue,"outbox",filename),inbox=Path.Combine(queue,"inbox",filename);
+            AddRequest(observed,initiallyExpired?DateTime.UtcNow.AddSeconds(-1).ToString("o"):expires,false,false,false);
+            PollQueue(null);
+            if(initiallyExpired) {
+                string receipt=RequireUnstartedReceipt(id,"WORKBENCH_REQUEST_EXPIRED","expired","queue");
+                RequireSettlementCorrelation(receipt,false);
+                if(eventPending||externalEvent.Raises!=0||DispatchCalls!=0)throw new Exception("A pre-expired request acquired a native event");
+                return new {name,passed=true,dispatchCalls=DispatchCalls,nativeRaises=externalEvent.Raises};
+            }
+            if(!eventPending||pendingObservation.RequestId!=observed||externalEvent.Raises!=1)throw new Exception("Expected one accepted event for the original request");
+            if(behind) {
+                AddRequest(id,DateTime.UtcNow.AddSeconds(-1).ToString("o"),false,false,false);
+                string earlierFile=Path.Combine(queue,"inbox",previous+".json");
+                System.IO.File.SetLastWriteTimeUtc(earlierFile,new DateTime(2026,1,1,0,0,0,DateTimeKind.Utc));
+                if(NextRequest()!=earlierFile)throw new Exception("The live request must precede the expired request");
+            }
+            else if(cancel||foreign||cancelAtExecute)AddCancellation(id,foreign?new string('b',32):session);
+            else ExpireQueuedRequest(id);
+            if(cancelAtExecute) {
+                Execute(null);
+                RequireUnstartedReceipt(id,"WORKBENCH_REQUEST_CANCELLED","cancelled","validation");
+                if(eventPending||externalEvent.Raises!=1||DispatchCalls!=0)throw new Exception("Cancellation after the last poll did not stop the callback before dispatch");
+                return new {name,passed=true,dispatchCalls=DispatchCalls,nativeRaises=externalEvent.Raises};
+            }
+            PollQueue(null);
+            if(!eventPending||pendingObservation.RequestId!=observed||externalEvent.Raises!=1||DispatchCalls!=0)
+                throw new Exception("Background polling changed the accepted owner or dispatched business work");
+            if(foreign) {
+                if(!File.Exists(inbox)||File.Exists(outbox))throw new Exception("Unrelated session cancelled the original request");
+                Execute(null);
+                var response=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(outbox));
+                if(!(bool)response["ok"]||DispatchCalls!=1||externalEvent.Raises!=1)throw new Exception("Unrelated session cancelled dispatch");
+            }
+            else {
+                string original=RequireUnstartedReceipt(id,cancel?"WORKBENCH_REQUEST_CANCELLED":"WORKBENCH_REQUEST_EXPIRED",cancel?"cancelled":"expired","queue");
+                RequireSettlementCorrelation(original,!behind);
+                if(behind&&!File.Exists(Path.Combine(queue,"inbox",previous+".json")))throw new Exception("Settlement consumed the earlier live request");
+                string next=behind?null:Guid.NewGuid().ToString();
+                if(next!=null)AddRequest(next,expires,false,false,false);
+                Execute(null);
+                if(File.ReadAllText(outbox)!=original||DispatchCalls!=(behind?1:0)||externalEvent.Raises!=1||eventPending)
+                    throw new Exception("Late callback changed the original receipt or dispatched the retired request");
+                if(behind) {
+                    if(!File.Exists(Path.Combine(queue,"outbox",previous+".json")))throw new Exception("Earlier live request lost its callback");
+                } else {
+                    if(!File.Exists(Path.Combine(queue,"inbox",next+".json")))throw new Exception("A released callback stole the next request");
+                    PollQueue(null);Execute(null);
+                    if(!File.Exists(Path.Combine(queue,"outbox",next+".json"))||externalEvent.Raises!=2||DispatchCalls!=1||File.ReadAllText(outbox)!=original)
+                        throw new Exception("The next request did not retain its own callback and receipt");
+                }
+            }
+            return new {name,passed=true,dispatchCalls=DispatchCalls,nativeRaises=externalEvent.Raises};
+        }
+        public object CheckRetryAfterDispatch(string name) {
+            File.Reset();
+            foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
+            string id=Guid.NewGuid().ToString(),filename=id+".json",expires=DateTime.UtcNow.AddMinutes(1).ToString("o");
+            string processing=Path.Combine(queue,"processing",filename),outbox=Path.Combine(queue,"outbox",filename),inbox=Path.Combine(queue,"inbox",filename);
+            bool lostReceipt=name=="queue-retry-after-unknown-dispatch";
+            File.FailRename=lostReceipt;
+            AddRequest(id,expires,false,false,false);
+            PollQueue(null);Execute(null);
+            if(DispatchCalls!=1||externalEvent.Raises!=1||File.Exists(outbox)==lostReceipt)throw new Exception("Fixture did not establish the first dispatch outcome");
+            string originalRequest=File.ReadAllText(processing),originalResponse=lostReceipt?null:File.ReadAllText(outbox);
+            string pendingReceipt=outbox+"."+session+".tmp",originalPending=lostReceipt?File.ReadAllText(pendingReceipt):null;
+            int writes=File.PublicationWrites,renames=File.PublicationRenames;
+            File.FailRename=false;
+            AddRequest(id,DateTime.UtcNow.AddSeconds(-1).ToString("o"),false,false,false);
+            AddCancellation(id,session);
+            nextRaise=DateTime.MinValue;
+            PollQueue(null);Execute(null);
+            if(DispatchCalls!=1||externalEvent.Raises!=1||File.PublicationWrites!=writes||File.PublicationRenames!=renames||!File.Exists(inbox)||
+                File.ReadAllText(processing)!=originalRequest||(lostReceipt?File.Exists(outbox):File.ReadAllText(outbox)!=originalResponse))
+                throw new Exception("Duplicate request changed the original claim or receipt after dispatch");
+            if(lostReceipt&&(!File.Exists(pendingReceipt)||File.ReadAllText(pendingReceipt)!=originalPending))
+                throw new Exception("Duplicate request removed or changed original publication evidence");
+            return new {name,passed=true,dispatchCalls=DispatchCalls,nativeRaises=externalEvent.Raises};
+        }
         public object CheckQueueOrder(string name) {
             File.Reset();
             foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
@@ -294,7 +429,7 @@ namespace RevitLocalCodex {
                 if(DispatchCalls!=1||NextRequest()!=null||File.ReadAllText(Path.Combine(queue,"processing",older+".json"))!="prior-claim"||File.ReadAllText(Path.Combine(queue,"outbox",newer+".json"))!="prior-receipt"||!File.Exists(Path.Combine(queue,"inbox","not-a-guid.json")))throw new Exception("A duplicate was executed, overwritten or discarded");
                 return new {name,passed=true,dispatchCalls=DispatchCalls};
             }
-            AddRequest(older,name=="queue-observed-expired"?DateTime.UtcNow.AddMinutes(-1).ToString("o"):expiry,false,false,false);
+            AddRequest(older,expiry,false,false,false);
             System.IO.File.SetLastWriteTimeUtc(Path.Combine(queue,"inbox",older+".json"),stamp);
             string expected=older;
             bool beforeRaise=name=="queue-oldest-finalized-file"||name=="queue-time-tie";
@@ -319,6 +454,7 @@ namespace RevitLocalCodex {
             }
             for(int i=0;i<100;i++)PollQueue(null);
             if(externalEvent.Raises!=1||DispatchCalls!=0)throw new Exception("Pending work was raised again or dispatched outside Execute");
+            if(name=="queue-observed-expired")ExpireQueuedRequest(older);
             Execute(null);
             var response=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(queue,"outbox",expected+".json")));
             bool expired=name=="queue-observed-expired",matched=expected==(name=="queue-time-tie"?newer:older);
@@ -444,7 +580,7 @@ namespace RevitLocalCodex {
             CaptureApiThread(new UIApplication());
             foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
             string id=Guid.NewGuid().ToString();
-            AddRequest(id,DateTime.UtcNow.AddMinutes(name=="wake-post-failure-expired"?-1:1).ToString("o"),false,false,false);
+            AddRequest(id,DateTime.UtcNow.AddMinutes(1).ToString("o"),false,false,false);
             if(name=="wake-raise-denied")externalEvent.Result=ExternalEventRequest.Denied;
             if(name=="wake-post-failure-expired")uiDispatcher.FailPost=true;
             if(name=="wake-shutdown")uiDispatcher.HasShutdownStarted=true;
@@ -455,6 +591,7 @@ namespace RevitLocalCodex {
                 if(eventPending||uiDispatcher.Posts!=0||pendingWakeOperation!=null)throw new Exception("Unaccepted event posted a wake");
             } else if(name=="wake-post-failure-expired") {
                 if(!eventPending||pendingObservation.UiWakeState!="post_failed"||pendingObservation.UiWakeDiagnostic!="InvalidOperationException")throw new Exception("Post failure lost accepted native work");
+                ExpireQueuedRequest(id);
                 Execute(null);
                 var failed=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(queue,"outbox",id+".json")));
                 if((bool)failed["ok"]||DispatchCalls!=0||(bool)((Dictionary<string,object>)failed["execution"])["started"])throw new Exception("Expired work was forged successful after wake failure");
@@ -652,7 +789,7 @@ namespace RevitLocalCodex {
             File.Reset();
             foreach(string folder in new[]{"inbox","processing","outbox"})Directory.CreateDirectory(Path.Combine(queue,folder));
             bool initial=name=="idle-diagnostic-initial-raise",saturated=name=="idle-diagnostic-saturation",expired=name=="idle-diagnostic-expired",replaced=name=="idle-diagnostic-next-owner";
-            string id=Guid.NewGuid().ToString();AddRequest(id,DateTime.UtcNow.AddMinutes(expired?-1:1).ToString("o"),false,false,false);
+            string id=Guid.NewGuid().ToString();AddRequest(id,DateTime.UtcNow.AddMinutes(1).ToString("o"),false,false,false);
             if(initial){OnQueueIdling(null,new IdlingEventArgs());if(pendingObservation.UiIdleAfterRaiseCount!=0||pendingObservation.UiIdleFirstEnteredUtc.HasValue||pendingObservation.UiFastIdleRequestCount!=1)throw new Exception("Initial Raise callback counted as after-Raise idle");}
             else PollQueue(null);
             SchedulerObservation original=pendingObservation;
@@ -663,6 +800,7 @@ namespace RevitLocalCodex {
                 Execute(null);id=Guid.NewGuid().ToString();AddRequest(id,DateTime.UtcNow.AddMinutes(1).ToString("o"),false,false,false);nextRaise=DateTime.MinValue;PollQueue(null);
                 if(Object.ReferenceEquals(original,pendingObservation)||pendingObservation.UiIdleAfterRaiseCount!=0||pendingObservation.UiIdleFirstEnteredUtc.HasValue||pendingObservation.UiFastIdleRequestCount!=0)throw new Exception("New request borrowed old Idling facts");
             }
+            if(expired)ExpireQueuedRequest(id);
             Execute(null);
             var response=json.Deserialize<Dictionary<string,object>>(File.ReadAllText(Path.Combine(queue,"outbox",id+".json")));
             var timing=(Dictionary<string,object>)response["timing"];var idle=(Dictionary<string,object>)timing["uiIdle"];
@@ -678,6 +816,8 @@ namespace RevitLocalCodex {
             if(args.Length!=1)return 2;string root=Path.GetFullPath(args[0]);if(Directory.Exists(root))throw new Exception("Do not overwrite managed evidence");Directory.CreateDirectory(root);
             var results=new List<object>();string current=null;
             try {
+                foreach(string name in new[]{"queue-expired-before-callback","queue-initially-expired","queue-later-expired","queue-cancel-before-callback","queue-foreign-cancel-marker","queue-cancel-at-execute"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckBackgroundSettlement(name));}
+                foreach(string name in new[]{"queue-retry-after-unknown-dispatch","queue-retry-after-successful-dispatch"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckRetryAfterDispatch(name));}
                 foreach(string name in new[]{"matched-success","dispatch-failure","expired","invalid-deadline","wrong-session","wrong-id","malformed-json","different-next-request","pending-result","unobserved-execute","optional-timing-budget","publication-write-failure","publication-rename-failure"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).Check(name));}
                 foreach(string name in new[]{"queue-oldest-finalized-file","queue-time-tie","queue-observed-retained","queue-observed-missing","queue-observed-claimed","queue-observed-receipt","queue-observed-expired","queue-invalid-and-claimed-excluded"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckQueueOrder(name));}
                 foreach(string name in new[]{"atomic-project-binding-raw-queue","atomic-auto-bind","atomic-explicit-mismatch","atomic-document-changed","atomic-null-status","atomic-null-health","atomic-native-document","atomic-invalid-flag","atomic-write-refused","idle-empty","idle-pending","idle-bounded","atomic-equivalent-wrapper","atomic-same-path-new-document","atomic-invalid-before","atomic-invalid-after","atomic-view-changed","atomic-null-to-document"}){current=name;results.Add(new WorkbenchHost(Path.Combine(root,name)).CheckAtomic(name));}

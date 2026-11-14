@@ -67,7 +67,7 @@ test('post-publication cancellation writes one bound marker and waits for origin
 
 test('timed-out visual request keeps late receipt ownership and publishes cancellation',async t=>{
   const f=await fixture(t);let failure;
-  try{await invokeWorkbench('revit_capture_view',{expected_document:source.path},{root:f.root,timeout:25,...retained});}catch(e){failure=e;}
+  try{await invokeWorkbench('revit_capture_view',{expected_document:source.path},{root:f.root,timeout:500,...retained});}catch(e){failure=e;}
   const facts=workbenchFailureEvidence(failure);assert.equal(facts.outcome,'unconfirmed');assert.ok(facts.receiptOwner);const req=await request(f);
   assert.equal(JSON.parse(await fs.readFile(path.join(f.root,'queue','cancel',req.id+'.json'),'utf8')).target_session,source.session);
   await fs.writeFile(path.join(f.root,'queue','outbox',req.id+'.json'),JSON.stringify(envelope(req.id,value(f,req.id,req.args,'capture_view'))));
