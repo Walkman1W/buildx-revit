@@ -17,7 +17,7 @@ test('commands share one page with inline system and personal labels and a creat
   const system=row(ui,'revit_set_parameters'),list=row(ui,'revit_list_commands'),personal=list.querySelectorAll('.model-command-stored-version')[0];
   assert.equal(system.hidden,false);assert.equal(list.hidden,false);assert.equal(personal.hidden,false);
   const systemName=system.querySelectorAll('.command-name')[0],personalName=personal.querySelectorAll('.command-name')[0];
-  assert.equal(systemName.children[0].textContent,'修改参数');assert.equal(systemName.children[1].textContent,'系统');
+  assert.equal(systemName.children[0].textContent,'批量修改实例参数');assert.equal(systemName.children[1].textContent,'系统');
   assert.equal(personalName.children[0].textContent,'参数备注');assert.equal(personalName.children[1].textContent,'个人');
   assert.equal(personalName.children[1].tagName,'SPAN');assert.equal(ui.get('model-create-command').textContent.includes('创建命令'),true);
   assert.equal(ui.requests.length,0,'opening commands must not repeatedly query or run any command');

@@ -2,6 +2,7 @@ import {createCommandField,createSheetRenumberField,createSheetBatchField,COMMAN
 import {createCommandChoiceField} from './command-choice-field.mjs';
 import {createParameterChangeField} from './parameter-change-field.mjs';
 import {createPersonalCommandFields} from './personal-command-fields.mjs';
+import {commandFormOwner} from './command-form-source.mjs';
 import {createManualTypeParameterWriteField} from './manual-type-parameter-write-field.mjs';
 import {clipboardImageFiles,hasTransferredFiles} from './clipboard-attachments.mjs';
 import {modelToolEntries} from './chat-view.mjs';
@@ -285,7 +286,10 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   let mention = null, matches = [], selected = 0, composing = false, drawerOpen = false, drawerBody, drawerClose, drawerReturnFocus, drawerTitle;
   let accountMenu, accountMenuOpen = false, menuEmail, menuState, menuLogin, menuRegister, menuManage, menuSignOut;
   let commandCatalogSignature = '', commandSearch, commandItems,createArea,createCommand,createCommandKind,createCommandHelp;
-  const commandFavorites=new Set();let commandScope='all';
+  const commandFavorites = new Set();
+  const personalVersions = new Map();
+  let commandScope = 'all', personalPage = null, personalPageSignature = '';
+  let personalWorkflow = null, nextPersonalPage;
   let commandButtons = [], parameterInputs = [], rows = [], resultRows = [];
   let draftOrigin = null, draftOriginStatus, draftOriginClear, chatDraftNotice;
   let attachmentButton, attachmentInput, attachmentList;
@@ -554,6 +558,11 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     const confirmed=Boolean(typeWriteField)||inputs?.$confirmation?.checked===true;
     if (inputs?.$confirmation) inputs.$confirmation.checked = false;
     typeWriteField?.lock();
+    if (command.id === 'revit_get_command') {
+      const identity = storedCommandIdentity(result.parameters);
+      if (identity) viewPersonalVersion(identity);
+      return;
+    }
     window.dispatchEvent(new CustomEvent('buildx-model-command',{detail:{commandId:command.id,parameters:result.parameters,...(sources.length?{sourceDocument:sources[0]}:{}),...(confirmed?{confirmed:true}:{})}}));
   }
 
@@ -570,10 +579,8 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const group = command.group || '常用命令';
       if (!groups.has(group)) { const section=el('section','model-command-group'); section.append(el('h3','model-command-group-title',group==='命令库'?'我的命令':group)); groups.set(group,section); commandItems.append(section); }
       const item = el('section','model-command-item'), row = el('div','model-command-row');
-      item.dataset.commandId = command.id;item.dataset.personalGroup=String(group==='命令库');item.dataset.toolName=command.tool || '';item.dataset.toolLabel=command.name || '';item.dataset.baseSearch=[command.name,command.tool,command.description,group,'系统'].filter(Boolean).join(' ').toLocaleLowerCase();item.dataset.search=item.dataset.baseSearch;
+      item.dataset.commandId = command.id;item.dataset.personalGroup=String(group==='命令库');item.dataset.toolName=command.tool || '';item.dataset.toolLabel=command.name || '';item.dataset.search=[command.name,command.tool,command.description,group,'系统'].filter(Boolean).join(' ').toLocaleLowerCase();
       const copy = el('span','model-command-copy'); copy.append(commandName(command.name,'system'),el('small','',command.description));
-      const favorite=button('model-command-favorite',commandFavorites.has(command.id)?'取消会话收藏':'会话收藏');favorite.dataset.favoriteKey=command.id;favorite.setAttribute('aria-pressed',String(commandFavorites.has(command.id)));
-      favorite.addEventListener('click',()=>{if(commandFavorites.has(command.id))commandFavorites.delete(command.id);else commandFavorites.add(command.id);favorite.textContent=commandFavorites.has(command.id)?'取消会话收藏':'会话收藏';favorite.setAttribute('aria-pressed',String(commandFavorites.has(command.id)));filterCommands();});copy.append(favorite);
       if (command.readOnly === true) copy.append(el('small','model-command-effect','只读查询，不修改模型'));
       if (command.readOnly === false) copy.append(el('small','model-command-effect',['revit_set_selection','revit_select_by_unique_ids'].includes(command.tool)?'更改 Revit 界面选择，不修改模型':'涉及模型或文件操作'));
       if (command.enabled === false) copy.append(el('small','model-command-unavailable',command.unavailableReason || '当前环境尚未就绪'));
@@ -582,8 +589,19 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         row.append(el('span','model-command-icon',command.icon||'◇'),copy);item.append(row);groups.get(group).append(item);
         continue;
       }
+      const favorite=button('model-command-favorite',commandFavorites.has(command.id)?'取消会话收藏':'会话收藏');favorite.dataset.favoriteKey=command.id;favorite.setAttribute('aria-pressed',String(commandFavorites.has(command.id)));
+      favorite.addEventListener('click',()=>{
+        if (!active || !commandItems.contains(item)) return;
+        if (commandFavorites.has(command.id)) commandFavorites.delete(command.id);
+        else commandFavorites.add(command.id);
+        favorite.textContent = commandFavorites.has(command.id) ? '取消会话收藏' : '会话收藏';
+        favorite.setAttribute('aria-pressed',String(commandFavorites.has(command.id)));
+        filterCommands();
+      });
+      copy.append(favorite);
       const manualTypeWrite=command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview===true;
-      const fields = manualTypeWrite?[]:command.inputSchema ? Object.entries(command.inputSchema.properties || {}).filter(([key]) => key !== 'expected_document').sort(([a],[b])=>Number(a==='mode')-Number(b==='mode')) : command.parameters ? [['keyword',{type:'string',maxLength:200}],['category',{type:'string',enum:MODEL_CATEGORIES.map(item => item.value),default:'all'}]] : [];
+      const isPersonalList = command.tool === 'revit_list_commands';
+      const fields = manualTypeWrite||isPersonalList?[]:command.inputSchema ? Object.entries(command.inputSchema.properties || {}).filter(([key]) => key !== 'expected_document').sort(([a],[b])=>Number(a==='mode')-Number(b==='mode')) : command.parameters ? [['keyword',{type:'string',maxLength:200}],['category',{type:'string',enum:MODEL_CATEGORIES.map(item => item.value),default:'all'}]] : [];
       const hasParameters = fields.length > 0 || command.readOnly === false;
       const apply = button('model-command-apply',command.enabled === false ? '不可用' : hasParameters ? '展开' : '应用');
       apply.setAttribute('aria-label',command.name + (hasParameters ? '，填写参数' : '，应用')); apply.dataset.commandEnabled = String(command.enabled !== false);
@@ -650,34 +668,78 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
           if(inputs.mode){const renderRun=()=>{run.textContent=inputs.mode.value==='commit'?'应用修改':'预览结果';};inputs.mode.addEventListener('change',renderRun);renderRun();}
           parameters.append(run);commandButtons.push(run);}
         parameters.append(error);item.append(parameters);rows.push({id:command.id,item,parameters,apply,inputs,fields:formFields,command,confirmLabel});
-        if(command.tool==='revit_list_commands'){apply.textContent='刷新列表';apply.addEventListener('click',()=>applyCommand(command,inputs,error));}
-        else apply.addEventListener('click',()=>{parameters.hidden=!parameters.hidden;apply.textContent=parameters.hidden?'展开':'收起';apply.setAttribute('aria-expanded',String(!parameters.hidden));if(!parameters.hidden)Object.values(inputs)[0]?.focus();});
+        apply.addEventListener('click',()=>{parameters.hidden=!parameters.hidden;apply.textContent=parameters.hidden?'展开':'收起';apply.setAttribute('aria-expanded',String(!parameters.hidden));if(!parameters.hidden)Object.values(inputs)[0]?.focus();});
         if(inputs.keyword)inputs.keyword.addEventListener('keydown',event=>{if(event.key === 'Enter' && !event.isComposing){event.preventDefault();applyCommand(command,inputs,error);}});
-      }else{item.append(error);apply.addEventListener('click',()=>applyCommand(command,null,error));}
+      }else{
+        item.append(error);
+        if (isPersonalList) {
+          apply.textContent = '读取列表';
+          apply.setAttribute('aria-label','读取个人命令列表');
+          apply.addEventListener('click',()=>requestPersonalPage());
+        } else apply.addEventListener('click',()=>applyCommand(command,null,error));
+      }
       const result=el('div','model-command-result');result.hidden=true;result.setAttribute('role','status');result.setAttribute('aria-live','polite');item.append(result);
-      resultRows.push({id:command.id,result,stop,inspect,recover,acknowledge,signature:''});commandButtons.push(apply);groups.get(group).append(item);
+      const list = isPersonalList ? el('div','model-command-result model-command-personal-list') : null;
+      if (list) item.append(list);
+      let back = null;
+      if (['revit_get_command','revit_run_command'].includes(command.id)) {
+        item.tabIndex = -1;
+        back = button('model-command-back','返回命令列表');
+        back.hidden = true;
+        back.addEventListener('click',()=>{
+          if (personalWorkflow?.rowId !== command.id) return;
+          personalWorkflow = null;
+          filterCommands();
+          commandSearch.focus();
+        });
+        item.append(back);
+      }
+      resultRows.push({id:command.id,result,stop,inspect,recover,acknowledge,signature:'',list,listPage:null,apply,back});commandButtons.push(apply);groups.get(group).append(item);
     }
+    groups.get('命令库')?.after(nextPersonalPage);
     filterCommands();
   }
   function filterCommands() {
     const query=(commandSearch?.value || '').trim().toLocaleLowerCase();
-    for(const item of commandItems?.querySelectorAll('.model-command-item') || []) {
-      const detail=['revit_save_command','revit_get_command','revit_run_command'].includes(item.dataset.commandId);
-      const selected=rows.find(row=>row.id===item.dataset.commandId);
-      const relevant=!detail||!selected?.parameters.hidden||snapshot?.commands?.some(command=>command.commandId===item.dataset.commandId);
-      const favoriteMatch=commandFavorites.has(item.dataset.commandId)||[...item.querySelectorAll('.model-command-stored-version')].some(card=>commandFavorites.has(card.dataset.favoriteKey));
-      item.hidden=(commandScope==='personal'&&item.dataset.personalGroup!=='true')||(commandScope==='favorites'&&!favoriteMatch)||!query&&!relevant || query !== '' && !item.dataset.search.includes(query) && !Number.isFinite(modelToolMatchScore({name:item.dataset.toolName,label:item.dataset.toolLabel},query));
+    for (const row of resultRows) if (row.back) row.back.hidden = personalWorkflow?.rowId !== row.id;
+    let matches = 0;
+    for (const item of commandItems.querySelectorAll('.model-command-item')) {
+      const id = item.dataset.commandId;
+      const form = rows.find(row=>row.id===id);
+      const command = snapshot?.commands?.find(value=>value.commandId===id);
+      const detail = ['revit_save_command','revit_get_command','revit_run_command'].includes(id);
+      const relevant = !detail || Boolean(form && !form.parameters.hidden) || Boolean(command);
+      const inScope = commandScope === 'all' || (commandScope === 'personal'
+        ? item.dataset.personalGroup === 'true' : commandFavorites.has(id));
+      const systemMatch = inScope && (query
+        ? item.dataset.search.includes(query) || Number.isFinite(modelToolMatchScore({name:item.dataset.toolName,label:item.dataset.toolLabel},query))
+        : relevant);
+      let cardMatch = false;
+      for (const card of item.querySelectorAll('.model-command-stored-version')) {
+        card.hidden = (commandScope === 'favorites' && !commandFavorites.has(card.dataset.favoriteKey)) || !card.dataset.search.includes(query);
+        if (!card.hidden) cardMatch = true;
+      }
+      const inWorkflow = personalWorkflow?.rowId === id;
+      const hasOriginalReceipt = id === 'revit_run_command' && command?.canInspectReceipt === true;
+      const hasListStatus = id === 'revit_list_commands' && command && command.status !== 'completed';
+      const matched = systemMatch || cardMatch;
+      if (matched) matches++;
+      item.hidden = !matched && !inWorkflow && !hasOriginalReceipt && !hasListStatus;
     }
-    for(const item of commandItems?.querySelectorAll('.model-command-stored-version') || [])item.hidden=(commandScope==='favorites'&&!commandFavorites.has(item.dataset.favoriteKey))||query!==''&&!item.dataset.search.includes(query);
-    for(const group of commandItems?.querySelectorAll('.model-command-group') || []) group.hidden=[...group.querySelectorAll('.model-command-item')].every(item=>item.hidden);
+    for(const group of commandItems.querySelectorAll('.model-command-group')) group.hidden=[...group.querySelectorAll('.model-command-item')].every(item=>item.hidden);
+    const canReadList = commandSupported('revit_list_commands');
+    nextPersonalPage.hidden = !canReadList || !personalPage?.hasMore;
+    nextPersonalPage.disabled = !commandActionAvailable('revit_list_commands');
     const empty=get('model-command-empty');
-    if(empty){
-      const none=(Boolean(query)||commandScope!=='all')&&[...commandItems.querySelectorAll('.model-command-item')].every(item=>item.hidden);
-      empty.hidden=!none;
-      const loaded=snapshot?.commands?.find(command=>command.commandId==='revit_list_commands'&&command.status==='completed');
-      get('model-command-empty-text').textContent=commandScope==='favorites'?'当前没有匹配的会话收藏；收藏不代表已验证或允许执行。':loaded?'当前工具和已读取的个人命令页没有匹配项；未读取的后续页不在搜索范围。':'没有匹配项；个人命令尚未读取，先读取列表再搜索名称。';
-      get('model-command-load-personal').disabled=!commandActionAvailable('revit_list_commands');
-    }
+    empty.hidden = !(query || commandScope !== 'all') || matches > 0 || Boolean(personalWorkflow);
+    get('model-command-empty-text').textContent = commandScope === 'favorites' ? '当前没有匹配的会话收藏。'
+      : !canReadList ? '没有匹配的命令。'
+      : !personalPage ? '没有匹配项，个人命令尚未读取。'
+      : personalPage.hasMore ? '已读取的命令没有匹配项。可加载下一页继续查找。'
+      : '已读取的命令没有匹配项。';
+    const load = get('model-command-load-personal');
+    load.hidden = !canReadList || Boolean(personalPage);
+    load.disabled = !commandActionAvailable('revit_list_commands');
   }
   function renderCommandCreation(value=snapshot){
     createArea.hidden=value?.confirmedWrite===true;
@@ -685,8 +747,46 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     createCommandKind.disabled=Boolean(disabled);createCommand.disabled=Boolean(disabled||!['csharp','sequence'].includes(kind));
     createCommandHelp.textContent=kind==='sequence'?'串联现有只读查询，生成可复用的步骤命令。':kind==='csharp'?'用日常语言描述需求，生成可复用的 C# 命令。':'该类型暂未接入，请选择 C# 命令或只读步骤命令。';
   }
+  function commandSupported(id) {
+    return commandCatalog.some(item=>item.id===id && item.enabled!==false && item.manualExecution!==false);
+  }
   function commandActionAvailable(id) {
-    return active && snapshot?.directCommandsAvailable && (snapshot.commandsReady ?? snapshot.ready) && !snapshot.blocked && !snapshot.busy && !snapshot.readOnly && snapshot.persistence?.status !== 'failed' && commandCatalog.some(item=>item.id===id && item.enabled!==false&&item.manualExecution!==false);
+    return active && snapshot?.directCommandsAvailable && (snapshot.commandsReady ?? snapshot.ready) && !snapshot.blocked && !snapshot.busy && !snapshot.modelPermissionPending && !snapshot.readOnly && snapshot.persistence?.status !== 'failed' && commandSupported(id);
+  }
+  function requestPersonalPage(next = false) {
+    if (!commandActionAvailable('revit_list_commands') || (next && !personalPage?.hasMore)) return;
+    const parameters = next ? {offset:personalPage.nextOffset,limit:personalPage.limit} : {offset:0,limit:100};
+    window.dispatchEvent(new CustomEvent('buildx-model-command',{detail:{commandId:'revit_list_commands',parameters}}));
+  }
+  function resetPersonalRunForm() {
+    const target = rows.find(row=>row.id==='revit_run_command');
+    if (!target) return;
+    for (const key of ['command_id','revision','parameters']) {
+      if (target.inputs[key]) target.inputs[key].value = '';
+    }
+    target.fields.find(field=>typeof field.setDefinition==='function')?.setDefinition(null);
+    if (target.inputs.mode) {
+      target.inputs.mode.value = target.inputs.mode.dataset.defaultValue || 'rollback';
+      target.inputs.mode.dispatchEvent(new Event('change'));
+    }
+    if (target.inputs.$confirmation) target.inputs.$confirmation.checked = false;
+    target.parameters.hidden = true;
+    target.apply.textContent = '展开';
+    target.apply.setAttribute('aria-expanded','false');
+    const error = target.parameters.querySelectorAll('.model-command-error')[0];
+    error.hidden = true;
+    error.textContent = '';
+  }
+  function viewPersonalVersion(identity) {
+    if (!commandActionAvailable('revit_get_command')) return;
+    resetPersonalRunForm();
+    const detail = snapshot.commands?.find(command=>command.commandId==='revit_get_command');
+    personalWorkflow = {rowId:'revit_get_command',identity,previousExecutionId:detail?.executionId};
+    window.dispatchEvent(new CustomEvent('buildx-model-command',{detail:{commandId:'revit_get_command',parameters:identity}}));
+    filterCommands();
+    const row = rows.find(value=>value.id==='revit_get_command');
+    row?.item.scrollIntoView({block:'nearest'});
+    row?.item.focus();
   }
   function renderDraftOrigin() {
     if(!draftOriginStatus || !draftOriginClear)return;
@@ -704,37 +804,81 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     renderDraftOrigin();chatDraftNotice.textContent='';chatDraftNotice.hidden=true;commandSearch.value='';target.parameters.hidden=false;filterCommands();switchView('commands');
     target.apply.textContent='收起';target.apply.setAttribute('aria-expanded','true');target.item.scrollIntoView({block:'nearest'});target.inputs.code.focus();
   }
-  function renderStoredVersions(row,command) {
-    if(command.status!=='completed' || !['revit_list_commands','revit_get_command'].includes(row.id)) return false;
-    const payload=command.result?.data?.value ?? command.result?.data;
-    if(row.id==='revit_list_commands') {
-      if(!payload || !Array.isArray(payload.commands) || !Number.isSafeInteger(payload.total) || !Number.isSafeInteger(payload.offset) || !Number.isSafeInteger(payload.limit) || typeof payload.has_more!=='boolean') return false;
-      const commandItem=rows.find(item=>item.id===row.id)?.item;
-      if(commandItem)commandItem.dataset.search=[commandItem.dataset.baseSearch,...payload.commands.map(record=>[record?.name,record?.description,record?.command_id,'个人'].filter(value=>typeof value==='string').join(' '))].join(' ').toLocaleLowerCase();
-      row.result.append(el('p','model-command-result-summary','已保存版本：本页 '+payload.commands.length+' 项，共 '+payload.total+' 项'+(payload.has_more?'；还有后续页，可在列表参数中调整起始位置。':'。')));
-      for(const record of payload.commands) {
-        const identity=storedCommandIdentity(record); if(!identity) {row.result.append(el('p','model-command-result-error','某项版本身份无效，无法选择。'));continue;}
-        const item=el('div','model-command-stored-version');
-        const favoriteKey='personal:'+identity.command_id+':'+identity.revision;item.dataset.favoriteKey=favoriteKey;
-        const favorite=button('model-personal-favorite',commandFavorites.has(favoriteKey)?'取消会话收藏':'会话收藏');favorite.dataset.favoriteKey=favoriteKey;favorite.setAttribute('aria-pressed',String(commandFavorites.has(favoriteKey)));
-        favorite.addEventListener('click',()=>{if(!commandActionAvailable('revit_get_command')||snapshot?.commands?.find(value=>value.commandId===row.id)!==command)return;if(commandFavorites.has(favoriteKey))commandFavorites.delete(favoriteKey);else commandFavorites.add(favoriteKey);favorite.textContent=commandFavorites.has(favoriteKey)?'取消会话收藏':'会话收藏';favorite.setAttribute('aria-pressed',String(commandFavorites.has(favoriteKey)));filterCommands();});item.append(favorite);
-        item.dataset.search=[record.name,record.description,identity.command_id,'个人'].filter(value=>typeof value==='string').join(' ').toLocaleLowerCase();
-        item.append(commandName(typeof record.name==='string'?record.name:identity.command_id,'personal'));
-        item.append(el('p','model-command-effect',record.schema_version===3?'只读步骤命令（执行前仍核对当前模型）':'可能修改模型或文件；查看准确版本后逐次确认，不由名称推断只读。'));
-        if(typeof record.description==='string')item.append(el('p','',record.description));
-        const version=el('details','model-command-version-detail');version.append(el('summary','','版本信息'),el('p','',identity.command_id+' · '+identity.revision));item.append(version);
-        const evidence=record.verification?.status==='source_execution_succeeded'?'有历史执行记录（不代表当前模型已验证）':record.verification?.status==='unverified'?'未记录成功执行证据':'执行证据状态未知';
-        item.append(el('p','',evidence));
-        const inspect=button('model-command-version-view','查看命令');
-        inspect.addEventListener('click',()=>{
-          if(!commandActionAvailable('revit_get_command') || snapshot?.commands?.find(value=>value.commandId===row.id)!==command)return;
-          commandSearch.value='';filterCommands();rows.find(value=>value.id==='revit_get_command')?.item.scrollIntoView({block:'nearest'});
-          window.dispatchEvent(new CustomEvent('buildx-model-command',{detail:{commandId:'revit_get_command',parameters:identity}}));
-        });
-        item.append(inspect);row.result.append(item);
+  function acceptPersonalPage(command) {
+    if (command?.status !== 'completed' || command.conversationId !== snapshot.commandConversationId) return false;
+    const payload = command.result?.data?.value ?? command.result?.data;
+    if (!payload || !Array.isArray(payload.commands) || !Number.isSafeInteger(payload.total) || payload.total < 0 ||
+        !Number.isSafeInteger(payload.offset) || payload.offset < 0 || !Number.isSafeInteger(payload.limit) ||
+        payload.limit < 1 || payload.limit > 100 || payload.commands.length > payload.limit ||
+        !Number.isSafeInteger(payload.offset + payload.limit) || typeof payload.has_more !== 'boolean') return false;
+    const signature = JSON.stringify([command.executionId,payload]);
+    if (signature === personalPageSignature) return true;
+    personalPageSignature = signature;
+    if (payload.offset === 0) personalVersions.clear();
+    let invalid = payload.offset === 0 ? 0 : personalPage?.invalid ?? 0;
+    for (const record of payload.commands) {
+      const identity = storedCommandIdentity(record);
+      if (!identity) {
+        invalid++;
+        continue;
       }
-      return true;
+      const key = 'personal:'+identity.command_id+':'+identity.revision;
+      personalVersions.set(key,{record,identity});
     }
+    personalPage = {total:payload.total,limit:payload.limit,nextOffset:payload.offset+payload.limit,hasMore:payload.has_more,invalid};
+    return true;
+  }
+  function renderPersonalList(row) {
+    const page = personalPage;
+    row.apply.textContent = page ? '刷新列表' : '读取列表';
+    row.apply.setAttribute('aria-label',page ? '刷新个人命令列表' : '读取个人命令列表');
+    if (row.listPage !== page) {
+      row.listPage = page;
+      row.list.replaceChildren();
+      if (page) {
+        row.list.append(el('p','model-command-result-summary','已保存版本：已读取 '+personalVersions.size+' 项，共 '+page.total+' 项'+
+          (page.hasMore?'。还有后续页，搜索仅覆盖已读取的版本。':'。')));
+        if (page.invalid) row.list.append(el('p','model-command-result-error','某项版本身份无效，无法选择。'));
+        // The repository returns each page newest first. Map preserves that
+        // order across pages and keeps each exact revision only once.
+        for (const [key,{record,identity}] of personalVersions) {
+          const item = el('div','model-command-stored-version');
+          item.dataset.favoriteKey = key;
+          item.dataset.search = [record.name,record.description,identity.command_id,'个人'].filter(value=>typeof value==='string').join(' ').toLocaleLowerCase();
+          item.append(commandName(typeof record.name==='string'?record.name:identity.command_id,'personal'));
+          item.append(el('p','model-command-effect',record.schema_version===3?'只读步骤命令（执行前仍核对当前模型）':'可能修改模型或文件，请在执行前核对准确版本。'));
+          if (typeof record.description==='string') item.append(el('p','',record.description));
+          const version = el('details','model-command-version-detail');
+          version.append(el('summary','','版本信息'),el('p','',identity.command_id+' · '+identity.revision));
+          item.append(version);
+          const evidence = record.verification?.status==='source_execution_succeeded'?'有历史执行记录（不代表当前模型已验证）':record.verification?.status==='unverified'?'未记录成功执行证据':'执行证据状态未知';
+          item.append(el('p','',evidence));
+          const actions = el('div','model-command-version-actions');
+          const inspect = button('model-command-version-view','查看命令');
+          inspect.addEventListener('click',()=>{
+            if (resultRows.includes(row) && row.list.contains(item)) viewPersonalVersion(identity);
+          });
+          const favorite = button('model-personal-favorite',commandFavorites.has(key)?'取消会话收藏':'会话收藏');
+          favorite.setAttribute('aria-pressed',String(commandFavorites.has(key)));
+          favorite.addEventListener('click',()=>{
+            if (!active || !resultRows.includes(row) || !row.list.contains(item)) return;
+            if (commandFavorites.has(key)) commandFavorites.delete(key);
+            else commandFavorites.add(key);
+            favorite.textContent = commandFavorites.has(key) ? '取消会话收藏' : '会话收藏';
+            favorite.setAttribute('aria-pressed',String(commandFavorites.has(key)));
+            filterCommands();
+          });
+          actions.append(inspect,favorite);
+          item.append(actions);
+          row.list.append(item);
+        }
+      }
+    }
+    for (const inspect of row.list.querySelectorAll('.model-command-version-view')) inspect.disabled = !commandActionAvailable('revit_get_command');
+  }
+  function renderStoredDetail(row,command) {
+    if (row.id !== 'revit_get_command' || command.status !== 'completed') return false;
+    const payload = command.result?.data?.value ?? command.result?.data;
     const identity=storedCommandIdentity(payload);if(!identity)return false;
     row.result.append(commandName(typeof payload.name==='string'?payload.name:identity.command_id,'personal','model-personal-name'));
     if(typeof payload.description==='string')row.result.append(el('p','model-personal-description',payload.description));
@@ -744,7 +888,14 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   function renderCommandResults() {
     for (const row of resultRows) {
       const command = snapshot?.commands?.find(item => item.commandId === row.id), presentation = modelCommandPresentation(command);
-      const signature = JSON.stringify(command || null);
+      const personalDetail = row.id === 'revit_get_command' && personalWorkflow?.rowId === row.id ? personalWorkflow : null;
+      const previousDetail = personalDetail && command?.status === 'completed' &&
+        command.executionId === personalDetail.previousExecutionId;
+      const signature = JSON.stringify([command ?? null, Boolean(previousDetail), row.id === 'revit_get_command' && commandSupported('revit_run_command')]);
+      if (row.list) {
+        row.validPage = acceptPersonalPage(command);
+        renderPersonalList(row);
+      }
       row.stop.hidden = !command || typeof command.executionId !== 'string' || !['running','stopping'].includes(command.status);
       row.stop.disabled = command?.status === 'stopping' || command?.cancelRequested === true || snapshot?.commandStopPending === true;
       row.stop.textContent = command?.status === 'stopping' || command?.cancelRequested ? '停止中…' : '停止';
@@ -756,10 +907,14 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       row.acknowledge.disabled=!snapshot?.directCommandsAvailable || !(snapshot.commandsReady ?? snapshot.ready) && command?.receiptCheck?.cleanupPending!==true || snapshot.blocked || snapshot.busy || snapshot.readOnly || snapshot.persistence?.status==='failed' || snapshot.commandCheckPending || checking;
       row.recover.hidden=command?.canInspectCabinetJob!==true;
       row.recover.disabled=!snapshot?.directCommandsAvailable || !(snapshot.commandsReady ?? snapshot.ready) && command?.receiptCheck?.cleanupPending!==true || snapshot.blocked || snapshot.busy || snapshot.readOnly || snapshot.persistence?.status==='failed' || snapshot.commandCheckPending || command?.cabinetRecoveryInspection?.checking===true;
+      if (row.choose) row.choose.disabled = !commandActionAvailable('revit_run_command');
       if (signature === row.signature) continue;
-      row.signature = signature; row.result.replaceChildren(); row.result.hidden = !presentation;
-      if(row.id==='revit_list_commands'){const item=rows.find(value=>value.id===row.id)?.item;if(item)item.dataset.search=item.dataset.baseSearch;}
+      row.signature = signature; row.choose = null; row.result.replaceChildren(); row.result.hidden = !presentation;
       if (!presentation) continue;
+      if (previousDetail) {
+        row.result.append(el('p','model-command-result-error','未取得本次查看结果。'));
+        continue;
+      }
       row.result.dataset.status = command.status;
       const heading = el('div','model-command-result-heading'); heading.append(el('span','',presentation.status));
       if (presentation.document && row.id !== 'document') heading.append(el('small','',presentation.document));
@@ -779,7 +934,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
         if(check.evidence){const facts=check.evidence;for(const [label,value] of [['作业',facts.jobHandle],['文件',facts.savePath],['状态',facts.outcome],['文件复核',facts.savedVerified?'已验证':null]])if(typeof value==='string'&&value)row.result.append(el('p','model-command-receipt-check',label+'：'+value));}
       }
       if(command.cabinetRecoveryInspection){const result=command.cabinetRecoveryInspection;if(result.checking)row.result.append(el('p','model-command-receipt-check','正在只读查看原作业…'));else if(result.job)row.result.append(el('pre','model-command-diagnostic-text',JSON.stringify(result.job,null,2)));else if(result.message)row.result.append(el('p','model-command-receipt-check',result.message));}
-      const renderedVersions=renderStoredVersions(row,command);
+      const renderedVersions=(row.list && row.validPage) || renderStoredDetail(row,command);
       if (!renderedVersions && presentation.rows.length) {
         const table = el('table','model-command-table'), head = el('thead'), body = el('tbody'), titles = el('tr');
         for (const title of presentation.columns) titles.append(el('th','',title)); head.append(titles);
@@ -800,20 +955,32 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       if (!renderedVersions && presentation.summary) row.result.append(el('p','model-command-result-summary',presentation.summary));
       if(row.id==='revit_get_command' && command.status==='completed') {
         const record=command.result?.data?.value ?? command.result?.data, identity=storedCommandIdentity(record);
-        if(identity) {
-          row.result.append(el('p','model-command-result-summary','已读取上述准确版本。请核对源码、参数和当前模型；历史执行记录不代表当前适用。填入运行表单会清空原参数、恢复默认回滚并取消原确认。'));
+        const matchesReview = identity && (!personalDetail ||
+          personalDetail.identity.command_id === identity.command_id && personalDetail.identity.revision === identity.revision);
+        if(matchesReview) {
+          row.result.append(el('p','model-command-result-summary','已读取准确版本。历史执行记录不代表当前适用。'));
+        }
+        if(matchesReview && commandSupported('revit_run_command')) {
           const choose=button('model-command-version-choose','使用这个命令');
+          row.choose = choose;
+          choose.disabled = !commandActionAvailable('revit_run_command');
           choose.addEventListener('click',()=>{
-            if(!commandActionAvailable('revit_run_command') || snapshot?.commands?.find(value=>value.commandId===row.id)!==command)return;
+            if(!commandActionAvailable('revit_run_command') || row.choose !== choose || !resultRows.includes(row) ||
+                snapshot?.commands?.find(value=>value.commandId===row.id)!==command)return;
             const target=rows.find(value=>value.id==='revit_run_command');
             if(!target?.inputs.command_id || !target.inputs.revision)return;
+            resetPersonalRunForm();
             target.inputs.command_id.value=identity.command_id;target.inputs.revision.value=identity.revision;
-            if(target.inputs.parameters)target.inputs.parameters.value='';
             const personalFields=target.fields.find(field=>typeof field.setDefinition==='function');personalFields?.setDefinition(record);
             personalFields?.element.querySelectorAll('.personal-command-selected')[0]?.append(commandBadge('personal'));
-            if(target.inputs.mode)target.inputs.mode.value=target.inputs.mode.dataset.defaultValue || 'rollback';
-            if(target.inputs.$confirmation)target.inputs.$confirmation.checked=false;
-            commandSearch.value='';target.parameters.hidden=false;filterCommands();target.apply.textContent='收起';target.apply.setAttribute('aria-expanded','true');target.item.scrollIntoView({block:'nearest'});target.inputs.parameters?.focus();
+            personalWorkflow = {rowId:'revit_run_command'};
+            target.parameters.hidden = false;
+            target.apply.textContent = '收起';
+            target.apply.setAttribute('aria-expanded','true');
+            filterCommands();
+            target.item.scrollIntoView({block:'nearest'});
+            target.item.focus();
+            target.inputs.parameters?.focus();
           });
           row.result.append(choose);
         }
@@ -1040,10 +1207,9 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     const empty=el('section','model-command-empty');empty.id='model-command-empty';empty.hidden=true;empty.setAttribute('role','status');
     const emptyText=el('p');emptyText.id='model-command-empty-text';
     const loadPersonal=button('model-command-load-personal','读取个人命令列表');loadPersonal.id='model-command-load-personal';
-    loadPersonal.addEventListener('click',()=>{
-      if(!commandActionAvailable('revit_list_commands'))return;
-      window.dispatchEvent(new CustomEvent('buildx-model-command',{detail:{commandId:'revit_list_commands',parameters:{offset:0,limit:100}}}));
-    });
+    loadPersonal.addEventListener('click',()=>requestPersonalPage());
+    nextPersonalPage = button('model-command-next-page','加载下一页个人命令');
+    nextPersonalPage.addEventListener('click',()=>requestPersonalPage(true));
     empty.append(emptyText,loadPersonal);commandList.append(empty);buildCommandRows(commandCatalog);
     const frame = el('div','model-input-frame'); prompt.before(frame); frame.append(prompt);
     attachmentList=el('div','model-pending-attachments'); attachmentList.hidden=true; attachmentList.setAttribute('aria-label','待发送附件'); frame.before(attachmentList);
@@ -1143,6 +1309,17 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   function updateModel(value) {
     const previous = snapshot;
     snapshot = value;
+    const accountChanged = previous && (previous.accountEpoch !== value?.accountEpoch || previous.commandIdentityKey !== value?.commandIdentityKey);
+    const personalOwnerChanged = commandFormOwner(previous) !== commandFormOwner(value);
+    const unverifiedAccount = value?.account?.required === true && (value.account.signedIn !== true || value.account.retainedSession === true);
+    if (accountChanged) commandFavorites.clear();
+    if (personalOwnerChanged || unverifiedAccount || !value?.enabled) {
+      personalVersions.clear();
+      personalPage = null;
+      personalPageSignature = '';
+      personalWorkflow = null;
+      if (previous) resetPersonalRunForm();
+    }
     if (!value?.enabled) {
       if (mounted && active) restoreLayout();
       return;
@@ -1220,7 +1397,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       const incoming=modelCommandCatalog(value.commandCatalog),signature=JSON.stringify(incoming);
       if(signature !== commandCatalogSignature){commandCatalogSignature=signature;commandCatalog=incoming;buildCommandRows(commandCatalog);}
     }
-    if(previous&&(previous.accountEpoch!==value.accountEpoch||previous.commandIdentityKey!==value.commandIdentityKey)){commandFavorites.clear();for(const favorite of commandList.querySelectorAll('.model-command-favorite')){favorite.textContent='会话收藏';favorite.setAttribute('aria-pressed','false');}}
+    if(accountChanged)for(const favorite of commandList.querySelectorAll('.model-command-favorite')){favorite.textContent='会话收藏';favorite.setAttribute('aria-pressed','false');}
     if (previous && (previous.accountEpoch !== value.accountEpoch || previous.contextEpoch !== value.contextEpoch)) {
       closePicker();
       if (previous.accountEpoch !== value.accountEpoch) {

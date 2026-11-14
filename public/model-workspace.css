@@ -71,6 +71,45 @@ body:not(.model-workspace) .model-input-highlight{display:none}
 .model-command-parameters input[type=checkbox]{width:14px;height:14px;flex:none}
 .model-command-item[data-enabled=false]{opacity:.65}
 .model-command-list button:disabled{cursor:not-allowed}
+.model-command-scopes,
+.model-command-version-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.model-command-version-actions {
+  align-items:baseline;
+}
+.model-command-scope,
+.model-command-favorite,
+.model-personal-favorite,
+.model-command-next-page,
+.model-command-load-personal,
+.model-command-back {
+  width:max-content;
+  max-width:100%;
+  border:1px solid #d5dfcd;
+  border-radius:5px;
+  background:#fff;
+  color:var(--accent);
+  padding:5px 9px;
+  font:11px/1.5 "Microsoft YaHei UI",sans-serif;
+}
+.model-command-scope[aria-pressed=true],
+.model-command-favorite[aria-pressed=true],
+.model-personal-favorite[aria-pressed=true] {
+  background:#eaf3e8;
+  border-color:#a6bca2;
+}
+.model-command-next-page,
+.model-command-back {
+  margin:9px 0;
+}
+.model-command-empty {
+  padding:10px 0;
+  color:var(--muted);
+  font-size:11px;
+}
 @media(max-width:420px){.model-account-overlay{padding:10px}.model-account-dialog{max-height:calc(100dvh - 20px);border-radius:10px}.model-account-heading{padding:14px}.model-command-parameters{grid-template-columns:minmax(0,1fr)}}
 .model-workspace[data-model-view=knowledge] footer,.model-workspace[data-model-view=skills] footer,.model-workspace[data-model-view=knowledge] #transcript,.model-workspace[data-model-view=skills] #transcript,.model-workspace[data-model-view=knowledge] #history-note,.model-workspace[data-model-view=skills] #history-note{display:none}
 .model-extra-panel{width:100%;max-width:760px;margin:0 auto;line-height:1.6}.model-extra-panel input{display:block;width:100%;margin:8px 0;padding:8px;border:1px solid #d5dfcd;border-radius:5px}.model-extra-panel button{margin:4px 6px 4px 0}.model-extra-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}.model-tabs{gap:16px;overflow-x:auto}.model-tab{white-space:nowrap}
