@@ -1260,7 +1260,7 @@ function applyConversation(data = {}, commandEvidence = false) {
     }
     reconcileSteerReceipts(data.session);
     canonical = true; lastSession = data.session; messages = sessionMessages(data.session);
-    reconcileUncertainTurn(data.session.conversation);
+    reconcileTurnReceipt(data.session.conversation);
     if(previousSkillsConversation&&skillsConversation()!==previousSkillsConversation)clearSkills('对话已切换，请重新读取技能。');
     if (priorCommandConversation !== commandConversationId()) { clearCommands(); clearTerminal(); }
     if (!changedConversation && contextEpoch !== null && data.session.contextEpoch !== undefined && contextEpoch !== data.session.contextEpoch) {
@@ -1619,10 +1619,12 @@ function rememberUncertainTurn(request){
   if(!request?.posted||request.accountEpoch!==accountEpoch||!request.conversationId||turnReceipt(lastSession?.conversation,request))return;
   uncertainTurns.set(request.conversationId,request);
 }
-function reconcileUncertainTurn(conversation){
-  const request=uncertainTurns.get(conversation?.id),receipt=turnReceipt(conversation,request);
+function reconcileTurnReceipt(conversation){
+  const pending=pendingRequests.get('turn'),uncertain=uncertainTurns.get(conversation?.id);
+  const request=uncertain||(pending?.posted?pending:null),receipt=turnReceipt(conversation,request);
   if(!receipt)return;
   uncertainTurns.delete(conversation.id);
+  if(request===pending)finishRequest(request);
   if(receipt==='started')consumeSubmittedInputs(request);
   if(transientNotice==='本轮发送结果尚未核实，请等待原对话回执。')notice(receipt==='not_sent'?'本轮未发送，已保留输入。':'已核实 Codex 收到本轮请求。');
 }

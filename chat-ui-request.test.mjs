@@ -621,6 +621,14 @@ test('a lost send response blocks another submission until the original turn ID 
   ui.input('确认后再问');await ui.submit();assert.equal(ui.requests.length,2);assert.notEqual(ui.requests[1].body.requestId,sent.body.requestId);
   await ui.respond(ui.requests[1]);ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
 });
+test('an exact native acknowledgement via SSE settles a still pending HTTP submission',async()=>{
+  const ui=await historySetup();ui.input('已有启动回执');await ui.submit();const sent=ui.requests[0];
+  const snapshot=historySession('chat-a');snapshot.conversation.turnBinding={requestId:sent.body.requestId,turnId:'native-turn',status:'completed'};
+  ui.emit('conversation',{busy:false,session:snapshot});assert.equal(ui.get('prompt').value,'');
+  ui.input('下一轮草稿');await ui.reject(sent,'旧 HTTP 响应中断');
+  assert.equal(ui.get('prompt').value,'下一轮草稿');assert.equal(ui.get('send').disabled,false);
+  ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
+});
 test('a direct command never submits the chat draft while an ordinary turn explicitly clears its submitted draft',async()=>{
   for(const command of [false,true]){
     const ui=await historySetup({directCommandsAvailable:true});ui.input('正在编辑的聊天草稿');ui.get('include-selection').checked=true;
