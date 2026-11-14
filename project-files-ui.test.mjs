@@ -17,6 +17,49 @@ const css=(root,cls)=>walk(root).find(n=>n.className.split(' ').includes(cls));
 const all=(root,cls)=>walk(root).filter(n=>n.className.split(' ').includes(cls));
 const flush=async()=>{for(let i=0;i<4;i++)await new Promise(resolve=>setImmediate(resolve));};
 
+test('a first library load can be retried in the open panel',async()=>{
+  const root=new Element('section');let reads=0;
+  const ui=mountProjectFiles({root,document:doc,request:async()=>{
+    if(++reads===1)throw new Error('资料库连接暂时不可用。');
+    return {roots:[{id:'reference',name:'说明.txt',path:'D:\\说明.txt',kind:'file',source:'user'}]};
+  }});
+  await ui.refresh();
+  assert.match(css(root,'project-files-status').textContent,/连接暂时不可用/);
+  const retry=css(root,'project-files-retry');
+  assert.ok(retry);
+  retry.fire('click');retry.fire('click');await flush();
+  assert.equal(reads,2);
+  assert.ok(css(root,'project-files-file'));
+  assert.equal(css(root,'project-files-retry'),undefined);
+});
+
+test('a replaced library address requires explicit revalidation before attachment',async()=>{
+  const root=new Element('section'),calls=[];
+  let state='available',attached=0;
+  const request=async(action,args)=>{
+    calls.push([action,args]);
+    if(action==='list-roots')return {roots:[{id:'p',name:'说明.txt',path:'D:\\说明.txt',kind:'file',source:'user',status:state}]};
+    if(action==='add-root'){state='revalidated';return {};}
+    if(action==='read-attachment'){
+      if(state==='revalidated')return {name:'说明.txt'};
+      state='needs-confirmation';
+      throw Object.assign(new Error('资料地址对应的文件已变化，请重新选择后再试。'),{code:'ROOT_CHANGED'});
+    }
+    throw new Error('unexpected action');
+  };
+  const ui=mountProjectFiles({root,document:doc,request,onBeginAttach:async()=>({ok:true,binding:'owned'}),onAddToContext:async()=>{attached++;return {ok:true};}});
+  await ui.refresh();
+  css(root,'project-files-add-context').fire('click');await flush();
+  assert.match(css(root,'project-files-status').textContent,/已变化/);
+  assert.equal(css(root,'project-files-add-context'),undefined);
+  assert.equal(attached,0);
+  assert.equal(calls.some(([action])=>action==='add-root'),false);
+  css(root,'project-files-enable').fire('click');await flush();
+  assert.deepEqual(calls.find(([action])=>action==='add-root')[1],{path:'D:\\说明.txt',kind:'file'});
+  css(root,'project-files-add-context').fire('click');await flush();
+  assert.equal(attached,1);
+});
+
 test('directory authorization is a separate explicit intent, not implied by adding or browsing references',async()=>{
   const root=new Element('section'),calls=[],selected=[];
   const request=async(action,args)=>{
