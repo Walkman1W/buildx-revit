@@ -206,6 +206,7 @@ namespace RevitLocalCodex
             internal readonly DateTime RaiseReturnedUtc;
             internal readonly long RaiseReturnedTicks;
             internal readonly string RaiseResult;
+            internal bool SettledBeforeCallback;
             // The bounded fast-idle interval belongs to this accepted event
             // and begins only when Revit actually enters an eligible UI idle.
             internal long? UiIdleStartedTicks;
@@ -322,7 +323,7 @@ namespace RevitLocalCodex
             {
                 if (disposed && ready) throw new InvalidOperationException("Workbench host is stopping.");
                 WriteAtomic(Path.Combine(queue, "host.json"), new { sessionId = session, pid = Process.GetCurrentProcess().Id,
-                    startedUtc = hostStartedUtc.ToString("o"), version = HostVersion, dispatcher = "ExternalEvent", atomicReadSnapshot = true,
+                    startedUtc = hostStartedUtc.ToString("o"), version = HostVersion, dispatcher = "ExternalEvent", atomicReadSnapshot = true, queueSettlementVersion = 1,
                     projectBindingPreviewVersion = 1, nativeModelQueriesVersion = 1, nativeModelQueryOperations = new[] { "health", "get_document_info", "list_views", "get_element_parameters", "get_elements_by_type", "get_element_geometry", "get_model_preparation", "get_pipe_network", "preview_project_parameter_binding", "get_revision_sequences", "get_schedule_data", "preview_dwg_export", "preview_nwc_export" }.Concat(AecPilotQueries.Operations).ToArray(),
                     nativeParameterQueriesVersion = 1, nativeParameterQueryOperations = new[] { "get_type_parameters", "get_parameter_value", "get_type_parameter_impact" },
                     nativeParameterWritesVersion = 1, nativeParameterWriteOperations = new[] { "set_parameter_value" },
@@ -373,7 +374,7 @@ namespace RevitLocalCodex
                     observation.UiIdleLastEnteredTicks = enteredTicks;
                 }
             }
-            PollQueue(null);
+            PollQueueCore();
             lock (schedulingGate)
             {
                 if (!disposed && !busy && eventPending && pendingObservation != null)
@@ -403,9 +404,22 @@ namespace RevitLocalCodex
             return Assembly.LoadFrom(file);
         }
 
-        // Timer threads only examine local queue paths and signal the external event.
-        // They never inspect UIApplication, documents, views, elements or transactions.
+        // The timer can settle still-unclaimed requests without a Revit callback.
+        // Neither polling nor settlement uses the model or the Revit UI context.
         private void PollQueue(object state)
+        {
+            if (Monitor.TryEnter(queueSweepGate))
+            {
+                try { SettleUnstartedRequests(); }
+                catch (Exception error) { RecordSchedulerFailure(error.GetType().Name + ": " + error.Message); }
+                finally { Monitor.Exit(queueSweepGate); }
+            }
+            PollQueueCore();
+        }
+
+        private readonly object queueSweepGate = new object();
+
+        private void PollQueueCore()
         {
             if (!Monitor.TryEnter(schedulingGate)) return;
             try
@@ -435,6 +449,56 @@ namespace RevitLocalCodex
                 RecordSchedulerFailure(error.GetType().Name + ": " + error.Message);
             }
             finally { Monitor.Exit(schedulingGate); }
+        }
+
+        private void SettleUnstartedRequests()
+        {
+            var serializer = new JavaScriptSerializer { MaxJsonLength = 128 * 1024, RecursionLimit = 40 };
+            foreach (string file in Directory.EnumerateFiles(Path.Combine(queue, "inbox"), "*.json").Where(IsQueuedRequest))
+            {
+                string id = Path.GetFileNameWithoutExtension(file);
+                DateTime deadline;
+                try
+                {
+                    if (new FileInfo(file).Length > 128 * 1024) continue;
+                    var request = serializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(file));
+                    if (request == null || Text(request, "id") != id || Text(request, "targetSession") != session || !TryReadDeadline(request, out deadline)) continue;
+                }
+                catch (ArgumentException) { continue; }
+                catch (InvalidOperationException) { continue; }
+                catch (IOException) { continue; }
+                catch (UnauthorizedAccessException) { continue; }
+
+                string reason = QueueRejection(id, deadline, serializer);
+                if (reason == null) continue;
+                SchedulerObservation observation;
+                bool matched;
+                lock (schedulingGate)
+                {
+                    if (disposed) return;
+                    if (!IsQueuedRequest(file)) continue;
+                    try { File.Move(file, Path.Combine(queue, "processing", Path.GetFileName(file))); }
+                    catch (IOException error) { RecordSchedulerFailure(error.GetType().Name + ": " + error.Message); continue; }
+                    catch (UnauthorizedAccessException error) { RecordSchedulerFailure(error.GetType().Name + ": " + error.Message); continue; }
+                    observation = pendingObservation;
+                    matched = observation != null && string.Equals(observation.RequestId, id, StringComparison.Ordinal);
+                    if (matched) observation.SettledBeforeCallback = true;
+                }
+                DateTime settledUtc = DateTime.UtcNow;
+                long settledTicks = Stopwatch.GetTimestamp();
+                var receipt = new { id, ok = false, hostSession = session, error = QueueRejectionError(reason),
+                    execution = new { started = false, phase = "queue", reason }, completedUtc = settledUtc.ToString("o"),
+                    timing = new {
+                        schemaVersion = 2, requestId = id, hostSession = session, settledUtc = settledUtc.ToString("o"),
+                        observedUtc = matched ? observation.ObservedUtc.ToString("o") : null,
+                        raiseReturnedUtc = matched ? observation.RaiseReturnedUtc.ToString("o") : null,
+                        observedToSettlementMs = matched ? (double?)ElapsedMilliseconds(observation.ObservedTicks, settledTicks) : null,
+                        schedulerCorrelation = matched ? "matched" : "unmatched", raiseResult = matched ? observation.RaiseResult : null
+                    } };
+                try { WriteAtomic(Path.Combine(queue, "outbox", id + ".json"), receipt, replaceExisting: false, serializer: serializer); }
+                catch (IOException error) { RecordSchedulerFailure(error.GetType().Name + ": " + error.Message); }
+                catch (UnauthorizedAccessException error) { RecordSchedulerFailure(error.GetType().Name + ": " + error.Message); }
+            }
         }
 
         // Called under schedulingGate, once for this accepted native event.
@@ -587,6 +651,36 @@ namespace RevitLocalCodex
                 && !File.Exists(Path.Combine(queue, "outbox", Path.GetFileName(file)));
         }
 
+        private static bool TryReadDeadline(Dictionary<string, object> request, out DateTime deadline)
+        {
+            return DateTime.TryParse(Text(request, "expiresUtc"), null, System.Globalization.DateTimeStyles.AdjustToUniversal, out deadline);
+        }
+
+        private string QueueRejection(string id, DateTime deadline, JavaScriptSerializer serializer)
+        {
+            if (deadline <= DateTime.UtcNow) return "expired";
+            string marker = Path.Combine(queue, "cancel", id + ".json");
+            try
+            {
+                if (!File.Exists(marker) || new FileInfo(marker).Length > 1024) return null;
+                var intent = serializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(marker));
+                return intent != null && intent.Count == 3 && intent.ContainsKey("schema_version") &&
+                    Object.Equals(intent["schema_version"], 1) && Text(intent, "request_id") == id &&
+                    Text(intent, "target_session") == session ? "cancelled" : null;
+            }
+            catch (ArgumentException) { return null; }
+            catch (InvalidOperationException) { return null; }
+            catch (IOException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
+        }
+
+        private static Dictionary<string, object> QueueRejectionError(string reason)
+        {
+            return reason == "expired"
+                ? BoundedFailureError("WORKBENCH_REQUEST_EXPIRED", "Request expired before execution; no operation was run.")
+                : BoundedFailureError("WORKBENCH_REQUEST_CANCELLED", "Request cancelled before execution; no operation was run.");
+        }
+
         public string GetName() { return "Local Codex workbench request"; }
 
         public void Execute(UIApplication uiapp)
@@ -597,12 +691,11 @@ namespace RevitLocalCodex
             SchedulerObservation observation;
             lock (schedulingGate)
             {
-                observation = pendingObservation;
-                pendingObservation = null;
-                eventPending = false;
-                CancelUiWake(observation);
                 if (disposed || busy) return;
+                observation = pendingObservation;
+                eventPending = false;
                 busy = true;
+                CancelUiWake(observation);
             }
             bool completed = false;
             try { ProcessOne(uiapp, observation, executeEnteredUtc, executeEnteredTicks); completed = true; }
@@ -616,6 +709,7 @@ namespace RevitLocalCodex
             {
                 lock (schedulingGate)
                 {
+                    pendingObservation = null;
                     busy = false;
                     // A successful callback is already in Revit's available API
                     // context. Do not suppress its next Idling opportunity: a
@@ -687,14 +781,18 @@ namespace RevitLocalCodex
         {
             // Preserve the accepted request across the asynchronous Raise/Execute
             // gap; a later arrival must not steal this callback by sorting first.
-            string observedFile = observation == null ? null : Path.Combine(queue, "inbox", observation.RequestId + ".json");
-            string file = observedFile != null && IsQueuedRequest(observedFile) ? observedFile : NextRequest();
-            if (file == null) return;
-            string id = Path.GetFileNameWithoutExtension(file);
-            string claimed = Path.Combine(queue, "processing", Path.GetFileName(file));
-            // Keep claim failures outside operation error handling: an existing claim
-            // must not be relabelled as failed or have its response overwritten.
-            File.Move(file, claimed);
+            string id, claimed;
+            lock (schedulingGate)
+            {
+                pendingObservation = null;
+                if (observation != null && observation.SettledBeforeCallback) return;
+                string observedFile = observation == null ? null : Path.Combine(queue, "inbox", observation.RequestId + ".json");
+                string file = observedFile != null && IsQueuedRequest(observedFile) ? observedFile : NextRequest();
+                if (file == null) return;
+                id = Path.GetFileNameWithoutExtension(file);
+                claimed = Path.Combine(queue, "processing", Path.GetFileName(file));
+                File.Move(file, claimed);
+            }
             DateTime claimedUtc = DateTime.UtcNow;
             long claimedTicks = Stopwatch.GetTimestamp();
             object result;
@@ -710,16 +808,17 @@ namespace RevitLocalCodex
                 if (Text(request, "id") != id) throw new InvalidOperationException("Request id mismatch.");
                 if (Text(request, "targetSession") != session) throw new InvalidOperationException("Revit session changed; query status again.");
                 DateTime expires;
-                if (!DateTime.TryParse(Text(request, "expiresUtc"), null, System.Globalization.DateTimeStyles.AdjustToUniversal, out expires))
+                if (!TryReadDeadline(request, out expires))
                 {
                     rejectionCode = "WORKBENCH_REQUEST_INVALID_DEADLINE";
                     throw new InvalidOperationException("Request deadline is invalid; no operation was run.");
                 }
-                if (expires <= DateTime.UtcNow)
+                rejectionReason = QueueRejection(id, expires, json);
+                if (rejectionReason != null)
                 {
-                    rejectionCode = "WORKBENCH_REQUEST_EXPIRED";
-                    rejectionReason = "expired";
-                    throw new InvalidOperationException("Request expired before execution; no operation was run.");
+                    var rejection = QueueRejectionError(rejectionReason);
+                    rejectionCode = (string)rejection["code"];
+                    throw new InvalidOperationException((string)rejection["message"]);
                 }
 #if BUILDX_CONFIRMED_WRITE
                 confirmedWriteDeadline = expires;
@@ -761,7 +860,7 @@ namespace RevitLocalCodex
                 var failureWithTiming = new Dictionary<string, object>(failure) {
                     { "timing", ReceiptTiming(id, observation, executeEnteredUtc, executeEnteredTicks, claimedUtc, claimedTicks, dispatchStartedUtc, validationFinishedTicks, dispatchFinishedUtc, dispatchStartedTicks, dispatchFinishedTicks) }
                 };
-                WriteAtomic(Path.Combine(queue, "outbox", id + ".json"), failure, failureWithTiming);
+                WriteAtomic(Path.Combine(queue, "outbox", id + ".json"), failure, failureWithTiming, replaceExisting: false);
                 return;
             }
             // A delivery failure after commit is an unknown response outcome, not a
@@ -770,7 +869,7 @@ namespace RevitLocalCodex
             var successWithTiming = new Dictionary<string, object>(success) {
                 { "timing", ReceiptTiming(id, observation, executeEnteredUtc, executeEnteredTicks, claimedUtc, claimedTicks, dispatchStartedUtc, validationFinishedTicks, dispatchFinishedUtc, dispatchStartedTicks, dispatchFinishedTicks) }
             };
-            WriteAtomic(Path.Combine(queue, "outbox", id + ".json"), success, successWithTiming);
+            WriteAtomic(Path.Combine(queue, "outbox", id + ".json"), success, successWithTiming, replaceExisting: false);
         }
 
         private static bool AtomicReadRequested(Dictionary<string, object> request, string operation)
@@ -1123,10 +1222,11 @@ namespace RevitLocalCodex
         }
 
         internal static string Text(Dictionary<string, object> args, string key, string fallback = "") { object value; return args.TryGetValue(key, out value) && value != null ? Convert.ToString(value) : fallback; }
-        private void WriteAtomic(string file, object value, object valueWithTiming = null)
+        private void WriteAtomic(string file, object value, object valueWithTiming = null, bool replaceExisting = true, JavaScriptSerializer serializer = null)
         {
+            serializer = serializer ?? json;
             string serialized;
-            try { serialized = json.Serialize(valueWithTiming ?? value); }
+            try { serialized = serializer.Serialize(valueWithTiming ?? value); }
             catch (InvalidOperationException)
             {
                 if (valueWithTiming == null) throw;
@@ -1134,11 +1234,11 @@ namespace RevitLocalCodex
                 // business envelope exceed the original serializer budget.
                 // This fallback happens before any I/O, never after an unknown
                 // temporary write or publication/rename outcome.
-                serialized = json.Serialize(value);
+                serialized = serializer.Serialize(value);
             }
             string temp = file + "." + session + ".tmp";
             File.WriteAllText(temp, serialized, new System.Text.UTF8Encoding(false));
-            if (File.Exists(file)) File.Replace(temp, file, null); else File.Move(temp, file);
+            if (replaceExisting && File.Exists(file)) File.Replace(temp, file, null); else File.Move(temp, file);
         }
         public void Dispose()
         {
