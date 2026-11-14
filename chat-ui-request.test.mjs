@@ -87,7 +87,9 @@ test('Skills are selected for one message using server IDs and cleared when the 
   const checkbox=ui.get('skills-list').children[0].children[0].children[0];checkbox.checked=true;checkbox.dispatchEvent(new UiEvent('change'));
   assert.match(ui.get('skills-summary').textContent,/本轮已选 1/);ui.input('使用此技能');await ui.submit();
   const turn=ui.requests.find(item=>item.url==='/api/turn');assert.equal(turn.body.conversationId,conversationId);assert.deepEqual(turn.body.skillIds,[skillId]);assert.doesNotMatch(JSON.stringify(turn.body),/SKILL\.md/);
-  await ui.respond(turn,{ok:true});ui.emit('state',{workspace:{kind:'model',supportsModelContext:true},ready:true,skillsAvailable:true,skillsRevision:2,connectionGeneration:1,codexAccount:{accountRevision:0}});await flush();
+  await ui.respond(turn,{ok:true,status:'not_sent'});assert.equal(ui.get('prompt').value,'使用此技能');assert.match(ui.get('skills-summary').textContent,/本轮已选 1/);
+  await ui.submit();const started=ui.requests.filter(item=>item.url==='/api/turn').at(-1);assert.notEqual(started,turn);assert.deepEqual(started.body.skillIds,[skillId]);
+  await ui.respond(started,{ok:true});ui.emit('state',{workspace:{kind:'model',supportsModelContext:true},ready:true,skillsAvailable:true,skillsRevision:2,connectionGeneration:1,codexAccount:{accountRevision:0}});await flush();
   assert.equal(ui.get('skills-list').children.length,0);assert.match(ui.get('skills-message').textContent,/重新读取/);
 });
 
@@ -594,7 +596,7 @@ test('a direct command never submits the chat draft while an ordinary turn expli
     if(command){commandIntent(ui);await flush();}else await ui.submit();
     assert.equal(ui.requests[0].url,command?'/api/command':'/api/turn');
     if(command)assert.equal(Object.hasOwn(ui.requests[0].body,'draft'),false);
-    else assert.deepEqual(ui.requests[0].body.draft,{text:'',includeSelection:true});
+    else {assert.deepEqual(ui.requests[0].body.draft,{text:'正在编辑的聊天草稿',includeSelection:true});assert.equal(ui.requests[0].body.clearDraftOnStart,true);}
     await ui.respond(ui.requests[0],{ok:true,executionId:'exec-document'});
     assert.equal(ui.get('prompt').value,command?'正在编辑的聊天草稿':'');
     ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
@@ -615,6 +617,7 @@ test('an edit made while the submitted turn awaits its draft checkpoint is sent 
   await ui.submit();ui.input('等待期间的新草稿');await ui.respond(ui.requests[0],{ok:true});
   assert.equal(ui.requests[1].url,'/api/turn');assert.equal(ui.requests[1].body.message,'已点击发送的问题');
   assert.deepEqual(ui.requests[1].body.draft,{text:'等待期间的新草稿',includeSelection:false});
+  assert.equal(Object.hasOwn(ui.requests[1].body,'clearDraftOnStart'),false);
   await ui.respond(ui.requests[1],{ok:true});assert.equal(ui.get('prompt').value,'等待期间的新草稿');
   ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
 });

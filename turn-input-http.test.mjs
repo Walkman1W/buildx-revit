@@ -72,9 +72,28 @@ test('stopping during snapshot save prevents Revit context reads and native thre
   const f=await createModelWorkspaceFixture({profile:'model-readonly',required:false,historyDirectory:directory,historyDependencies:{open:async(file,flags)=>{if(file.endsWith('.attachment')&&flags==='wx'){entered();await gate;}return fs.open(file,flags);}}});
   t.after(async()=>{release();await f.close();assert.equal(path.dirname(directory),os.tmpdir());assert.ok(path.basename(directory).startsWith('buildx-turn-stop-'));await fs.rm(directory,{recursive:true,force:true});});
   const id=f.app.snapshot('model-test-client').session.conversation.id;
-  const pending=f.post('turn',{conversationId:id,message:'等待保存时停止',context:{includeSelection:true},attachments:[wire('a.txt','不会发送的正文')]});
-  await opened;assert.equal((await f.post('interrupt',{})).status,202);release();assert.equal((await pending).status,202);await idle(f);
+  const submitted={text:'等待保存时停止',includeSelection:true};
+  const pending=f.post('turn',{conversationId:id,message:submitted.text,draft:submitted,clearDraftOnStart:true,context:{includeSelection:true},attachments:[wire('a.txt','不会发送的正文')]});
+  await opened;assert.equal((await f.post('interrupt',{})).status,202);release();const response=await pending;assert.equal(response.status,202);assert.equal(response.body.status,'not_sent');await idle(f);
   assert.equal(f.codex.threads,0);assert.equal(f.codex.turns.length,0);assert.equal(f.workbenchCalls.length,0);assert.equal(f.app.snapshot('model-test-client').session.messages.at(-1).status,'interrupted');
+  assert.deepEqual(f.app.snapshot('model-test-client').draft,submitted);
+});
+
+test('native turn start clears only the accepted draft version',async t=>{
+  const {open}=await fixture(t),f=await open(),id=f.app.snapshot('model-test-client').session.conversation.id;
+  const submitted={text:'已发送的问题',includeSelection:false};
+  assert.equal((await f.post('turn',{message:submitted.text,draft:submitted,clearDraftOnStart:true})).status,202);
+  assert.deepEqual(f.app.snapshot('model-test-client').draft,draft);
+  f.codex.finish(0,'completed','已回答');await idle(f);
+  let entered,release;const reached=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+  t.after(()=>release());const send=f.codex.turn.bind(f.codex);
+  f.codex.turn=async(...args)=>{entered();await gate;return send(...args);};
+  const pending=f.post('turn',{message:submitted.text,draft:submitted,clearDraftOnStart:true});await reached;
+  const newer={text:'等待时编辑的新草稿',includeSelection:true};
+  try{assert.equal((await f.post('chat/draft',{conversationId:id,draft:newer})).status,200);}
+  finally{release();}
+  assert.equal((await pending).status,202);assert.deepEqual(f.app.snapshot('model-test-client').draft,newer);
+  f.codex.finish(1,'completed','已回答');await idle(f);
 });
 
 test('snapshot capacity and known-unsent errors fail without native replay',async t=>{

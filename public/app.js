@@ -1609,8 +1609,13 @@ async function send(text, { clearDraft = true } = {}) {
     const result = await post('turn', { message: trimmed, context: request.submittedContext,...(request.model!==undefined?{model:request.model}:{}),...(request.effort!==undefined?{effort:request.effort}:{}),
       ...(request.attachments.length ? {conversationId:request.conversationId,attachments:request.attachments.map(({name,mediaType,data}) => ({name,mediaType,data}))} : {}),
       ...(request.skillIds.length ? {conversationId:request.skillsConversation,skillIds:request.skillIds} : {}),
-      ...(historyEnabled() ? {draft:clearSubmittedDraft ? {text:'',includeSelection:draft.includeSelection} : draft} : {}) });
+      ...(historyEnabled() ? {draft, ...(clearSubmittedDraft ? {clearDraftOnStart:true} : {})} : {}) });
     if (!ownsRequest(request)) return;
+    if(result.status==='not_sent'){
+      if(request.busyRevision===busyRevision)busy=false;
+      notice('已停止，本轮未发送。');
+      return;
+    }
     if(request.accountEpoch===accountEpoch&&request.skillsConversation===skillsConversation()&&request.skillIds.length){skillSelection.clear();renderSkills();$('skills-message').textContent='已提交本轮技能选择；执行结果以对话回执为准。';}
     if (request.accountEpoch === accountEpoch && request.conversationId === activeConversationId && request.attachments.length) {
       const submitted=new Set(request.attachments.map(item => item.id));

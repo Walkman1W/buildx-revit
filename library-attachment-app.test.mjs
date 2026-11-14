@@ -15,6 +15,15 @@ test('library snapshot stages exact text bytes in the selected conversation with
   await ui.submit();const request=ui.requests.find(item=>item.url==='/api/turn');assert.deepEqual(request.body.attachments,[{name:'资料.txt',mediaType:'text/plain',data:source.data}]);await ui.respond(request);
 });
 
+test('a turn stopped before native submission retains its staged library attachment',async t=>{
+  const ui=await createInputUi();t.after(()=>ui.close());ui.input('保留这条草稿');
+  assert.equal((await attach(ui,snapshot('资料.txt','受控正文'),begin(ui).binding)).ok,true);
+  await ui.submit();const request=ui.requests.find(item=>item.url==='/api/turn');
+  await ui.respond(request,{ok:true,status:'not_sent'});
+  assert.equal(ui.get('prompt').value,'保留这条草稿');assert.deepEqual(names(ui),['资料.txt']);
+  assert.equal(ui.requests.filter(item=>item.url==='/api/turn').length,1);
+});
+
 for(const [extension,notice] of [['pdf','图片或扫描页中的文字可能遗漏'],['docx','页眉、页脚等内容可能遗漏'],['xlsx','缓存的值，可能已过期']])test(`extracted ${extension} limitation appears in attachment card and sent text`,async t=>{
   const ui=await createInputUi();t.after(()=>ui.close());const name='说明.'+extension,source=snapshot(name,'提取内容',{attachmentName:name+'.txt',sourceFormat:'extracted'});
   assert.equal((await attach(ui,source,begin(ui).binding)).ok,true);assert.deepEqual(names(ui),[name+'.txt']);
