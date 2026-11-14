@@ -572,6 +572,12 @@ test('sending waits for the owned draft write and a draft snapshot cannot unlock
   await ui.respond(ui.requests[1],{ok:true});ui.emit('done',{});
   ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
 });
+test('stopping while the composer waits for a draft checkpoint never submits a turn',async()=>{
+  const ui=await historySetup();ui.input('保留待发送的草稿');ui.get('prompt').dispatchEvent(new UiEvent('blur'));await flush();
+  const draft=ui.requests[0];await ui.submit();await ui.click('stop');await ui.respond(draft,{ok:true});
+  assert.equal(ui.requests.length,1);assert.equal(ui.get('prompt').value,'保留待发送的草稿');assert.equal(ui.get('send').disabled,false);
+  ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
+});
 test('failed local persistence blocks new AI requests without clearing the editable draft',async()=>{
   const failed=historySession('chat-a');failed.conversation.persistence={status:'failed',message:'本地保存未确认'};
   const ui=await historySetup({initialSession:failed});ui.input('保留的新草稿');

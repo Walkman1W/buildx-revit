@@ -1770,6 +1770,10 @@ async function selectConversation(id) {
 }
 async function interruptTask(expectedCommand = null) {
   if (!busy || commandPending() || commandStopUnavailable || pendingRequests.has('interrupt')) return;
+  const pendingTurn=pendingRequests.get('turn');
+  if(!expectedCommand&&pendingTurn?.waitingForDraft){
+    finishRequest(pendingTurn);busy=false;notice('已停止，本轮未发送。');updateButtons();return;
+  }
   const command = commandRunning() ? activeCommand : null;
   if (expectedCommand && (!command || expectedCommand.executionId !== command.executionId || expectedCommand.conversationId !== command.conversationId || command.status === 'stopping' || command.cancelRequested)) return;
   const request = beginRequest('interrupt'); updateButtons();
