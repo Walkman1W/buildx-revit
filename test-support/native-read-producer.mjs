@@ -53,7 +53,7 @@ function statement(source, marker) {
   return source.slice(start, end + 1);
 }
 
-function harness({readBranch, writeBranch, scriptFailure, boundedFailureError, freeze, scriptParameters, expectedDocument, requireDocument, readOperations, writeOperations, isRead, isWrite}) {
+function harness({readBranch, writeBranch, scriptFailure, boundedFailureError, freeze, scriptParameters, expectedDocument, requireDocument, readOperations, writeOperations, isRead, isWrite, isParameterRead}) {
   return `using System;
 using System.IO;
 using System.Linq;
@@ -75,6 +75,9 @@ internal static class Control {
   internal static string FailureMessage;
   internal static bool Fail, RollbackUnknown;
   internal static int ReadCalls, WriteCalls, Commits, Rollbacks;
+}
+internal static class NativeParameterQueries {
+  ${isParameterRead}
 }
 internal static class WorkbenchActions {
   ${readOperations}
@@ -183,13 +186,14 @@ async function runProducer(executable, input) {
 /** Compile exact source branches into controlled peers, then return their DTO. */
 export async function loadNativeReadProducer(t, {hostPath=path.join(stage,'revit-addin','WorkbenchHost.cs')}={}) {
   if(!nativeProducerAvailable)throw new Error('Native producer tests require Windows with the existing .NET Framework compiler');
-  const [source,actions]=await Promise.all([fs.readFile(hostPath,'utf8'),fs.readFile(path.join(stage,'revit-addin','WorkbenchActions.cs'),'utf8')]);
+  const [source,actions,parameterQueries]=await Promise.all([fs.readFile(hostPath,'utf8'),fs.readFile(path.join(stage,'revit-addin','WorkbenchActions.cs'),'utf8'),fs.readFile(path.join(stage,'revit-addin','NativeParameterQueries.cs'),'utf8')]);
   const read=block(source,'if (WorkbenchActions.IsRead(operation))');
   const dispatch=block(source,'private object Dispatch(');
   if(read.start<dispatch.open||read.end>=dispatch.end)throw new Error('Read producer is outside actual Dispatch');
   const writeStart=source.indexOf('if (operation != "execute_csharp"',read.end);
   if(writeStart<read.end||writeStart>=dispatch.end)throw new Error('Missing original write admission boundary');
   const fragments={readBranch:read.text,writeBranch:source.slice(writeStart,dispatch.end-1).trim(),scriptFailure:block(source,'private sealed class ScriptExecutionFailure').text,boundedFailureError:block(source,'private static Dictionary<string, object> BoundedFailureError(').text,freeze:block(source,'private object FreezeResult(').text,scriptParameters:block(source,'private static IDictionary<string, object> ScriptParameters(').text,expectedDocument:block(source,'private static string ExpectedDocument(').text,requireDocument:block(source,'private static void RequireDocument(').text,readOperations:statement(actions,'internal static readonly string[] ReadOperations ='),writeOperations:statement(actions,'internal static readonly string[] WriteOperations ='),isRead:block(actions,'internal static bool IsRead(').text,isWrite:block(actions,'internal static bool IsWrite(').text};
+  fragments.isParameterRead=block(parameterQueries,'internal static bool IsRead(').text;
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-native-read-producer-'));
   t.after(async()=>{const resolved=path.resolve(directory);if(path.dirname(resolved)!==path.resolve(os.tmpdir())||!path.basename(resolved).startsWith('buildx-native-read-producer-'))throw new Error('Unsafe controlled compiler cleanup target');await fs.rm(resolved,{recursive:true,force:true});});
   const generated=path.join(directory,'producer.cs'),executable=path.join(directory,'producer.exe');
