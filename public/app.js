@@ -40,6 +40,7 @@ let modelReceipt=null,modelReceiptPending=null,modelReceiptMessage='',modelRecei
 let terminal=null,terminalPending=null,terminalMessage='',terminalRevision=0,terminalStale=false;
 let turnAttachmentsAvailable = false, attachmentRead = null;
 let skillsSupported=false,skillChoices=[],skillSelection=new Set(),skillRevision=null,skillRead=null,observedSkillsRevision=null;
+let staleSkillSelection=false;
 let mcpCandidatesAvailable=false,mcpCandidateRead=null;
 // Unsent files belong to this browser/account and conversation, never to the
 // persisted text draft. Sent snapshots are owned by the server transcript.
@@ -110,7 +111,8 @@ function node(tag, className, text) {
   return element;
 }
 function skillsConversation(){return activeConversationId||lastSession?.conversation?.id||null;}
-function clearSkills(message='列表尚未核实。'){
+function clearSkills(message='列表尚未核实。',{preserveIntent=false}={}){
+  staleSkillSelection=preserveIntent&&(staleSkillSelection||skillSelection.size>0);
   skillChoices=[];skillSelection.clear();skillRevision=null;skillRead=null;
   $('skills-list').replaceChildren();$('skills-summary').textContent='尚未读取';$('skills-message').textContent=message;
 }
@@ -124,24 +126,24 @@ function renderSkills(){
     if(Array.isArray(item.dependencies)){const labels={available:'可用',unavailable:'不可用',unknown:'尚未核实'};content.append(node('small','', '依赖：'+item.dependencies.map(dep=>dep.label+'（'+(labels[dep.status]||'尚未核实')+'）').join('、')));}
     if(item.reason)content.append(node('small','',item.reason));
     label.append(check,content);li.append(label);list.append(li);
-    check.addEventListener('change',()=>{if(check.checked){if(skillSelection.size>=4){check.checked=false;$('skills-message').textContent='每次最多选择 4 个 Skills。';return;}skillSelection.add(item.id);}else skillSelection.delete(item.id);$('skills-summary').textContent=skillSelection.size?'本轮已选 '+skillSelection.size:skillChoices.filter(choice=>choice.selectable!==false).length+' 个可选';});
+    check.addEventListener('change',()=>{if(check.checked){if(skillSelection.size>=4){check.checked=false;$('skills-message').textContent='每次最多选择 4 个 Skills。';return;}skillSelection.add(item.id);staleSkillSelection=false;}else skillSelection.delete(item.id);$('skills-summary').textContent=skillSelection.size?'本轮已选 '+skillSelection.size:skillChoices.filter(choice=>choice.selectable!==false).length+' 个可选';updateButtons();});
   }
   $('skills-summary').textContent=skillSelection.size?'本轮已选 '+skillSelection.size:skillChoices.filter(item=>item.selectable!==false).length+' 个可选';
 }
 async function loadSkills(){
   const conversationId=skillsConversation();
   if(!skillsSupported||!modelUiEnabled||!ready||busy||skillRead||pendingRequests.has('session')||!conversationId)return;
-  clearSkills('正在读取当前 Codex 技能…');
+  clearSkills('正在读取当前 Codex 技能…',{preserveIntent:true});
   const owner={accountEpoch,conversationId,connectionGeneration:modelPickerIdentity.connectionGeneration,accountRevision:modelPickerIdentity.accountRevision};skillRead=owner;updateButtons();
   try{
     const result=await post('skills',{conversationId});
     if(skillRead!==owner)return;
     if(accountEpoch!==owner.accountEpoch||skillsConversation()!==conversationId||modelPickerIdentity.connectionGeneration!==owner.connectionGeneration||modelPickerIdentity.accountRevision!==owner.accountRevision){clearSkills('连接或对话已变化，请重新读取。');return;}
     if(!Array.isArray(result.skills)||!Number.isSafeInteger(result.revision)||result.conversationId!==conversationId)throw new Error('技能列表未能核实。');
-    if(observedSkillsRevision!==null&&observedSkillsRevision>result.revision){clearSkills('技能列表已变化，请重新读取。');return;}
+    if(observedSkillsRevision!==null&&observedSkillsRevision>result.revision){clearSkills('技能列表已变化，请重新读取。',{preserveIntent:true});return;}
     skillRevision=result.revision;skillChoices=result.skills;renderSkills();
-    $('skills-message').textContent=skillChoices.length?'选择后仅作用于下一条消息；工具依赖状态以当前核实结果为准。':'当前没有发现可用的 Skills。';
-  }catch(error){if(skillRead===owner){clearSkills(skillReadFailureMessage(error));updateButtons();}}
+    $('skills-message').textContent=staleSkillSelection?'请重新选择技能，或取消失效的技能选择后再发送。':skillChoices.length?'选择后仅作用于下一条消息；工具依赖状态以当前核实结果为准。':'当前没有发现可用的 Skills。';
+  }catch(error){if(skillRead===owner){clearSkills(skillReadFailureMessage(error),{preserveIntent:true});updateButtons();}}
   finally{if(skillRead===owner){skillRead=null;renderSkills();}updateButtons();}
 }
 function nearBottom() { const view = $('messages'); return view.scrollHeight - view.scrollTop - view.clientHeight < 88; }
@@ -689,7 +691,7 @@ function updateButtons() {
     const last=receiptProjection?.records.at(-1);steerFeedbackBinding=last?{conversationId}:null;steerFeedbackKind=last?.status??null;
     $('steer-feedback').hidden=!last;$('steer-feedback').textContent=last?.status==='accepted'?'最近的补充指令已由 Codex 接收，是否执行尚待确认。':last?.status==='not_sent'?'最近的补充指令未发送。':'';
   }
-  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text) || uncertainTurns.has(conversationId);
+  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text) || uncertainTurns.has(conversationId);
   $('steer').hidden = !(modelUiEnabled && steerAvailable && busy) || permissionChecking;
   $('steer').disabled = !binding || !text || text.length>16000 || pendingRequests.has('steer') || pendingRequests.has('interrupt') || visibleInputId!==null || ['pending','submitting'].includes(dynamicApproval?.state) || Boolean(attachmentRead) || pendingAttachments().length>0 || historyEnabled() && persistenceFailed() || receiptBlocked || isUncertainSteer(conversationId,text);
   $('prompt').readOnly = readOnly || switchingConversation;
@@ -708,6 +710,8 @@ function updateButtons() {
   $('refresh-context').textContent = pendingRequests.has('context') ? '读取中…' : '刷新';
   $('skills-panel').hidden=!modelUiEnabled;
   $('skills-refresh').disabled=!skillsSupported||!ready||blocked||Boolean(skillRead)||!skillsConversation();
+  $('skills-clear-stale').hidden=!staleSkillSelection;
+  $('skills-clear-stale').disabled=blocked||Boolean(skillRead);
   document.querySelectorAll('#skills-list input').forEach(input=>{input.disabled=input.dataset.skillSelectable==='false'||!ready||blocked||Boolean(skillRead);});
   document.querySelectorAll('[data-prompt]').forEach(button => { button.disabled = !ready || blocked || readOnly; });
   publishModelView();
@@ -777,8 +781,10 @@ function status(state = {}) {
   }
   if(modelIdentityChanged||state.error===true||state.codexAccount?.status==='invalidated')observedSkillsRevision=null;
   if(Number.isSafeInteger(state.skillsRevision))observedSkillsRevision=observedSkillsRevision===null?state.skillsRevision:Math.max(observedSkillsRevision,state.skillsRevision);
-  if(modelIdentityChanged||state.error===true||state.codexAccount?.status==='invalidated'||!skillsSupported||Number.isSafeInteger(state.skillsRevision)&&skillRevision!==null&&state.skillsRevision>skillRevision){
-    if(skillChoices.length||skillSelection.size||skillRead||skillRevision!==null)clearSkills('连接或技能列表已变化，请重新读取。');
+  if(modelIdentityChanged||state.error===true||state.codexAccount?.status==='invalidated'||!skillsSupported){
+    if(skillChoices.length||skillSelection.size||skillRead||skillRevision!==null||staleSkillSelection)clearSkills('连接或技能列表已变化，请重新读取。');
+  }else if(Number.isSafeInteger(state.skillsRevision)&&skillRevision!==null&&state.skillsRevision>skillRevision){
+    clearSkills('技能列表已变化，请重新读取并选择，或取消失效的选择。',{preserveIntent:true});
   }
   if (Object.hasOwn(state,'directCommandsAvailable')) directCommandsAvailable = modelUiEnabled && state.directCommandsAvailable === true;
   if(Object.hasOwn(state,'commandReadiness'))independentCommands=modelUiEnabled&&state.commandReadiness==='local';
@@ -1633,7 +1639,7 @@ function consumeSubmittedInputs(request){
 }
 async function send(text, { clearDraft = true } = {}) {
   const trimmed=text.trim(),conversationId=skillsConversation();
-  if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(conversationId) || isUncertainSteer(conversationId,trimmed) || uncertainTurns.has(conversationId)) return;
+  if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(conversationId) || isUncertainSteer(conversationId,trimmed) || uncertainTurns.has(conversationId)) return;
   cancelDraftTimer();
   invalidateRequests();
   const request = beginRequest('turn', { requestId:conversationId?crypto.randomUUID():null, clearDraft, draftRevision, draft: $('prompt').value, submittedContext:contextFlags(), waitingForDraft:Boolean(draftSaveWork), accountEpoch, conversationId, skillIds:Object.freeze([...skillSelection]), model:modelUiEnabled&&modelSelectionAvailable?selectedModel:undefined, effort:modelUiEnabled&&modelSelectionAvailable&&selectedEffort?selectedEffort:undefined, attachments:Object.freeze(pendingAttachments().slice()) });
@@ -1740,6 +1746,10 @@ async function steer(){
 $('steer').addEventListener('click',()=>{void steer();});
 $('composer').addEventListener('submit', event => { event.preventDefault(); send($('prompt').value); });
 $('skills-refresh').addEventListener('click',()=>{void loadSkills();});
+$('skills-clear-stale').addEventListener('click',()=>{
+  if(!staleSkillSelection||busy||skillRead)return;
+  staleSkillSelection=false;$('skills-message').textContent='已取消失效的技能选择。';updateButtons();
+});
 $('prompt').addEventListener('input', () => { draftRevision++; $('prompt').style.height = 'auto'; $('prompt').style.height = Math.min(180, $('prompt').scrollHeight) + 'px'; updateButtons(); if (historyEnabled()) scheduleDraftSave(); });
 $('prompt').addEventListener('blur', () => { if (historyEnabled()) { cancelDraftTimer(); rememberDraft(); void saveDraft(); } });
 $('prompt').addEventListener('keydown', event => {

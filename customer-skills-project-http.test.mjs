@@ -51,6 +51,7 @@ test('customer skill requires a selected library and invalidates selection when 
   assert.equal(sent.length,1);client.emit('notification','turn/completed',{threadId:'thread',turn:{id:'turn',status:'completed'}});
   const again=await skills(),old=again.body.skills[0];assert.equal(old.selectable,true);
   assert.equal((await f.post('project-files',{action:'remove-root',parameters:{id:rootId}},cookie)).status,200);
+  assert.ok(f.app.snapshot('model-test-client').state.skillsRevision>again.body.revision);
   assert.equal((await f.post('turn',{conversationId,message:'使用旧技能',skillIds:[old.id]},cookie)).status,409);
   assert.equal((await skills()).body.skills[0].selectable,false);
   const readded=await f.post('project-files',{action:'add-root',parameters:{path:directory,kind:'directory'}},cookie);

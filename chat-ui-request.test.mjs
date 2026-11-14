@@ -102,6 +102,20 @@ test('a late skills response cannot present a list invalidated by a newer state'
   assert.equal(ui.get('skills-list').children.length,0);assert.match(ui.get('skills-message').textContent,/重新读取/);assert.equal(ui.get('skills-refresh').disabled,false);
 });
 
+test('a changed skill catalog requires a new choice or explicit dismissal before sending',async()=>{
+  const conversationId='11111111-1111-4111-8111-111111111111';
+  const ui=await setup({workspace:{kind:'model',supportsModelContext:true},historyAvailable:true,initialSession:{...session(),conversation:{id:conversationId,readOnly:false}}});
+  const state=revision=>({workspace:{kind:'model',supportsModelContext:true},ready:true,historyAvailable:true,skillsAvailable:true,skillsRevision:revision,connectionGeneration:1,codexAccount:{accountRevision:0}});
+  ui.emit('state',state(0));await ui.click('skills-refresh');
+  await ui.respond(ui.requests[0],{ok:true,conversationId,revision:0,skills:[{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',name:'Example'}]});
+  const checkbox=ui.get('skills-list').children[0].children[0].children[0];checkbox.checked=true;checkbox.dispatchEvent(new UiEvent('change'));
+  ui.input('带技能的草稿');ui.emit('state',state(1));await ui.click('skills-refresh');
+  await ui.respond(ui.requests[1],{ok:true,conversationId,revision:1,skills:[]});
+  await ui.submit();assert.equal(ui.requests.length,2);assert.equal(ui.get('send').disabled,true);assert.equal(ui.get('skills-clear-stale').hidden,false);
+  await ui.click('skills-clear-stale');await ui.submit();assert.equal(ui.requests[2].url,'/api/turn');assert.equal(Object.hasOwn(ui.requests[2].body,'skillIds'),false);
+  await ui.respond(ui.requests[2]);ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
+});
+
 test('reasoning effort follows the selected model and is sent for every supported turn',async()=>{
   const ui=await setup({workspace:{kind:'model',supportsModelContext:true}}),picker=[];
   ui.window.addEventListener('buildx-model-picker-view',event=>picker.push(event.detail));
