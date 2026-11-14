@@ -593,8 +593,18 @@ test('an earlier draft checkpoint is not native busy proof after the following t
   const ui=await historySetup();ui.input('提交失败后保留');ui.get('prompt').dispatchEvent(new UiEvent('blur'));await flush();
   await ui.submit();ui.emit('conversation',{busy:false,session:historySession('chat-a'),draft:{text:'更早保存',includeSelection:false},history:{available:true,activeId:'chat-a'}});
   await ui.respond(ui.requests[0],{ok:true});await ui.reject(ui.requests[1],'提交没有成功');
-  assert.equal(ui.get('send').disabled,false);assert.equal(ui.get('prompt').value,'提交失败后保留');
+  assert.equal(ui.get('send').disabled,true);assert.equal(ui.get('prompt').value,'提交失败后保留');
   ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
+});
+test('a lost send response blocks another submission until the original turn ID is observed',async()=>{
+  const ui=await historySetup();ui.input('核对原轮次');await ui.submit();const sent=ui.requests[0];
+  await ui.reject(sent,'网络响应中断');assert.equal(ui.get('send').disabled,true);assert.equal(ui.get('prompt').value,'核对原轮次');
+  const snapshot=historySession('chat-a');snapshot.conversation.turnBinding={requestId:'unrelated',turnId:'another-turn',status:'completed'};
+  ui.emit('conversation',{busy:false,session:snapshot});await ui.submit();assert.equal(ui.requests.length,1);
+  snapshot.conversation.turnBinding={requestId:sent.body.requestId,turnId:'native-turn',status:'completed'};
+  ui.emit('conversation',{busy:false,session:snapshot});assert.equal(ui.get('prompt').value,'');
+  ui.input('确认后再问');await ui.submit();assert.equal(ui.requests.length,2);assert.notEqual(ui.requests[1].body.requestId,sent.body.requestId);
+  await ui.respond(ui.requests[1]);ui.setAccount({required:true,signedIn:false});await ui.accountEvent('buildx-account-changed');
 });
 test('a direct command never submits the chat draft while an ordinary turn explicitly clears its submitted draft',async()=>{
   for(const command of [false,true]){

@@ -20,6 +20,7 @@ const modelPreferenceKey='buildx-model-preference-v1';
 let modelPreference=readModelPreference();
 let steerAvailable=false, steerReceiptsAvailable=false, visibleInputId=null, steerFeedbackBinding=null, steerFeedbackKind=null;
 const uncertainSteers=new Map();
+const uncertainTurns=new Map();
 const projectedSteerReceipts=new Map();
 let modelPickerIdentity={connectionGeneration:null,accountRevision:null};
 let directCommandsAvailable = false, activeCommand = null, commandRevision = 0;
@@ -100,7 +101,7 @@ let draftRevision = 0, busyRevision = 0;
 function beginRequest(kind, extra = {}) { const owner = { kind, busyRevision, commandRevision, ...extra }; pendingRequests.set(kind, owner); return owner; }
 function ownsRequest(owner) { return pendingRequests.get(owner.kind) === owner; }
 function finishRequest(owner) { if (owner?.receiptTimer) clearTimeout(owner.receiptTimer); if (ownsRequest(owner)) pendingRequests.delete(owner.kind); }
-function invalidateRequests() { const pending=pendingRequests.get('steer');if(pending&&pending.accountEpoch===accountEpoch&&lastSession?.conversation?.id===pending.conversationId)markSteerUnknown(pending);for (const owner of pendingRequests.values()) if (owner.receiptTimer) clearTimeout(owner.receiptTimer); pendingRequests.clear(); }
+function invalidateRequests() { const pending=pendingRequests.get('steer');if(pending&&pending.accountEpoch===accountEpoch&&lastSession?.conversation?.id===pending.conversationId)markSteerUnknown(pending);rememberUncertainTurn(pendingRequests.get('turn'));for (const owner of pendingRequests.values()) if (owner.receiptTimer) clearTimeout(owner.receiptTimer); pendingRequests.clear(); }
 
 function node(tag, className, text) {
   const element = document.createElement(tag);
@@ -688,7 +689,7 @@ function updateButtons() {
     const last=receiptProjection?.records.at(-1);steerFeedbackBinding=last?{conversationId}:null;steerFeedbackKind=last?.status??null;
     $('steer-feedback').hidden=!last;$('steer-feedback').textContent=last?.status==='accepted'?'最近的补充指令已由 Codex 接收，是否执行尚待确认。':last?.status==='not_sent'?'最近的补充指令未发送。':'';
   }
-  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text);
+  $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text) || uncertainTurns.has(conversationId);
   $('steer').hidden = !(modelUiEnabled && steerAvailable && busy) || permissionChecking;
   $('steer').disabled = !binding || !text || text.length>16000 || pendingRequests.has('steer') || pendingRequests.has('interrupt') || visibleInputId!==null || ['pending','submitting'].includes(dynamicApproval?.state) || Boolean(attachmentRead) || pendingAttachments().length>0 || historyEnabled() && persistenceFailed() || receiptBlocked || isUncertainSteer(conversationId,text);
   $('prompt').readOnly = readOnly || switchingConversation;
@@ -1253,6 +1254,7 @@ function applyConversation(data = {}, commandEvidence = false) {
     }
     reconcileSteerReceipts(data.session);
     canonical = true; lastSession = data.session; messages = sessionMessages(data.session);
+    reconcileUncertainTurn(data.session.conversation);
     if(previousSkillsConversation&&skillsConversation()!==previousSkillsConversation)clearSkills('对话已切换，请重新读取技能。');
     if (priorCommandConversation !== commandConversationId()) { clearCommands(); clearTerminal(); }
     if (!changedConversation && contextEpoch !== null && data.session.contextEpoch !== undefined && contextEpoch !== data.session.contextEpoch) {
@@ -1595,20 +1597,56 @@ async function inspectOriginalCabinetJob(detail) {
   catch(error){if(current())notice(error.message||'原作业读取尚未完成。');}
   finally{if(current())finishRequest(request);updateButtons();}
 }
+function turnReceipt(conversation, request){
+  if(!request?.requestId)return null;
+  const receipt=conversation?.id===request?.conversationId?conversation?.turnBinding:null;
+  if(!receipt||receipt.requestId!==request?.requestId)return null;
+  if(typeof receipt.turnId==='string'&&receipt.turnId)return 'started';
+  if(['interrupted','failed'].includes(receipt.status))return 'not_sent';
+  return null;
+}
+function rememberUncertainTurn(request){
+  if(!request?.posted||request.accountEpoch!==accountEpoch||!request.conversationId||turnReceipt(lastSession?.conversation,request))return;
+  uncertainTurns.set(request.conversationId,request);
+}
+function reconcileUncertainTurn(conversation){
+  const request=uncertainTurns.get(conversation?.id),receipt=turnReceipt(conversation,request);
+  if(!receipt)return;
+  uncertainTurns.delete(conversation.id);
+  if(receipt==='started')consumeSubmittedInputs(request);
+  if(transientNotice==='本轮发送结果尚未核实，请等待原对话回执。')notice(receipt==='not_sent'?'本轮未发送，已保留输入。':'已核实 Codex 收到本轮请求。');
+}
+function consumeSubmittedInputs(request){
+  if(request.accountEpoch!==accountEpoch||request.conversationId!==skillsConversation())return;
+  if(request.skillIds.length){
+    for(const skill of request.skillIds)skillSelection.delete(skill);
+    renderSkills();$('skills-message').textContent='已提交本轮技能选择；执行结果以对话回执为准。';
+  }
+  if(request.attachments.length){
+    const submitted=new Set(request.attachments.map(item=>item.id));
+    closeImagePreview(false);for(const item of conversationAttachments.get(activeConversationId)||[])if(submitted.has(item.id))releaseAttachmentPreview(item);
+    conversationAttachments.set(activeConversationId,(conversationAttachments.get(activeConversationId)||[]).filter(item=>!submitted.has(item.id)));
+  }
+  if(request.clearDraft&&draftRevision===request.draftRevision&&$('prompt').value===request.draft){
+    $('prompt').value='';$('prompt').style.height='';draftRevision++;rememberDraft();
+  }
+}
 async function send(text, { clearDraft = true } = {}) {
-  const trimmed = text.trim(); if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(lastSession?.conversation?.id) || isUncertainSteer(lastSession?.conversation?.id,trimmed)) return;
+  const trimmed=text.trim(),conversationId=skillsConversation();
+  if (!ready || busy || (selectionReadUnconfirmed && $('include-selection').checked) || modelPermissionChecking() || commandPending() || pendingRequests.has('session') || attachmentRead || skillRead || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && (conversationReadOnly || persistenceFailed()) || !trimmed || steerReceiptsBlocked(conversationId) || isUncertainSteer(conversationId,trimmed) || uncertainTurns.has(conversationId)) return;
   cancelDraftTimer();
   invalidateRequests();
-  const request = beginRequest('turn', { draftRevision, draft: $('prompt').value, submittedContext:contextFlags(), waitingForDraft:Boolean(draftSaveWork), accountEpoch, conversationId:activeConversationId, skillsConversation:skillsConversation(), skillIds:Object.freeze([...skillSelection]), model:modelUiEnabled&&modelSelectionAvailable?selectedModel:undefined, effort:modelUiEnabled&&modelSelectionAvailable&&selectedEffort?selectedEffort:undefined, attachments:Object.freeze(pendingAttachments().slice()) });
+  const request = beginRequest('turn', { requestId:conversationId?crypto.randomUUID():null, clearDraft, draftRevision, draft: $('prompt').value, submittedContext:contextFlags(), waitingForDraft:Boolean(draftSaveWork), accountEpoch, conversationId, skillIds:Object.freeze([...skillSelection]), model:modelUiEnabled&&modelSelectionAvailable?selectedModel:undefined, effort:modelUiEnabled&&modelSelectionAvailable&&selectedEffort?selectedEffort:undefined, attachments:Object.freeze(pendingAttachments().slice()) });
   notice(); busy = true; $('activity-text').textContent = '正在提交请求…'; updateButtons();
   if (!canonical) { messages.push({ id: crypto.randomUUID(), role: 'user', text: trimmed, tools: [] }); renderConversation(); }
   try {
     if (draftSaveWork) { await draftSaveWork; if (!ownsRequest(request)) return; request.waitingForDraft=false;busy=true;updateButtons(); }
     const draft = currentDraft();
     const clearSubmittedDraft = clearDraft && draftRevision === request.draftRevision && $('prompt').value === request.draft;
-    const result = await post('turn', { message: trimmed, context: request.submittedContext,...(request.model!==undefined?{model:request.model}:{}),...(request.effort!==undefined?{effort:request.effort}:{}),
+    request.posted=true;
+    const result = await post('turn', { message: trimmed, context: request.submittedContext,...(request.requestId?{requestId:request.requestId,conversationId}:{}),...(request.model!==undefined?{model:request.model}:{}),...(request.effort!==undefined?{effort:request.effort}:{}),
       ...(request.attachments.length ? {conversationId:request.conversationId,attachments:request.attachments.map(({name,mediaType,data}) => ({name,mediaType,data}))} : {}),
-      ...(request.skillIds.length ? {conversationId:request.skillsConversation,skillIds:request.skillIds} : {}),
+      ...(request.skillIds.length ? {conversationId:request.conversationId,skillIds:request.skillIds} : {}),
       ...(historyEnabled() ? {draft, ...(clearSubmittedDraft ? {clearDraftOnStart:true} : {})} : {}) });
     if (!ownsRequest(request)) return;
     if(result.status==='not_sent'){
@@ -1616,22 +1654,16 @@ async function send(text, { clearDraft = true } = {}) {
       notice('已停止，本轮未发送。');
       return;
     }
-    if(request.accountEpoch===accountEpoch&&request.skillsConversation===skillsConversation()&&request.skillIds.length){skillSelection.clear();renderSkills();$('skills-message').textContent='已提交本轮技能选择；执行结果以对话回执为准。';}
-    if (request.accountEpoch === accountEpoch && request.conversationId === activeConversationId && request.attachments.length) {
-      const submitted=new Set(request.attachments.map(item => item.id));
-      closeImagePreview(false);for(const item of conversationAttachments.get(activeConversationId)||[])if(submitted.has(item.id))releaseAttachmentPreview(item);
-      conversationAttachments.set(activeConversationId,(conversationAttachments.get(activeConversationId) || []).filter(item => !submitted.has(item.id)));
-    }
-    if (clearDraft && draftRevision === request.draftRevision && $('prompt').value === request.draft) {
-      $('prompt').value = ''; $('prompt').style.height = ''; draftRevision++;
-      rememberDraft();
-    }
+    consumeSubmittedInputs(request);
     if (result.session && request.busyRevision === busyRevision && request.commandRevision === commandRevision) applyConversation(result);
     if (request.busyRevision === busyRevision && busy) $('activity-text').textContent = 'Codex 正在处理…';
   } catch (error) {
-    if (!ownsRequest(request) || request.commandRevision !== commandRevision) return;
+    if (!ownsRequest(request)) return;
     const observed = request.busyRevision !== busyRevision;
-    notice(error.message + (observed && busy ? '；服务仍在处理，请以执行回执为准。' : ''));
+    const receipt=turnReceipt(lastSession?.conversation,request);
+    if(receipt==='started'){consumeSubmittedInputs(request);notice('已核实 Codex 收到本轮请求。');}
+    else if(!request.requestId||receipt==='not_sent'||error.outcome==='not_sent'||error.rejected&&error.httpStatus<500&&error.outcome!=='unknown')notice(error.message+(observed&&busy?'；服务仍在处理，请以执行回执为准。':''));
+    else{rememberUncertainTurn(request);notice('本轮发送结果尚未核实，请等待原对话回执。');}
     if (!observed) busy = false;
   } finally { finishRequest(request); updateButtons(); if (historyEnabled() && !busy) scheduleDraftSave(); }
 }
@@ -1827,6 +1859,7 @@ function clearAccountDisplay(isBusy=false){
   historyState={available:historyEnabled(),sessions:[],activeId:null,loading:false,error:'',nextCursor:null,complete:true};
   if (historyAvailable) { $('prompt').value='';$('prompt').style.height='';draftRevision++; }
   accountEpoch++;invalidateRequests();invalidateStatusRead();stream?.close();stream=null;messages=[];lastSession=null;context=null;contextEpoch=null;messageNodes.clear();openedTools.clear();
+  uncertainTurns.clear();
   interruptionNotice='';transientNotice='';customerRecovery=false;notice();
   busy=isBusy;busyRevision++;
   $('transcript').replaceChildren();$('include-document').checked=false;$('include-selection').checked=false;

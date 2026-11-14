@@ -96,6 +96,16 @@ test('native turn start clears only the accepted draft version',async t=>{
   f.codex.finish(1,'completed','已回答');await idle(f);
 });
 
+test('a duplicate submitted request ID in the same conversation does not start another native turn',async t=>{
+  const {open}=await fixture(t),f=await open(),id=f.app.snapshot('model-test-client').session.conversation.id;
+  const input={message:'原轮次',conversationId:id,requestId:'5624d1ed-aaf0-462c-b3b7-f49ed78a7721'};
+  assert.equal((await f.post('turn',input)).status,202);
+  assert.equal(f.app.snapshot('model-test-client').session.conversation.turnBinding.requestId,input.requestId);
+  f.codex.finish(0,'completed','原轮次完成');await idle(f);
+  const duplicate=await f.post('turn',input);
+  assert.equal(duplicate.status,409);assert.equal(duplicate.body.status,'unknown');assert.equal(f.codex.turns.length,1);
+});
+
 test('snapshot capacity and known-unsent errors fail without native replay',async t=>{
   const directory=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-turn-capacity-'));
   const f=await createModelWorkspaceFixture({profile:'model-readonly',required:false,historyDirectory:directory,historyDependencies:{attachmentScopeBytes:4}});
