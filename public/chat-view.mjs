@@ -152,6 +152,13 @@ export function legacyDelta(messages, text, messageId = 'legacy-assistant') {
 
 // Fixed local feedback only: never expose arbitrary transport/account diagnostics.
 export function skillReadFailureMessage(error){
+ if(error?.rejected===true){
+  const {httpStatus:status,message}=error;
+  if(status===401&&message==='请先登录并核验 BuildX 账号。')return '请先登录并核验 BuildX 账号，再读取技能。';
+  if(status===403&&message==='请重新连接面板后重试')return '请重新连接面板，再读取技能。';
+  if(status===503&&(message==='本地服务正在停止；仅原停机请求可重试清理。'||message==='本地服务正在停止'))
+   return '本地服务正在停止，请等待服务结束。重新连接后再读取技能。';
+ }
  const known=new Map([
  ['请等待当前操作结束。','当前操作尚未结束，技能读取未开始。请等待原操作回执，再重新读取技能；不要重复执行原命令。'],
  ['请先连接并确认本机 Codex。','本机 Codex 连接尚未确认，请先检查本机连接，再重新读取技能。'],

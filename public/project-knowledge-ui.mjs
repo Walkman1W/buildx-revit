@@ -70,7 +70,11 @@ export function mountProjectFiles({root, document:doc=document, request, onChang
           await call(action,{rootId:item.id,path});if(!current(created))return;
           menu.open=false;status.textContent=action==='open-file'?'已请求用默认应用打开文件。':'已请求打开所在文件夹。';
         }
-      }catch(error){if(current(created))status.textContent=action!=='read-attachment'&&error?.name==='AbortError'?'打开请求结果未确认，请先检查 Windows 窗口。':errorText(error);}
+      }catch(error){
+        if(!current(created))return;
+        if(error?.code==='ROOT_CHANGED')await refresh(errorText(error));
+        else status.textContent=action!=='read-attachment'&&error?.name==='AbortError'?'打开请求结果未确认，请先检查 Windows 窗口。':errorText(error);
+      }
       finally{busy=false;control.disabled=false;}
     };
     const open=button('用默认应用打开','project-files-open-file',()=>void run('open-file',open));
@@ -107,7 +111,8 @@ export function mountProjectFiles({root, document:doc=document, request, onChang
         idleView();
       }catch(error){
         if(!current(token)||version!==dirGeneration||!details.open)return;
-        if(error?.code==='DIRECTORY_CHANGED'||error?.code==='INVALID_CURSOR'){
+        if(error?.code==='ROOT_CHANGED')await refresh(errorText(error));
+        else if(error?.code==='DIRECTORY_CHANGED'||error?.code==='INVALID_CURSOR'){
           loaded=false;nextCursor=null;children.replaceChildren(...shown,node('p','project-files-error',error?.code==='INVALID_CURSOR'?'分页已失效，请关闭后重新展开。':'目录已变化，请关闭后重新展开。'));
         }else if(cursor){nextCursor=cursor;idleView(errorText(error));}
         else{children.replaceChildren(...shown,node('p','project-files-error',errorText(error)),button('重试','project-files-more',()=>void loadPage(null)));}
@@ -160,10 +165,19 @@ export function mountProjectFiles({root, document:doc=document, request, onChang
     const storageMessage=value.storageStatus==='unavailable'?(value.storageMessage||'资料库地址无法保存，重启后可能丢失。'):'';
     status.textContent=[projectMessage||'文件按需读取；原文件保留在原位置。',storageMessage].filter(Boolean).join(' ');
   }
-  async function refresh(){
+  async function refresh(message=''){
     const token=++epoch;chooserAbort?.abort();selectedFile=null;status.textContent='正在读取资料库…';
-    try{const value=await call('list-roots',{});if(current(token))render(value);}
-    catch(error){if(current(token)){roots.replaceChildren();status.textContent=errorText(error);}}
+    try{
+      const value=await call('list-roots',{});
+      if(!current(token))return;
+      render(value);
+      if(message)status.textContent=message+' '+status.textContent;
+    }catch(error){
+      if(!current(token))return;
+      const retry=button('重新读取资料库','project-files-retry',()=>{if(current(token))void refresh(message);});
+      roots.replaceChildren(retry);
+      status.textContent=errorText(error);
+    }
   }
   form.addEventListener('submit',async event=>{
     event.preventDefault();const path=input.value.trim();if(!path){status.textContent='请输入文件或文件夹的绝对路径。';return;}
