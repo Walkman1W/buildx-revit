@@ -17,7 +17,7 @@ async function fixture(t,queueSettlementVersion=1){
   t.after(()=>fs.rm(root,{recursive:true,force:true}));
   const queue=path.join(root,'queue');
   for(const name of ['inbox','processing','outbox'])await fs.mkdir(path.join(queue,name),{recursive:true});
-  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId,pid:process.pid,version:'0.8.9',queueSettlementVersion}));
+  await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId,pid:process.pid,version:'0.8.9',queueSettlementVersion,visualInspectionVersion:1}));
   return {root,queue,inbox:path.join(queue,'inbox')};
 }
 
@@ -115,4 +115,18 @@ test('a cancellation marker alone never establishes that a published write stopp
   assert.deepEqual(await fs.readdir(path.join(queue,'cancel')),[id+'.json']);
   assert.equal(failure.receiptOwner.inspect().value.terminal,false);
   assert.equal(failure.receiptOwner.close().ok,true);
+});
+
+test('queue settlement waits for a wrapped visual receipt owner to verify expiry',async t=>{
+  const {root,queue,inbox}=await fixture(t);
+  const result=invokeWorkbench('revit_inspect_elements',{expected_document:document.path,element_ids:[3]},
+    {root,timeout:2200,sourceDocument:document,retainReceiptOwner:true}).then(()=>assert.fail('Expected expiry'),error=>error);
+  const name=await waitFor(async()=> (await fs.readdir(inbox)).find(entry=>entry.endsWith('.json')));
+  const id=path.basename(name,'.json');
+  await fs.rename(path.join(inbox,name),path.join(queue,'processing',name));
+  await fs.writeFile(path.join(queue,'outbox',name),JSON.stringify(queueReceipt(id,'expired')));
+  const failure=workbenchFailureEvidence(await result);
+  assert.equal(failure.outcome,'expired');assert.deepEqual(failure.requestIds,[id]);
+  assert.equal((await failure.receiptOwner.inspect()).value.terminal,true);
+  assert.equal((await failure.receiptOwner.close()).ok,true);
 });

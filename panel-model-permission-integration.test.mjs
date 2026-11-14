@@ -53,6 +53,19 @@ test('confirmation is one use and C# always requires user review even in automat
   assert.equal((await approve(f,script,'decline')).status,200);await wait(()=>f.codex.answers.length===2);assert.equal(f.calls.length,1);
 });
 
+test('a second visible model approval cannot start while the first owns an execution',async t=>{
+  let settle;const pending=new Promise(resolve=>{settle=resolve;});t.after(()=>settle({ok:true,value:{done:true}}));
+  const f=await fixture(t,{invoke:()=>pending});await choose(f,'confirm');await f.post('turn',{message:'分别确认两项操作'});
+  const args={mode:'commit',element_ids:[1],delta_mm:{x:1,y:0,z:0}};
+  f.codex.request(1,'revit_move_elements',args);f.codex.request(2,'revit_move_elements',{...args,element_ids:[2]});
+  const first=f.app.snapshot('browser').dynamicApproval;
+  assert.equal((await approve(f,first)).status,200);await wait(()=>f.calls.length===1);
+  const second=f.app.snapshot('browser').dynamicApproval;assert.ok(second);assert.notEqual(second.id,first.id);
+  const rejected=await approve(f,second);assert.equal(rejected.status,409);assert.equal(rejected.body.code,'MODEL_OPERATION_BUSY');assert.equal(f.calls.length,1);
+  settle({ok:true,value:{done:true}});await wait(()=>f.codex.answers.length===1);
+  assert.equal((await approve(f,second,'decline')).status,200);await wait(()=>f.codex.answers.length===2);assert.equal(f.calls.length,1);
+});
+
 test('cross-conversation, changing documents and direct command attempts cannot bypass the model policy',async t=>{
   const f=await fixture(t);const id=f.session;
   assert.equal((await f.post('command',{conversationId:id,commandId:'revit_move_elements',confirmed:true,parameters:{mode:'commit'}})).status,403);

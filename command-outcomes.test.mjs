@@ -30,3 +30,11 @@ test('display never infers expiry or a known failure from arbitrary exception wo
   const expired=modelCommandPresentation({status:'failed',error:{code:'COMMAND_REQUEST_EXPIRED',outcome:'expired',message:'native diagnostic'}});assert.equal(expired.error,'本次查询未执行。');assert.equal(expired.diagnostic,'native diagnostic');
   assert.equal(modelCommandPresentation({status:'failed',error:{code:'COMMAND_QUERY_FAILED',outcome:'failed',message:'native diagnostic'}}).error,'Revit 未能完成本次查询。');
 });
+
+test('queue settlement presents cancellation and expiry without inferring them from a pending receipt',()=>{
+  const cancelled={status:'interrupted',error:{outcome:'not_started',nativeFailure:{phase:'queue',started:false,reason:'cancelled'}}};
+  assert.equal(modelCommandPresentation(cancelled).error,'已取消，未执行。');
+  const expired={status:'failed',error:{code:'COMMAND_REQUEST_EXPIRED',outcome:'expired',nativeFailure:{phase:'queue',started:false,reason:'expired'}}};
+  assert.equal(modelCommandPresentation(expired).error,'请求在排队期间过期，未执行。');
+  assert.equal(modelCommandPresentation({...cancelled,status:'unknown'}).status,'结果待核对');
+});

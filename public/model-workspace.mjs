@@ -146,6 +146,11 @@ export function modelCommandPresentation(command) {
     else if(command.error?.code === 'COMMAND_REQUEST_EXPIRED' && command.error.outcome === 'expired'){view.status='请求已过期';view.error=cabinetOperation?'本次操作未执行。':'本次查询未执行。';}
     else if(command.error?.code === 'COMMAND_QUERY_FAILED' && command.error.outcome === 'failed')view.error='Revit 未能完成本次查询。';
   }
+  const failure=command.error?.nativeFailure;
+  if(failure?.phase==='queue'&&failure.started===false){
+    if(command.status==='failed'&&command.error.outcome==='expired'&&failure.reason==='expired')view.error='请求在排队期间过期，未执行。';
+    if(command.status==='interrupted'&&command.error.outcome==='not_started'&&failure.reason==='cancelled')view.error='已取消，未执行。';
+  }
   if (command.status !== 'completed' || !command.result?.data) return view;
   const data = command.result.data;
   view.document = typeof command.result.document?.title === 'string' ? command.result.document.title : '';
