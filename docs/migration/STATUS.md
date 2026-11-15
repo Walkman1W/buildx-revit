@@ -4,7 +4,9 @@
 
 ## 2026-11-15 对话本机工具联调
 
-`codex/buildx-chat-tools-20261115` 在独立工作树接入扫描 PDF、Excel、Brave 搜索和 Images API，复用白底对话、逐次确认和结果卡。合成中英泵报价通过真实本机 OCR 和一次确认的 Excel 下载，Excel 16 打开并重算 25,000 CNY。搜索记录确切查询和来源，生图先验证纯文字再验证选中的参考图。两项外部调用使用本机夹具，Brave 的固定版本另做了真实 MCP 握手。外部供应商和 Revit WebView 尚待验收。[联调说明](CHAT-LOCAL-TOOLS-20261115.zh-CN.md)
+`codex/buildx-chat-tools-20261115` 在独立工作树接入扫描 PDF、Excel、Brave 搜索和 Images API，复用白底对话、逐次确认和结果卡。合成中英泵报价通过真实本机 OCR 和一次确认的 Excel 下载，Excel 16 打开并重算 25,000 CNY。搜索记录确切查询和来源，生图先验证纯文字再验证选中的参考图。两项外部调用使用本机夹具，Brave 的固定版本另做了真实 MCP 握手。
+
+`e513668` 构建内部候选 `0.8.9-chat-tools.20261115.2`。真实 Revit 2024 API 编译，152 项 ZIP 文件回读和候选语法检查通过。独立本机 41918 实例已启动，Codex 握手就绪，浏览器实测白底输入区和 PDF 暂存。既有 `.3` 注册和 41876 实例已复核。真实供应商和 Revit WebView 待验收。[联调说明](CHAT-LOCAL-TOOLS-20261115.zh-CN.md)
 
 ## 2026-11-15 水泵进出水口端面修复
 
