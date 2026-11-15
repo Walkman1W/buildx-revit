@@ -27,6 +27,8 @@ If Codex detection finds more than one possible runtime, select the absolute pat
 
 In the repository root on Windows, install the locked dependencies and run the entry-point syntax check and targeted test suites. Some tests use the installed .NET Framework C# compiler to run controlled Revit host fixtures.
 
+Node.js tests live in [`tests/`](tests/). From the repository root, run the suites below or use `node --test tests/workbench-queue-settlement.test.mjs` to run a single file.
+
 ```powershell
 npm ci --ignore-scripts
 npm run check

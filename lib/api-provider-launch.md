@@ -10,4 +10,4 @@
 
 每次启动生成独立随机环境变量名，以减少既有静态 MCP `env_vars` 意外转发测试标记；旧固定变量也从新子进程环境中移除。这不能阻止同一用户的恶意进程或能够读取父进程环境的插件，不能作为密钥隔离边界。恢复真实 API 能力前，必须先完成受控服务端密钥保管与访问控制、网关和凭据生命周期，并验证真实供应商认证、Responses 流式和工具调用；不得读取、复制、清除已有 ChatGPT 凭据。客户端的 API 身份仅表示测试配置归属，`modelAvailability` 保持 `unverified`，不代表推理成功。
 
-运行 `node --test api-provider-launch.test.mjs internal-api-client.test.mjs` 可验证隔离单元测试，包含一个仅接收合成测试值的 Node 进程。`workbench/experiments/api-provider/` 下的真实 Codex 测试使用回环模拟 Responses/MCP，但**回环模型地址和临时 Codex 目录不能证明整个进程强制离线**。2026-10-29 的一次独立探针中，Codex 后代 Git 访问了 GitHub，专属临时目录中出现已获取的对象包和 `curated-sync` 引用；同批其他测试是否发生外联未知。该次没有连接真实模型供应商或 Revit 的证据，但不能声称没有外网活动。此前相关文档中的“完全无外网”表述不成立。未建立并验证覆盖全部后代的强制离线隔离前，不再运行真实 Codex 探针；它也不能证明任何真实供应商兼容。
+运行 `node --test tests/api-provider-launch.test.mjs tests/internal-api-client.test.mjs` 可验证隔离单元测试，包含一个仅接收合成测试值的 Node 进程。`workbench/experiments/api-provider/` 下的真实 Codex 测试使用回环模拟 Responses/MCP，但**回环模型地址和临时 Codex 目录不能证明整个进程强制离线**。2026-10-29 的一次独立探针中，Codex 后代 Git 访问了 GitHub，专属临时目录中出现已获取的对象包和 `curated-sync` 引用；同批其他测试是否发生外联未知。该次没有连接真实模型供应商或 Revit 的证据，但不能声称没有外网活动。此前相关文档中的“完全无外网”表述不成立。未建立并验证覆盖全部后代的强制离线隔离前，不再运行真实 Codex 探针；它也不能证明任何真实供应商兼容。

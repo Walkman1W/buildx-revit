@@ -1,4 +1,4 @@
-// Executed only by customer-chat-cwd.test.mjs in its own Node process. Native
+// Executed only by tests/customer-chat-cwd.test.mjs in its own Node process. Native
 // executables, Auth and upstream responses are fixtures; no actual Codex runs.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';

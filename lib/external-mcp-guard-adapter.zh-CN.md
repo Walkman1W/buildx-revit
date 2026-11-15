@@ -15,4 +15,4 @@
 
 ## 验证范围
 
-`node --test lib/external-mcp-guard-adapter.test.mjs` 使用模拟启动 owner 检查生命周期、竞态、失败重试和关闭通知，并使用自建本地 stdio 夹具验证 SDK 握手及工具列表；该夹具直接通过 SDK 生成进程且假定清理证明，不代表真实守护或第三方 MCP 验收。未修改 ACL、现有服务或 Revit。实际 guard、私有账本和生产接线完成前，不开放该入口。
+`node --test tests/lib/external-mcp-guard-adapter.test.mjs` 使用模拟启动 owner 检查生命周期、竞态、失败重试和关闭通知，并使用自建本地 stdio 夹具验证 SDK 握手及工具列表；该夹具直接通过 SDK 生成进程且假定清理证明，不代表真实守护或第三方 MCP 验收。未修改 ACL、现有服务或 Revit。实际 guard、私有账本和生产接线完成前，不开放该入口。

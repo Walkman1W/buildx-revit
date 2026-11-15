@@ -4,6 +4,13 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-TEST-LAYOUT-20261116",
+      "title": "统一 Node.js 测试目录",
+      "status": "verified",
+      "acceptance": "全部 Node.js 测试位于 tests/，保留用例，测试命令和独立源码白名单指向新路径",
+      "evidence": "306 test files; 12 npm suite commands; 363 source snapshot entries; 120 layout, 5 snapshot, 53 fixture and 222 controlled native-query checks passed; 3131 tests before and after, no new failing test titles"
+    },
+    {
       "id": "BX-MAIN-SOURCE-20261115",
       "title": "主线源码基线与中英文文档",
       "status": "source_baseline",

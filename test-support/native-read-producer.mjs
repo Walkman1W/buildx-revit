@@ -139,7 +139,7 @@ internal sealed class Producer {
   ${requireDocument}
   private static string Text(Dictionary<string,object> values,string key,string fallback="") { object value;return values.TryGetValue(key,out value)?Convert.ToString(value):fallback; }
   // This peer isolates dispatch/transaction behavior. The real access-policy
-  // implementation is executed separately by native-access-policy.test.mjs.
+  // implementation is executed separately by tests/native-access-policy.test.mjs.
   private static void RequireProjectEdit(Document doc,string expected,object access) { RequireDocument(doc,expected);if(!doc.AllowedSample)throw new InvalidOperationException("Controlled document is not an allowed project."); }
 }
 internal static class Program {

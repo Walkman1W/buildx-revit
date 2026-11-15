@@ -27,6 +27,8 @@ BuildX 是 Autodesk Revit 的 AI 工作台。在 Revit 侧栏里使用自己的 
 
 在 Windows 的仓库根目录安装锁定依赖，运行入口语法检查和目标回归。部分测试通过系统已有的 .NET Framework C# 编译器运行受控宿主夹具。
 
+Node.js 测试集中在 [`tests/`](tests/)。从仓库根目录运行下列测试组，也可用 `node --test tests/workbench-queue-settlement.test.mjs` 单独运行一个文件。
+
 ```powershell
 npm ci --ignore-scripts
 npm run check
