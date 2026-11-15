@@ -104,6 +104,7 @@ namespace RevitLocalCodex {
 
   internal static bool IsRead(string op){return NativeParameterQueries.IsRead(op)||NativeModelQueries.IsRead(op);}
   internal static object Read(UIApplication app,string op,Dictionary<string,object> args){return NativeParameterQueries.IsRead(op)?NativeParameterQueries.Read(app,op,args):NativeModelQueries.Read(app,op,args);}
+  internal static object PreviewBatchParameterFilter(Document doc,string category,long? typeId,long? levelId,long parameterId){throw new InvalidOperationException("Out of scope batch filter preview peer.");}
   private sealed class BasicCreatedExpectation { internal ElementId Id; }
         // The parameter producer extracts the shared dispatcher; unrelated
         // operations fail closed here and are covered by dedicated fixtures.
@@ -156,6 +157,10 @@ namespace RevitLocalCodex {
  internal sealed class TypeWriteHostPeer {
   private readonly string session=TypeWritePeerControl.Text("hostSession","controlled-host");private TypeParameterWriteApproval typeParameterApprovals;
   private readonly JavaScriptSerializer json=new JavaScriptSerializer {MaxJsonLength=1024*1024,RecursionLimit=40};
+  private sealed class SnapshotPeer {
+   internal object Query(Document doc,Dictionary<string,object> args){throw new InvalidOperationException("Out of scope snapshot delta peer.");}
+  }
+  private readonly SnapshotPeer snapshotBridge=new SnapshotPeer();
   // ACTUAL_ATOMIC_OPERATIONS
   // ACTUAL_HOST_METHODS
   internal TypeWriteHostPeer(){var source=new BuildX.FamilyRevit.RevitProjectDocumentSource(Thread.CurrentThread.ManagedThreadId);typeParameterApprovals=new TypeParameterWriteApproval(session,source.SameOpenDocument,()=>TypeWritePeerControl.Tick,1000,()=>DateTime.UtcNow);}

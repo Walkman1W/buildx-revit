@@ -13,7 +13,7 @@ let streamConnected = false, streamRecoveryPending = false, recoveryWorkspace = 
 // Workspace is a display/capability ceiling supplied by this fixed-profile
 // endpoint. It never grants tool or write authority. A restricted page cannot
 // regain model context from a late status/snapshot or a reconnect response.
-let fixedWorkspace = null, modelContextAllowed = true, sourceToolCount = 0, confirmedWrite = false;
+let fixedWorkspace = null, modelContextAllowed = true, sourceToolCount = 0, confirmedWrite = false, scopedAutomatic = false;
 let modelUiEnabled = false, modelAccount = null, modelConfirmation = null;
 let modelSelectionAvailable=false, modelChoices=[], selectedModel='', selectedEffort='', modelPickerError='', modelPickerLoading=false, modelPickerAttempted=false, modelPickerRevision=0;
 const modelPreferenceKey='buildx-model-preference-v1';
@@ -537,7 +537,7 @@ function restoreConversationDraft(id, data, preserveInitial = false) {
 function publishModelView() {
   if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function' || typeof CustomEvent !== 'function') return;
   window.dispatchEvent(new CustomEvent('buildx-model-view', { detail: {
-    enabled: modelUiEnabled && modelContextAllowed, ready, commandsReady, busy, confirmedWrite,
+    enabled: modelUiEnabled && modelContextAllowed, ready, commandsReady, busy, confirmedWrite, scopedAutomatic,
     blocked: busy || modelPermissionChecking() || pendingRequests.has('session') || commandPending(), account: modelAccount, confirmation: modelConfirmation,
     toolCatalog, ...(commandCatalog!==null?{commandCatalog}:{}), hasMessages: messages.length > 0, accountEpoch, contextEpoch, mcpCandidatesAvailable,
     history:{ ...historyState, available:historyEnabled(), activeId:activeConversationId || historyState.activeId },
@@ -766,6 +766,7 @@ function renderTools(state) {
 }
 function status(state = {}) {
   if (state.confirmedWrite === true) confirmedWrite = true;
+  if (Object.hasOwn(state,'confirmedWrite')) scopedAutomatic = state.confirmedWrite===true && state.scopedAutomatic===true;
   if (!applyWorkspace(state.workspace)) { if (customerWorkspace()) { ready = false; updateButtons(); } return false; }
   if(Object.hasOwn(state,'busyOperation'))serverBusyOperation=state.busyOperation==='model-permission-check'?'model-permission-check':null;
   else if(state.busy===false)serverBusyOperation=null;
@@ -892,16 +893,35 @@ function renderMarkdown(parent, text, message) {
   parent.replaceChildren(fragment);
 }
 const originalReadReceiptLabels={received:'原回执确认查询成功',expired:'原请求已过期，未执行',not_started:'原回执确认未执行',failed:'原回执确认失败'};
+const modelOperationReceiptLabels={
+  completed:'模型操作已完成',not_started:'操作未开始',failed:'Revit 执行失败',unconfirmed:'结果待核对',declined:'已拒绝，未执行',
+};
+function modelOperationReceiptText(receipt){
+  if(receipt.outcome==='not_started'&&receipt.code==='MODEL_APPROVAL_EXPIRED')return '确认超时，未执行';
+  if(receipt.outcome==='not_started'&&receipt.code==='MODEL_OPERATION_UNSUPPORTED')return '工具未开放，未执行';
+  if(receipt.outcome==='unconfirmed'&&receipt.code==='MODEL_REVIT_EXECUTION_FAILED')return 'Revit 执行失败，结果待核对';
+  return Object.hasOwn(modelOperationReceiptLabels,receipt.outcome)?modelOperationReceiptLabels[receipt.outcome]:null;
+}
 function toolCard(messageId, tool, receipt) {
   const id = messageId + ':' + tool.id;
   const currentStatus = ['running', 'returned', 'failed', 'unknown'].includes(tool.status) ? tool.status : 'unknown';
   const receiptLabel=currentStatus==='unknown'&&receipt&&Object.hasOwn(originalReadReceiptLabels,receipt.status)?originalReadReceiptLabels[receipt.status]:null;
+  const operationReceipt=tool.name==='buildx_model_operation'?tool.operationReceipt:null;
+  const operationLabel=operationReceipt?modelOperationReceiptText(operationReceipt):null;
   const displayedStatus=receiptLabel?(receipt.status==='received'?'returned':'failed'):currentStatus;
   const details = node('details', 'tool-call ' + displayedStatus), summary = node('summary');
   details.open = openedTools.has(id);
   details.addEventListener('toggle', () => { if (!details.isConnected) return; if (details.open) openedTools.add(id); else openedTools.delete(id); });
-  summary.append(node('span', 'tool-indicator'), node('span', 'tool-name', tool.label || tool.name || '工具调用'), node('span', 'tool-status', receiptLabel||toolStatus(currentStatus)));
+  summary.append(node('span', 'tool-indicator'), node('span', 'tool-name', tool.label || tool.name || '工具调用'), node('span', 'tool-status', operationLabel||receiptLabel||toolStatus(currentStatus)));
   const content = node('div', 'tool-details');
+  if(operationLabel){
+    content.append(node('p','',operationLabel+'。'));
+    if(operationReceipt.tool)content.append(node('h4','','操作'),node('code','',operationReceipt.tool));
+    if(operationReceipt.code)content.append(node('h4','','诊断码'),node('code','',operationReceipt.code));
+    if(operationReceipt.requestId)content.append(node('h4','','Revit 原请求'),node('code','',operationReceipt.requestId));
+    if(operationReceipt.outcome==='unconfirmed')content.append(node('p','','请核对原回执，避免重复提交。'));
+    details.append(summary,content);return details;
+  }
   content.append(node('h4', '', tool.name || '工具'), node('h4', '', '调用参数'), node('pre', '', previewText(tool.argumentsPreview)));
   if (tool.resultPreview !== undefined && tool.resultPreview !== null) content.append(node('h4', '', '返回内容'), node('pre', '', previewText(tool.resultPreview)));
   if (tool.error) content.append(node('h4', '', '错误'), node('pre', 'tool-error', previewText(tool.error)));
@@ -1234,7 +1254,8 @@ function applyDynamicApprovalResult(value){
      !['completed','not_started','unconfirmed','declined'].includes(value.status)||
      value.code!==undefined&&(typeof value.code!=='string'||!/^MODEL_[A-Z0-9_]{1,100}$/.test(value.code))||
      value.operationOutcome!==undefined&&value.operationOutcome!=='not_started')return;
-  const message={completed:'模型操作已完成，请查看执行结果。',not_started:value.code==='MODEL_DOCUMENT_REVALIDATION_FAILED'?'当前模型或执行权限未能重新核实，本次操作未开始；请结束未完成的 Revit 命令后重新核实。':'本次模型操作未开始，请查看对话中的原因。',unconfirmed:value.operationOutcome==='not_started'?'模型操作未开始；前置查询的原回执仍需核对。':'模型操作结果尚未确认，请核对原回执；不要重复执行。',declined:'已拒绝，本次模型操作未执行。'}[value.status];
+  const diagnostic=value.code==='MODEL_APPROVAL_EXPIRED'||value.code==='MODEL_OPERATION_UNSUPPORTED'||value.code==='MODEL_REVIT_EXECUTION_FAILED'?modelOperationReceiptText({outcome:value.status,code:value.code})+'。':null;
+  const message=diagnostic??{completed:'模型操作已完成，请查看执行结果。',not_started:value.code==='MODEL_DOCUMENT_REVALIDATION_FAILED'?'当前模型或执行权限未能重新核实，本次操作未开始；请结束未完成的 Revit 命令后重新核实。':'本次模型操作未开始，请查看对话中的原因。',unconfirmed:value.operationOutcome==='not_started'?'模型操作未开始；前置查询的原回执仍需核对。':'模型操作结果尚未确认，请核对原回执；不要重复执行。',declined:'已拒绝，本次模型操作未执行。'}[value.status];
   owner.resultMessage=message+(value.code?'（'+value.code+'）':'');settleDynamicApproval(owner,value.status);
 }
 function settleDynamicApproval(owner,state){
@@ -1639,7 +1660,11 @@ async function runCommand(detail) {
   const definition=commandCatalog?.find(command=>command.id===commandId);
   if(definition?.enabled===false||definition?.manualExecution===false||definition?.tool==='revit_set_type_parameter'&&definition.requiresTypeParameterReview!==true)return;
   if(definition?.readOnly===false&&detail?.confirmed!==true){
-    const grant=modelPermission,exempt=!confirmedWrite&&definition.effectKind==='model_transaction'&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===conversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now())&&(grant.level==='automatic'||parameters.mode!=='commit')&&!(grant.level==='rollback'&&parameters.mode==='commit');
+    const grant=modelPermission;
+    const currentGrant=grant?.available===true&&grant.conversationId===conversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now());
+    const exempt=currentGrant&&definition.effectKind==='model_transaction'&&(confirmedWrite
+      ? scopedAutomatic&&definition.scopedAutoApplyEligible===true&&definition.tool!=='revit_set_type_parameter'&&accessPolicy?.mode==='project-write'&&accessPolicy.modelWritable===true&&grant.level==='automatic'&&parameters.mode==='commit'
+      : ['rollback','confirm','automatic'].includes(grant.level)&&(grant.level==='automatic'||parameters.mode!=='commit')&&!(grant.level==='rollback'&&parameters.mode==='commit'));
     if(!exempt)return;
   }
   commandRevision++;

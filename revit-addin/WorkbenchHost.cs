@@ -1,6 +1,9 @@
 #if BUILDX_CONFIRMED_WRITE && BUILDX_NATIVE_READONLY_TEST
 #error Confirmed write and read-only modes are mutually exclusive.
 #endif
+#if BUILDX_SCOPED_AUTO_APPLY && !BUILDX_CONFIRMED_WRITE
+#error Scoped auto apply requires the confirmed-write host.
+#endif
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -334,6 +337,9 @@ namespace RevitLocalCodex
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
+#if BUILDX_SCOPED_AUTO_APPLY
+                    scopedAutoApplyVersion = ScopedAutoApply.Version, scopedAutoApplyOperations = ScopedAutoApply.Operations,
+#endif
                     familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, pumpFamilyArtifactVersion = 1, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
         }
@@ -777,6 +783,14 @@ namespace RevitLocalCodex
             CheckConfirmedWrite(uiapp, doc, args, access);
         }
 #endif
+#if BUILDX_SCOPED_AUTO_APPLY
+        private void CheckScopedAutoApply(UIApplication uiapp, Document doc, Dictionary<string, object> args, AccessPolicy.Binding access, string id)
+        {
+            if (QueueRejection(id, confirmedWriteDeadline, json) != null)
+                throw new InvalidOperationException("Scoped auto apply expired or was cancelled before commit.");
+            CheckConfirmedWrite(uiapp, doc, args, access);
+        }
+#endif
 
         private void ProcessOne(UIApplication uiapp, SchedulerObservation observation, DateTime executeEnteredUtc, long executeEnteredTicks)
         {
@@ -837,6 +851,12 @@ namespace RevitLocalCodex
                 var args = request.ContainsKey("args") ? request["args"] as Dictionary<string, object> : null;
                 bool atomicRead = AtomicReadRequested(request, operation);
                 AccessPolicy.Binding access = AccessPolicy.RequestBinding(request);
+                bool scopedAutoApply = false;
+#if BUILDX_SCOPED_AUTO_APPLY
+                rejectionCode = "WORKBENCH_SCOPED_AUTO_APPLY_INVALID";
+                scopedAutoApply = ScopedAutoApply.Requested(request, operation, args, access != null, atomicRead);
+                rejectionCode = null;
+#endif
                 if (BuildX.FamilyRevit.PumpFamilyArtifact.IsOperation(operation))
                 {
                     rejectionCode = "PUMP_APPROVAL_UNVERIFIED";
@@ -867,7 +887,7 @@ namespace RevitLocalCodex
                     }
                     else result = atomicRead
                         ? DispatchAtomicRead(uiapp, operation, args ?? new Dictionary<string, object>(), id, access)
-                        : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access);
+                        : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access, scopedAutoApply);
                 }
                 finally { dispatchFinishedUtc = DateTime.UtcNow; dispatchFinishedTicks = Stopwatch.GetTimestamp(); }
             }
@@ -1022,7 +1042,7 @@ namespace RevitLocalCodex
             return args;
         }
 
-        private object Dispatch(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access)
+        private object Dispatch(UIApplication uiapp, string operation, Dictionary<string, object> args, string id, AccessPolicy.Binding access, bool scopedAutoApply = false)
         {
 #if BUILDX_CONFIRMED_WRITE
             if (operation != "status" && !WorkbenchActions.IsRead(operation) && !CadGeometryQueries.IsRead(operation) && operation != "preview_schematic" && operation != "preview_project_parameter_binding" && operation != "set_selection" && operation != "select_by_unique_ids" && operation != "set_parameter_value" && operation != "set_type_parameter" && operation != "create_group")
@@ -1107,6 +1127,10 @@ namespace RevitLocalCodex
             string mode = Text(args, "mode", "rollback");
             if (mode != "commit" && mode != "rollback") throw new InvalidOperationException("Mode must be commit or rollback.");
 #if BUILDX_CONFIRMED_WRITE
+#if BUILDX_SCOPED_AUTO_APPLY
+            if (scopedAutoApply) CheckScopedAutoApply(uiapp, doc, args, access, id);
+            else
+#endif
             ConfirmNativeWrite(uiapp, doc, operation, args, access);
 #endif
             string sourcePath = doc.PathName, sourceTitle = doc.Title;
@@ -1127,6 +1151,10 @@ namespace RevitLocalCodex
                     // callback is running. Never commit under an obsolete grant.
                     if (mode == "commit") RequireProjectEdit(doc, ExpectedDocument(args), access);
 #if BUILDX_CONFIRMED_WRITE
+#if BUILDX_SCOPED_AUTO_APPLY
+                    if (scopedAutoApply) CheckScopedAutoApply(uiapp, doc, args, access, id);
+                    else
+#endif
                     CheckConfirmedWrite(uiapp, doc, args, access);
 #endif
                     TransactionStatus completion = mode == "commit" ? group.Assimilate() : group.RollBack();
@@ -1172,6 +1200,9 @@ namespace RevitLocalCodex
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
+#if BUILDX_SCOPED_AUTO_APPLY
+                    scopedAutoApplyVersion = ScopedAutoApply.Version, scopedAutoApplyOperations = ScopedAutoApply.Operations,
+#endif
                     structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, pumpFamilyArtifactVersion = 1, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }
                         .Concat(WorkbenchActions.ReadOperations).Concat(WorkbenchActions.WriteOperations).Concat(FamilyOperations).Concat(VisualInspection.Operations).ToArray() },

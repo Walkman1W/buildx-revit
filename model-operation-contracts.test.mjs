@@ -1,14 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import Ajv from 'ajv';
 import Ajv2020 from 'ajv/dist/2020.js';
 import {MODEL_AI_EFFECT_TOOLS,MODEL_AI_READ_TOOLS} from './lib/panel-tools.mjs';
 import {supportsModelPermissionTool} from './lib/model-operation-effects.mjs';
 import {MODEL_AGENT_TOOL,MODEL_AGENT_TOOL_WITH_FAMILY_LIFECYCLE} from './lib/model-agent-tool.mjs';
-import {MODEL_OPERATION_SCHEMA_TOOL,modelOperationContracts,describeModelOperationSchema} from './lib/model-operation-contracts.mjs';
-import {createModelWorkspaceSessionProfile} from './lib/codex-profile.mjs';
+import {MODEL_OPERATION_SCHEMA_TOOL,modelOperationContracts,describeModelOperationSchema,modelReadTools} from './lib/model-operation-contracts.mjs';
+import {createModelWorkspaceSessionProfile,verifyModelWorkspaceCatalog} from './lib/codex-profile.mjs';
 import {CodexClientCore} from './lib/codex-client-core.mjs';
 import {createModelPermissionOwner} from './lib/model-permission-owner.mjs';
+import {CONFIRMED_WRITE_TOOLS} from './lib/confirmed-write-profile.mjs';
 
 const documentPath='D:\\controlled\\catalog-budget.rvt';
 const strictAjv=()=>new Ajv2020({strict:true,allErrors:true});
@@ -102,6 +106,44 @@ test('domain discovery is bounded and exact read contracts retain their schemas'
     assert.ok(byDomain.get('elements').includes(name),name);
   }
   for(const input of [{domain:'bad'},{domain:'mep',limit:21},{domain:'mep',offset:-1},{domain:'mep',tool:'revit_execute_csharp'}])assert.equal(describeModelOperationSchema(input).ok,false);
+});
+
+test('confirmed workspace discovery matches executable writes and keeps read contracts',async t=>{
+  const root=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-confirmed-catalog-'));
+  t.after(()=>fs.rm(root,{force:true,recursive:true}));
+  assert.equal(createModelWorkspaceSessionProfile(root,false,false,[],{scopedAutomatic:true}).scopedAutomatic,undefined);
+  await fs.writeFile(path.join(root,'buildx-confirmed-write.json'),JSON.stringify({schemaVersion:1,scope:'confirmed-write'}));
+  const profile=createModelWorkspaceSessionProfile(root,false,false,[],{scopedAutomatic:true});
+  assert.equal(profile.scopedAutomatic,true);
+  assert.match(profile.buildInstructions(),/省略 mode 将直接应用.*显式 mode: "rollback".*类型参数每次都要求明确确认/);
+  assert.equal(createModelWorkspaceSessionProfile(root).scopedAutomatic,undefined);
+  const byName=new Map(profile.dynamicTools.map(tool=>[tool.name,tool]));
+  assert.deepEqual(byName.get('buildx_model_operation').inputSchema.properties.tool.enum,CONFIRMED_WRITE_TOOLS);
+  const advertised=byName.get('buildx_model_operation_schema').inputSchema.properties.tool.enum;
+  const unexposedReads=['revit_family_templates','revit_family_inspect_job'];
+  assert.deepEqual(profile.toolNames,MODEL_AI_READ_TOOLS.map(tool=>tool.name).filter(name=>!unexposedReads.includes(name)));
+  assert.deepEqual(new Set(advertised),new Set([...profile.toolNames,...CONFIRMED_WRITE_TOOLS]));
+  const catalog=tools=>({data:[{name:'revit_workbench',runtimeStatus:'connected',authStatus:'unsupported',resources:[],resourceTemplates:[],tools:Object.fromEntries(tools.map(tool=>[tool.name,tool]))}]} );
+  assert.equal(profile.verifyWholeCatalog(catalog(modelReadTools(true))).ok,true);
+  assert.equal(profile.verifyWholeCatalog(catalog(MODEL_AI_READ_TOOLS)).ok,false);
+  assert.equal(verifyModelWorkspaceCatalog(catalog(MODEL_AI_READ_TOOLS)).ok,true);
+  assert.equal(verifyModelWorkspaceCatalog(catalog(modelReadTools(true))).ok,false);
+  const options={confirmedWrite:true},expanded=[];
+  for(const domain of MODEL_OPERATION_SCHEMA_TOOL.inputSchema.properties.domain.enum){
+    let offset=0,more=true;
+    while(more){
+      const {ok,value}=describeModelOperationSchema({domain,offset,limit:3},options);
+      assert.equal(ok,true);expanded.push(...value.tools);more=value.hasMore;offset+=3;
+    }
+  }
+  assert.deepEqual(new Set(expanded.map(tool=>tool.name)),new Set(advertised));
+  assert.deepEqual(new Set(expanded.filter(tool=>tool.kind==='operation').map(tool=>tool.name)),new Set(CONFIRMED_WRITE_TOOLS));
+  for(const name of advertised)assert.deepEqual(describeModelOperationSchema({tool:name},options),describeModelOperationSchema({tool:name}));
+  for(const name of ['revit_create_wall','revit_create_pipe','revit_execute_csharp','revit_family_save_job',...unexposedReads]){
+    assert.equal(describeModelOperationSchema({tool:name}).ok,true);
+    assert.equal(describeModelOperationSchema({tool:name},options).error.code,'MODEL_OPERATION_UNSUPPORTED');
+  }
+  assert.equal(describeModelOperationSchema({tool:'unknown'},options).error.code,'MODEL_OPERATION_SCHEMA_UNAVAILABLE');
 });
 
 test('schema lookup rejects malformed data, aliases, unknown names and getters without model work',()=>{

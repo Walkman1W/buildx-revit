@@ -4,6 +4,15 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-SCOPED-AUTO-APPLY-20261115",
+      "title": "项目范围自动应用、工具目录及诊断回执",
+      "status": "candidate_packaged",
+      "acceptance": "确认超时、工具未开放、原生失败和未知结果各有真实原因；已绑定项目的实例参数与模型组可自动提交；类型参数和回滚预览逐次确认",
+      "evidence": "0.8.9-scoped-auto-apply.20261115.1; Revit 2024 API 24.3.30.11; 153 ZIP entries verified; 41918 live Codex exact schema returns MODEL_OPERATION_UNSUPPORTED and receipt survives browser history; 107 focused tests and 45 type-parameter tests passed",
+      "realRevitWebViewVerified": false,
+      "realModelExecutionVerified": false
+    },
+    {
       "id": "BX-CHAT-LOCAL-TOOLS-20261115",
       "title": "本机扫描 PDF、Excel、搜索和 PNG 联调",
       "status": "candidate_packaged",

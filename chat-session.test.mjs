@@ -1,10 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
 import {ChatSession,CHAT_LIMITS,previewChatValue,previewMcpResult,boundedChatNotification} from './lib/chat-session.mjs';
+import {panelConversationEvents,panelSnapshot,projectPanelConversation} from './lib/panel-chat-format.mjs';
 
 function started(){const s=new ChatSession();s.threadId='thread-1';const run=s.begin('检查模型');run.turnId='turn-1';return {s,run};}
 const owned=(extra={})=>({threadId:'thread-1',turnId:'turn-1',...extra});
 const label=name=>name==='revit_get_selection'?'当前选择':null;
+test('native model receipts preserve owned reasons and unknown results in conversation history',()=>{
+  const {s,run}=started(),foreign=started();
+  const timeout={id:randomUUID(),tool:'revit_set_parameter_value',outcome:'not_started',code:'MODEL_APPROVAL_EXPIRED'};
+  const missing={id:randomUUID(),tool:'revit_create_wall',outcome:'not_started',code:'MODEL_OPERATION_UNSUPPORTED'};
+  const execution={id:randomUUID(),tool:'revit_create_group',outcome:'unconfirmed',code:'MODEL_REVIT_EXECUTION_FAILED',requestId:randomUUID()};
+  assert.equal(s.recordModelOperationReceipt(foreign.run,timeout),false);
+  assert.equal(s.recordModelOperationReceipt(run,{...execution,outcome:'timeout'}),false);
+  for(const receipt of [timeout,missing,execution])assert.equal(s.recordModelOperationReceipt(run,receipt),true);
+  assert.equal(s.recordModelOperationReceipt(run,execution),false);
+  assert.equal(s.finish(run,'completed'),true);
+  assert.equal(s.recordModelOperationReceipt(run,{...timeout,id:randomUUID()}),false);
+  const snapshot=s.view(), saved=panelConversationEvents(s.conversationId,[],snapshot,undefined,new Date().toISOString());
+  assert.equal(saved.ok,true);
+  const projected=projectPanelConversation(s.conversationId,saved.events);
+  const tools=projected.session.messages.find(message=>message.role==='assistant').tools;
+  assert.deepEqual(tools.map(tool=>tool.status),['failed','failed','unknown']);
+  assert.deepEqual(tools.map(({id,operationReceipt})=>({id,...operationReceipt})),[timeout,missing,execution]);
+  const tampered=structuredClone(snapshot);tampered.messages[1].tools.at(-1).status='failed';
+  assert.equal(panelSnapshot(tampered).ok,false);
+});
 test('terminal with an event ID survives a full deduplication budget without hiding dropped events',()=>{
   for(const drops of [false,true]){
     const {s,run}=started();

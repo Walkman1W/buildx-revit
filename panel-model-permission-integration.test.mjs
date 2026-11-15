@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
+import {randomUUID} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {createPanelServer} from './lib/panel-server.mjs';
 import {createCodexSessionProfile,MODEL_WORKSPACE_SESSION_PROFILE} from './lib/codex-profile.mjs';
@@ -20,13 +21,24 @@ class Fake extends EventEmitter{
 }
 async function fixture(t,options={}){
   const codex=new Fake(),calls=[],direct=[];let document={session:'host',path:'C:\\model.rvt',title:'模型'};
-  let familySha='a'.repeat(64);
-  const services=Object.freeze({observeDocument:async()=>({...document}),readCommand:async(args,control)=>options.readCommand?options.readCommand(args,control):({schema_version:1,command_id:args.command_id,revision:args.revision,name:'已保存命令',description:'示例',code:'return 42;'}),inspectFamilyJob:async job_handle=>({operation:'family_inspect_job',hostSession:'host',value:{operation:'family_inspect_job',host_session:'host',success:true,code:'FAMILY_JOB_INSPECTED',job_handle,job_scope:'bound_project',project_handle:'project',project_fingerprint:'fingerprint',core_registry_current:true,cleanup_pending:false,save:{state:'saved_reopened_verified_closed',path:'C:\\family.rfa',sha256:familySha,independently_reopened_verified:true}}}),invoke:async(...args)=>{calls.push(args);return options.invoke?options.invoke(...args):{ok:true,value:{done:true}};}});
-  const app=createPanelServer({root,codex,port:0,...options.historyStore?{historyStore:options.historyStore}:{},...options.pollDelays?{modelReceiptPollDelays:options.pollDelays}:{},profile:MODEL_WORKSPACE_SESSION_PROFILE,modelPermissionServices:services,invokeWorkbench:async()=>{throw new Error('unexpected read');},invokeReadonlyCommand:async(...args)=>{direct.push(args);const [id,parameters]=args;if(options.directInvoke)return options.directInvoke(...args);return {ok:true,value:{command:id,data:id==='revit_get_command'?await services.readCommand(parameters):id==='revit_family_inspect_job'?await services.inspectFamilyJob(parameters.job_handle):{done:true}}};}});
+  let familySha='a'.repeat(64),scopedHost=options.scoped===true,panelRoot=root;
+  const policy=Object.freeze({id:'test-policy',revision:1,accountScope:'test-project',mode:'project-write'});
+  if(options.scoped){
+    const profileRoot=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-scoped-profile-'));
+    await fs.writeFile(path.join(profileRoot,'buildx-confirmed-write.json'),JSON.stringify({schemaVersion:1,scope:'confirmed-write'}));
+    t.after(()=>fs.rm(profileRoot,{recursive:true,force:true}));
+    codex.profile=createCodexSessionProfile(profileRoot,{profile:MODEL_WORKSPACE_SESSION_PROFILE,scopedAutomatic:true});
+    panelRoot=profileRoot;
+  }
+  const accessServices=options.scoped?Object.freeze({tools:[],activate:async()=>({ok:true}),view:()=>({...policy,roots:[]}),
+    control:()=>policy,current:(_scope,value)=>value?.id===policy.id&&value.revision===policy.revision,
+    authorize:async()=>({ok:true}),select:async()=>({ok:true,value:policy}),invoke:async()=>{},deactivate:async()=>{},close:async()=>({closed:true})}):null;
+  const services=Object.freeze({observeDocument:async control=>{if(control?.requireScopedAutoApply&&!scopedHost)throw new Error("当前项目的 Revit 宿主未声明自动应用能力");return {...document};},readCommand:async(args,control)=>options.readCommand?options.readCommand(args,control):({schema_version:1,command_id:args.command_id,revision:args.revision,name:'已保存命令',description:'示例',code:'return 42;'}),inspectFamilyJob:async job_handle=>({operation:'family_inspect_job',hostSession:'host',value:{operation:'family_inspect_job',host_session:'host',success:true,code:'FAMILY_JOB_INSPECTED',job_handle,job_scope:'bound_project',project_handle:'project',project_fingerprint:'fingerprint',core_registry_current:true,cleanup_pending:false,save:{state:'saved_reopened_verified_closed',path:'C:\\family.rfa',sha256:familySha,independently_reopened_verified:true}}}),invoke:async(...args)=>{calls.push(args);return options.invoke?options.invoke(...args):{ok:true,value:{done:true}};}});
+  const app=createPanelServer({root:panelRoot,codex,port:0,...options.scoped?{confirmedWrite:true,accessServices}:{},...options.historyStore?{historyStore:options.historyStore}:{},...options.pollDelays?{modelReceiptPollDelays:options.pollDelays}:{},profile:MODEL_WORKSPACE_SESSION_PROFILE,modelPermissionServices:services,invokeWorkbench:async()=>{throw new Error('unexpected read');},invokeReadonlyCommand:async(...args)=>{direct.push(args);const [id,parameters]=args;if(options.directInvoke)return options.directInvoke(...args);return {ok:true,value:{command:id,data:id==='revit_get_command'?await services.readCommand(parameters):id==='revit_family_inspect_job'?await services.inspectFamilyJob(parameters.job_handle):{done:true}}};}});
   const {origin}=await app.listen(),status=await(await fetch(origin+'/api/status')).json();t.after(()=>app.close());
   const post=async(route,data={},client='browser')=>{const response=await fetch(origin+'/api/'+route,{method:'POST',headers:{'Content-Type':'application/json','X-Local-Chat':status.csrf,Origin:origin},body:JSON.stringify({client,...data})});return {status:response.status,body:await response.json()};};
   const session=app.snapshot('browser').session.conversation.id;
-  return {app,codex,calls,direct,origin,post,session,changeDocument:value=>{document=value;},changeFamilySha:value=>{familySha=value;}};
+  return {app,codex,calls,direct,origin,post,session,changeDocument:value=>{document=value;},changeFamilySha:value=>{familySha=value;},changeScopedHost:value=>{scopedHost=value;}};
 }
 const choose=(f,level,revision=0)=>f.post('model-permission',{conversationId:f.session,level,expectedRevision:revision});
 const approve=(f,p,decision='accept',client='browser')=>f.post('dynamic-approval',{conversationId:f.session,requestId:p.id,digest:p.digest,decision},client);
@@ -41,6 +53,43 @@ test('actual HTTP/SSE grants automatic authority only after a verified document 
   assert.equal(f.calls[0][1].mode,'commit');assert.equal(f.codex.answers[0].success,true);
   f.codex.request(2,'revit_move_elements',{mode:'rollback',element_ids:[1],delta_mm:{x:1,y:0,z:0}});await wait(()=>f.calls.length===2);assert.equal(f.calls[1][1].mode,'rollback');
   assert.equal(f.app.snapshot('other').modelPermission.level,null);controller.abort();
+});
+
+test('scoped candidate negotiates automatic apply and records distinct native write outcomes',async t=>{
+  const requestId=randomUUID(),group={name:'Fixture group',element_ids:[1,2]};
+  const receiptOwner={inspect:async()=>({ok:true,value:{status:'failed_rolled_back',terminal:true,requestId}}),
+    close:async()=>({ok:true,value:{closed:true}})};
+  const f=await fixture(t,{scoped:true,pollDelays:[5000],invoke:async(_tool,args)=>args.name==='Native failure'
+    ? {ok:false,error:{outcome:'failed'},evidence:{nativeFailure:{started:true,phase:'dispatch',outcome:'failed',hostSession:'host',requestId}},receiptOwner}
+    : {ok:true,value:{request_id:randomUUID()}}});
+  f.changeScopedHost(false);
+  const denied=await choose(f,'automatic');assert.equal(denied.status,409);assert.match(denied.body.error,/未声明自动应用能力/);
+  f.changeScopedHost(true);
+  assert.equal((await choose(f,'automatic')).status,200);
+  assert.equal((await f.post('turn',{message:'候选回执测试'})).status,202);
+  const tools=()=>f.app.snapshot('browser').session.messages.at(-1).tools;
+  f.codex.request(1,'revit_create_wall',{});
+  await wait(()=>tools().some(tool=>tool.operationReceipt?.code==='MODEL_OPERATION_UNSUPPORTED'));
+  assert.equal(f.calls.length,0);
+  f.codex.request(2,'revit_create_group',group);
+  await wait(()=>f.codex.answers.length===2);
+  assert.equal(f.calls.length,1);assert.equal(f.calls[0][1].mode,'commit');assert.equal(f.calls[0][2].approvedScopedAutoApply,true);
+  assert.equal(f.app.snapshot('browser').dynamicApproval,null);
+  f.codex.request(3,'revit_create_group',{...group,mode:'rollback'});
+  await wait(()=>Boolean(f.app.snapshot('browser').dynamicApproval));
+  const pending=f.app.snapshot('browser').dynamicApproval;
+  t.mock.timers.enable({apis:['Date'],now:pending.deadline+1});
+  try{assert.equal((await approve(f,pending)).body.code,'MODEL_APPROVAL_EXPIRED');}
+  finally{t.mock.timers.reset();}
+  assert.ok(tools().some(tool=>tool.operationReceipt?.code==='MODEL_APPROVAL_EXPIRED'));
+  assert.equal(f.calls.length,1);
+  f.codex.request(4,'revit_create_group',{...group,name:'Native failure'});
+  await wait(()=>tools().some(tool=>tool.operationReceipt?.code==='MODEL_REVIT_EXECUTION_FAILED'));
+  assert.equal(tools().find(tool=>tool.operationReceipt?.code==='MODEL_REVIT_EXECUTION_FAILED').operationReceipt.requestId,requestId);
+  const {ticket}=f.app.snapshot('browser').modelReceipt;
+  assert.equal((await f.post('model-receipt/check',{conversationId:f.session,ticket})).status,200);
+  const checked=f.app.snapshot('browser').modelReceipt;
+  if(checked)assert.equal((await f.post('model-receipt/acknowledge',{conversationId:f.session,ticket,checkRevision:checked.checkRevision,confirmed:true})).status,200);
 });
 
 test('confirmation is one use and C# always requires user review even in automatic mode',async t=>{

@@ -3,10 +3,12 @@ param(
     [Parameter(Mandatory=$true)][string]$WebView2PackageDirectory,
     [string]$OutputDirectory = (Join-Path $PSScriptRoot 'bin-workbench'),
     [switch]$IsolatedBuild,
-    [switch]$ConfirmedWrite
+    [switch]$ConfirmedWrite,
+    [switch]$ScopedAutoApply
 )
 
 $ErrorActionPreference = 'Stop'
+if ($ScopedAutoApply -and (-not $ConfirmedWrite -or -not $IsolatedBuild)) { throw 'Scoped auto apply requires an isolated confirmed-write build.' }
 function Resolve-RevitDirectory([string]$Selected) {
     if ($Selected) {
         $resolved = [IO.Path]::GetFullPath($Selected)
@@ -109,6 +111,7 @@ $compileArguments = @(
     ('/out:' + (Join-Path $outputDirectory 'LocalCodexRevit.dll'))
 )
 if ($ConfirmedWrite) { $compileArguments += '/define:BUILDX_CONFIRMED_WRITE' }
+if ($ScopedAutoApply) { $compileArguments += '/define:BUILDX_SCOPED_AUTO_APPLY' }
 $compileArguments += @($references | ForEach-Object { '/reference:' + $_ })
 $compileArguments += '/resource:' + (Join-Path $PSScriptRoot '..\public\bim-x-logo.png') + ',RevitLocalCodex.BimXLogo'
 $familyCoreDirectory = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\family-core'))
@@ -159,7 +162,7 @@ $dependencyRecords = @($inputs | ForEach-Object {
 })
 $record = [ordered]@{
     compiler_exit_code = $compilerExit
-    compiler_options = @('/target:library','/platform:x64','/langversion:5','/optimize+','/debug-') + $(if ($ConfirmedWrite) { @('/define:BUILDX_CONFIRMED_WRITE') } else { @() })
+    compiler_options = @('/target:library','/platform:x64','/langversion:5','/optimize+','/debug-') + @($compileArguments | Where-Object { $_ -like '/define:*' })
     compiled_utc = [DateTime]::UtcNow.ToString('o')
     output = $assemblyPath
     output_sha256 = (Get-FileHash -LiteralPath $assemblyPath -Algorithm SHA256).Hash.ToLowerInvariant()

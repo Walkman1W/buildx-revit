@@ -538,9 +538,9 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   function commandNeedsConfirmation(command,inputs){
     if(command.tool==='revit_set_type_parameter'&&command.requiresTypeParameterReview===true)return false;
     if(command.readOnly!==false)return false;
-    if(snapshot?.confirmedWrite===true)return true;
     const grant=snapshot?.modelPermission,mode=inputs?.mode?.value||command.inputSchema?.properties?.mode?.default||'rollback';
     const currentGrant=snapshot?.ready===true&&grant?.available===true&&['rollback','confirm','automatic'].includes(grant.level)&&grant.conversationId===snapshot.commandConversationId&&(grant.expiresAt===null||Number.isSafeInteger(grant.expiresAt)&&grant.expiresAt>Date.now());
+    if(snapshot?.confirmedWrite===true)return !(snapshot.scopedAutomatic===true&&command.scopedAutoApplyEligible===true&&currentGrant&&grant.level==='automatic'&&mode==='commit'&&snapshot.accessPolicy?.mode==='project-write');
     const coveredFull=snapshot?.accessPolicy?.available===true&&snapshot.accessPolicy.mode==='full-access'&&['revit_execute_csharp','revit_save_command','revit_run_command'].includes(command.tool);
     return !(currentGrant&&(command.effectKind==='model_transaction'||coveredFull)&&(grant.level==='automatic'||mode!=='commit'));
   }
@@ -1373,7 +1373,8 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     renderAccessStatus();
     accessConfirmApply.disabled=!canChangeAccess();
     const permission=value.modelPermission, validPermission=value.ready===true&&permission?.available===true&&(permission.level===null||['rollback','confirm','automatic'].includes(permission.level))&&permission.conversationId===value.commandConversationId&&(permission.expiresAt===null||Number.isSafeInteger(permission.expiresAt)&&permission.expiresAt>Date.now());
-    permissionAutomatic.hidden=value.confirmedWrite===true;permissionAutomatic.disabled=permissionAutomatic.hidden;
+    permissionAutomatic.hidden=value.confirmedWrite===true&&value.scopedAutomatic!==true;
+    permissionAutomatic.disabled=permissionAutomatic.hidden||value.scopedAutomatic===true&&(!validAccess||policy.mode!=='project-write');
     permissionPlaceholder.textContent=validPermission?'请选择执行方式':'执行未核实';
     permissionSelect.value=value.modelPermissionPending?'__pending':validPermission?permission.level||'':'';
     permissionSelect.disabled=!validPermission||value.modelPermissionPending===true||value.accessPolicyPending===true||value.blocked||value.busy||value.readOnly||value.ready!==true;
@@ -1382,7 +1383,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     permissionRefresh.hidden=value.modelPermissionStatusRefreshAvailable!==true;
     permissionRefresh.disabled=value.modelPermissionStatusRefreshing===true;
     permissionRefresh.textContent=permissionRefresh.disabled?'正在刷新…':'刷新服务状态';
-    permissionSafety.textContent=(validAccess?'访问范围：'+accessText()+'。':'访问范围尚未核实。')+(value.confirmedWrite===true?' 每次模型写入和回滚预览均需确认。':' 脚本、文件和族操作按实际授权及执行方式核验。C# 脚本不是安全沙盒，回滚不能撤销事务外副作用。');
+    permissionSafety.textContent=(validAccess?'访问范围：'+accessText()+'。':'访问范围尚未核实。')+(value.scopedAutomatic===true?' 自动应用限当前项目的实例参数和模型组提交。类型参数及回滚预览继续逐次确认。':value.confirmedWrite===true?' 每次模型写入和回滚预览均需确认。':' 脚本、文件和族操作按实际授权及执行方式核验。C# 脚本不是安全沙盒，回滚不能撤销事务外副作用。');
     permissionSelect.title=permissionText;
     const receipt=value.modelReceipt,hasReceipt=Boolean(receipt&&receipt.conversationId===value.commandConversationId);
     modelReceiptPanel.hidden=!hasReceipt;modelReceiptNotice.hidden=!hasReceipt;

@@ -27,7 +27,7 @@ const receiptProducer=receiptBridge?.createChatReadReceiptProducer({
 });
 // Legacy/read-only entries retain their original dependency boundary.
 const workspaceDispatch=workspace?(await import('./lib/model-tool-dispatch.mjs')).invokeModelTool:null;
-const workspaceTools=workspace?(await import('./lib/panel-tools.mjs')).MODEL_AI_READ_TOOLS:null;
+const workspaceTools=workspace?(await import('./lib/model-operation-contracts.mjs')).modelReadTools(guarded):null;
 const tools=readOnly?READONLY_WORKBENCH_TOOL_NAMES.map(name=>{
   const matches=PANEL_WORKBENCH_TOOLS.filter(tool=>tool.name===name);
   if(matches.length!==1||matches[0].annotations?.readOnlyHint!==true)throw new Error('Read-only workbench catalog does not match its named contracts');

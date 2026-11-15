@@ -137,7 +137,7 @@ async function pluginBuildEvidence(pluginDirectory,sourceRoot,checked,missing,te
       revitEvidence={version:'2025',runtime:'net8.0-windows',apiFileVersion:facts.apiFileVersion,uiFileVersion:facts.uiFileVersion,apiSha256:api.sha256,uiSha256:ui.sha256,apiUiAutodeskSignatureVerified:true};
     }
     return {compilerExit:0,dllSha256:plugin.sha256,sources,
-      ...(Array.isArray(record.compiler_options)?{compilerOptions:record.compiler_options.filter(value=>['/target:library','/platform:x64','/langversion:5','/optimize+','/debug-','/define:BUILDX_CONFIRMED_WRITE','BUILDX_CONFIRMED_WRITE','net8.0-windows','x64'].includes(value))}:{}),
+      ...(Array.isArray(record.compiler_options)?{compilerOptions:record.compiler_options.filter(value=>['/target:library','/platform:x64','/langversion:5','/optimize+','/debug-','/define:BUILDX_CONFIRMED_WRITE','BUILDX_CONFIRMED_WRITE','/define:BUILDX_SCOPED_AUTO_APPLY','net8.0-windows','x64'].includes(value))}:{}),
       ...revitEvidence?{revitEvidence}:{},
       webView2Sdk:{id:sdk.package_id,version:sdk.version,packageSha256:sdk.package_sha256,source:sdk.source,payloadVerifiedAgainstPackage:true},
       realRevitLoadVerified:false,realModelExecutionVerified:false};
