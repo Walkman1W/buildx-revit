@@ -204,7 +204,11 @@ test('read transport bounds bytes and UTF-16 serializer size before accepting a 
 });
 
 test('timeout is unconfirmed and preserves the owned queued request without automatic replay',async t=>{
-  const p=await peer(t,()=>null,{timeout:40}),value=unconfirmed(await p.run('document'));
+  const timeout=10_000,p=await peer(t,()=>null,{timeout}),now=Date.now;
+  // A claimed request may have executed. Expiring before the peer moves the
+  // original into processing would test the pre-publication path instead.
+  t.mock.method(Date,'now',()=>now()+(p.requests.length?timeout+1:0));
+  const value=unconfirmed(await p.run('document'));
   assert.match(value.error.message,/outcome unknown/);assert.equal(p.requests.length,1);
   assert.deepEqual(value.evidence.requestIds,[p.requests[0].id]);
   assert.ok((await fs.stat(path.join(p.root,'queue','processing',p.requests[0].id+'.json'))).isFile());

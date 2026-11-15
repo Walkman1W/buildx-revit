@@ -9,6 +9,7 @@ BuildX is an AI workspace for Autodesk Revit. Use your own Codex from the Revit 
 - **Chat with project context**. Connect to your existing Codex installation and select project documents, attachments, or Skills for the current turn.
 - **Query models and find commands**. Inspect the active document, selection, and element parameters. Search built-in commands and personal commands already loaded, and mark commands as favorites for the current session.
 - **Approve supported model changes**. The confirmed-write candidate supports specified instance and type parameter edits and model group creation. BuildX checks the active document and project access, then asks for approval in BuildX and Revit for each operation. Use rollback preview to inspect changes. If a request times out and the outcome is unknown, look up its original receipt to avoid duplicate execution.
+- **Preview project auto-apply**. After explicit authorization, the isolated candidate can automatically commit supported instance parameter and model group operations in the bound project. Type parameter edits and rollback previews still require individual approval. Controlled tests have passed; live Revit transactions remain to be verified.
 - **Generate a pump family in the candidate**. Review the dimensions, port sizes, and destination in chat to request a standalone horizontal end-suction pump `.rfa` with inlet and outlet connectors. An internal candidate has loaded in Revit 2024. The implementation status tracks live testing of the embedded WebView and the generate, save, and reopen flow.
 - **Try optional chat tools in an isolated preview**. The preview offers local OCR for scanned PDFs, approved Excel generation, and live web search and image generation through Codex. See the setup, dependencies, and verification scope in the [chat tools preview record](docs/migration/CHAT-LOCAL-TOOLS-20261115.zh-CN.md).
 
@@ -57,3 +58,5 @@ node tools/buildx-installer.mjs --build-confirmed-write-candidate `
 - [Version history](CHANGELOG.md) · [Implementation status](docs/migration/STATUS.md) · [Task ledger](docs/migration/TASKS.json)
 - [Runtime layout](docs/migration/RUNTIME-LAYOUT.zh-CN.md) · [Native migration plan](docs/migration/NATIVE-DEPENDENCY-REPLACEMENT.zh-CN.md)
 - [Third-party notices](THIRD-PARTY-NOTICES.md)
+
+This repository does not specify an overall open source license. The notices above list the licenses that apply to third-party components.
