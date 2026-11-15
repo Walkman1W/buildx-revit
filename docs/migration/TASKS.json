@@ -11,7 +11,8 @@
       "evidence": "CHAT-LOCAL-TOOLS-20261115.zh-CN.md; c786754 real local OCR plus XLSX HTTP integration; Excel 16 calculation 25000 CNY; controlled Brave and Images API results; e513668 Revit 2024 candidate 0.8.9-chat-tools.20261115.2, 152 ZIP entries verified, portal 41918 Codex connection and white composer with a staged PDF",
       "realCodexWebSearchVerified": true,
       "nativeImageCapabilityVerified": true,
-      "realNativeImageGenerationVerified": false,
+      "realNativeImageGenerationVerified": true,
+      "realNativeImageReferenceVerified": false,
       "realExternalProvidersVerified": false,
       "realRevitWebViewVerified": false
     },

@@ -46,3 +46,24 @@ test('an App Server webSearch completion becomes a bounded native tool receipt',
   assert.equal(record.status,'returned');
   assert.equal(record.resultPreview,'https://help.autodesk.com/');
 });
+
+test('native image enables scoped events and omits the separate Images API tool',()=>{
+  const options={profile:'model-workspace',localTools:LOCAL_CHAT_TOOL_DEFINITIONS};
+  const regular=new CodexClient(process.cwd(),options),native=new CodexClient(process.cwd(),{...options,nativeImageGeneration:true});
+  assert.ok(regular.profile.buildLaunchArgs([]).includes('features.image_generation=false'));
+  const args=native.profile.buildLaunchArgs([]);
+  assert.ok(args.includes('features.image_generation=true'));
+  assert.ok(args.includes('features.omit_app_server_notification_media=true'));
+  assert.ok(native.profile.dynamicTools.every(tool=>tool.name!=='buildx_generate_image'));
+  const session=new ChatSession(),run=session.begin('生成测试图');
+  assert.ok(session.bindThread(run,'test-thread'));
+  run.turnId='test-turn';
+  const event=boundedChatNotification('item/completed',{threadId:run.threadId,turnId:run.turnId,
+    item:{type:'imageGeneration',id:'image-result',status:'completed',savedPath:'private-path.png',result:'inline payload'}});
+  assert.equal(event.item.result,undefined);
+  assert.equal(session.notification(run,'item/completed',event,()=>null).changed,true);
+  const record=session.view().messages.find(message=>message.role==='assistant').tools[0];
+  assert.equal(record.name,'codex_image_generation');
+  assert.equal(record.status,'returned');
+  assert.ok(!JSON.stringify(record).includes('private-path.png'));
+});
