@@ -19,7 +19,7 @@ namespace BuildX.FamilyRevit
         internal const string OpenOperation = "open_pump_family_artifact";
         private const string TemplateId = "metric-mechanical-equipment";
         private const string TypeName = "BuildX-Standard";
-        private const double MmPerFoot = 304.8;
+        private const double ToleranceMm = .1;
         private const long MaxArtifactBytes = 64L * 1024 * 1024;
         private const FileAttributes UnsafeFile = FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Device;
         private readonly string artifacts;
@@ -73,16 +73,45 @@ namespace BuildX.FamilyRevit
             }
         }
 
-        private sealed class RejectErrors : IFailuresPreprocessor
+        private sealed class PumpValidationException : InvalidOperationException
         {
+            internal readonly string Reason;
+            internal PumpValidationException(string reason) : base(reason) { Reason = reason; }
+        }
+
+        private sealed class PumpDiagnostics : IFailuresPreprocessor
+        {
+            internal string Stage = "prepare";
+            private readonly HashSet<string> failureIds = new HashSet<string>(StringComparer.Ordinal);
+
+            internal object Failure(string code, string outcome, string message, string reason = null, Exception error = null,
+                bool saveAttempted = false, bool cleanupComplete = true)
+            {
+                var validation = error as PumpValidationException;
+                string exceptionType = error == null ? "None" : (error.GetType().FullName ?? "Unknown").Replace('+', '.');
+                if (exceptionType == null || exceptionType.Length > 128 ||
+                    !Regex.IsMatch(exceptionType, @"\A[A-Za-z_][A-Za-z0-9_.]*\z"))
+                    exceptionType = "Unknown";
+                return new { success = false, code, outcome, message, diagnostic = new {
+                    stage = Stage, reason = reason ?? (validation == null ? "native_api_error" : validation.Reason),
+                    exceptionType, saveAttempted, cleanupComplete,
+                    failureIds = failureIds.OrderBy(id => id, StringComparer.Ordinal).ToArray() } };
+            }
+
             public FailureProcessingResult PreprocessFailures(FailuresAccessor accessor)
             {
-                var messages = accessor.GetFailureMessages();
-                if (messages.Any(item => item.GetSeverity() >= FailureSeverity.Error))
-                    return FailureProcessingResult.ProceedWithRollBack;
-                foreach (FailureMessageAccessor item in messages)
-                    if (item.GetSeverity() == FailureSeverity.Warning) accessor.DeleteWarning(item);
-                return FailureProcessingResult.Continue;
+                bool rollback = false;
+                foreach (FailureMessageAccessor item in accessor.GetFailureMessages())
+                {
+                    FailureSeverity severity = item.GetSeverity();
+                    if (severity == FailureSeverity.Warning) accessor.DeleteWarning(item);
+                    else if (severity >= FailureSeverity.Error)
+                    {
+                        rollback = true;
+                        if (failureIds.Count < 8) failureIds.Add(item.GetFailureDefinitionId().Guid.ToString("D"));
+                    }
+                }
+                return rollback ? FailureProcessingResult.ProceedWithRollBack : FailureProcessingResult.Continue;
             }
         }
 
@@ -132,6 +161,7 @@ namespace BuildX.FamilyRevit
 
         internal object Create(UIApplication app, Dictionary<string, object> args, string id, DateTime expires, Func<bool> mayContinue)
         {
+            var diagnostics = new PumpDiagnostics();
             PumpSpec spec;
             Guid request;
             try
@@ -139,69 +169,81 @@ namespace BuildX.FamilyRevit
                 spec = PumpSpec.Parse(args);
                 if (!Guid.TryParseExact(id, "D", out request)) throw new InvalidOperationException("Invalid pump request identity.");
             }
-            catch (InvalidOperationException error) { return Failure("PUMP_INPUT_INVALID", "not_started", error.Message); }
+            catch (InvalidOperationException error)
+            { return diagnostics.Failure("PUMP_INPUT_INVALID", "not_started", "Invalid pump family specification.", "invalid_input", error); }
 
             currentApp = app;
             bool saveAttempted = false;
             string name = spec.Name + "-" + request.ToString("N") + ".rfa";
             string output = Path.Combine(artifacts, name);
-            string stage = "prepare";
             try
             {
                 if (!CloseOwned())
-                    return Failure("PUMP_CLEANUP_PENDING", "not_started", "A previous family document still needs cleanup.");
+                {
+                    diagnostics.Stage = "cleanup";
+                    return diagnostics.Failure("PUMP_CLEANUP_PENDING", "not_started",
+                        "A previous family document still needs cleanup.", "owned_document_close_failed", cleanupComplete: false);
+                }
                 RequireContinue(expires, mayContinue);
                 RequirePlainDirectoryChain(Path.GetDirectoryName(artifacts));
                 Directory.CreateDirectory(artifacts);
                 RequirePlainDirectoryChain(artifacts);
                 if (Exists(output))
-                    return Failure("PUMP_OUTPUT_EXISTS", "unknown", "This request already has an output. Check its original receipt.");
+                    return diagnostics.Failure("PUMP_OUTPUT_EXISTS", "unknown",
+                        "This request already has an output. Check its original receipt.", "output_exists");
+                diagnostics.Stage = "template";
                 var template = templates.Inspect(TemplateId);
                 if (template.State != FamilyTemplateState.BytesVerified ||
                     String.IsNullOrEmpty(template.SourcePath) || String.IsNullOrEmpty(template.Sha256))
-                    return Failure("PUMP_TEMPLATE_UNAVAILABLE", "not_started", "The configured Revit directory needs a metric Mechanical Equipment family template.");
+                    return diagnostics.Failure("PUMP_TEMPLATE_UNAVAILABLE", "not_started",
+                        "The configured Revit directory needs a metric Mechanical Equipment family template.", "template_unavailable");
 
-                stage = "build";
+                diagnostics.Stage = "new_document";
                 List<Document> existing = OpenDocuments(app);
                 Document family = app.Application.NewFamilyDocument(template.SourcePath);
                 ClaimNewDocument(family, existing);
+                diagnostics.Stage = "transaction_start";
                 using (var transaction = new Transaction(family, "BuildX pump family"))
                 {
                     if (transaction.Start() != TransactionStatus.Started)
-                        throw new InvalidOperationException("Pump family transaction could not start.");
+                        throw new PumpValidationException("transaction_start_rejected");
                     var settings = transaction.GetFailureHandlingOptions();
-                    settings.SetFailuresPreprocessor(new RejectErrors());
+                    settings.SetFailuresPreprocessor(diagnostics);
                     settings.SetClearAfterRollback(true);
                     transaction.SetFailureHandlingOptions(settings);
-                    Build(family, spec);
-                    Inspect(family, spec);
+                    Build(family, spec, diagnostics);
+                    diagnostics.Stage = "commit";
                     RequireContinue(expires, mayContinue);
                     if (transaction.Commit() != TransactionStatus.Committed)
-                        throw new InvalidOperationException("Pump family transaction did not commit.");
+                        throw new PumpValidationException("transaction_commit_rejected");
                 }
 
-                stage = "save";
+                diagnostics.Stage = "verify_before_save";
+                Inspect(family, spec);
+                diagnostics.Stage = "save";
                 RequireContinue(expires, mayContinue);
                 RequirePlainDirectoryChain(artifacts);
-                if (Exists(output)) throw new IOException("The pump family file name is already in use.");
+                if (Exists(output))
+                    return diagnostics.Failure("PUMP_OUTPUT_EXISTS", "unknown",
+                        "This request already has an output. Check its original receipt.", "output_exists", cleanupComplete: CloseOwned());
                 saveAttempted = true;
                 using (var options = new SaveAsOptions { OverwriteExistingFile = false, MaximumBackups = 1 })
                     family.SaveAs(output, options);
-                if (!CloseOwned()) throw new InvalidOperationException("The new family document could not be closed.");
+                if (!CloseOwned()) throw new PumpValidationException("owned_document_close_failed");
                 long bytes;
                 string sha = VerifyFile(output, out bytes);
 
-                stage = "reopen";
+                diagnostics.Stage = "reopen";
                 existing = OpenDocuments(app);
                 Document reopened = app.Application.OpenDocumentFile(output);
                 ClaimNewDocument(reopened, existing);
-                if (!String.Equals(Path.GetFullPath(reopened.PathName), output, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("Revit reopened a different document.");
+                if (!MatchesPath(reopened, output)) throw new PumpValidationException("reopened_path_mismatch");
+                diagnostics.Stage = "verify_reopened";
                 object[] connectors = Inspect(reopened, spec);
-                if (!CloseOwned()) throw new InvalidOperationException("The verification document could not be closed.");
+                if (!CloseOwned()) throw new PumpValidationException("owned_document_close_failed");
                 long afterBytes;
                 if (VerifyFile(output, out afterBytes) != sha || bytes != afterBytes)
-                    throw new IOException("The saved RFA changed during verification.");
+                    throw new PumpValidationException("saved_file_changed");
                 return new { success = true, file_name = name, sha256 = sha, bytes, reopened = true, family_category = "MechanicalEquipment", type_name = TypeName,
                     width_mm = spec.Width, depth_mm = spec.Depth, height_mm = spec.Height, connectors };
             }
@@ -209,50 +251,52 @@ namespace BuildX.FamilyRevit
             {
                 bool closed = CloseOwned();
                 string code = saveAttempted ? "PUMP_ARTIFACT_UNVERIFIED" : !closed ? "PUMP_CLEANUP_PENDING" :
-                    stage == "prepare" ? "PUMP_PRECHECK_FAILED" : "PUMP_BUILD_FAILED";
-                return Failure(code, saveAttempted || !closed ? "unknown" : "failed", stage + " (" + error.GetType().Name + ")");
+                    diagnostics.Stage == "prepare" || diagnostics.Stage == "template" ? "PUMP_PRECHECK_FAILED" : "PUMP_BUILD_FAILED";
+                return diagnostics.Failure(code, saveAttempted || !closed ? "unknown" : "failed", "Revit did not finish generating the pump family.",
+                    error: error, saveAttempted: saveAttempted, cleanupComplete: closed);
             }
             finally { currentApp = null; }
         }
 
         internal object Open(UIApplication app, Dictionary<string, object> args, DateTime expires, Func<bool> mayContinue)
         {
+            var diagnostics = new PumpDiagnostics { Stage = "open" };
             object filename, sha256, bytes;
             if (args == null || args.Count != 3 || !args.TryGetValue("file_name", out filename) ||
                 !args.TryGetValue("sha256", out sha256) || !args.TryGetValue("bytes", out bytes))
-                return Failure("PUMP_ARTIFACT_ID_INVALID", "not_started", "A verified family file identity is required.");
+                return diagnostics.Failure("PUMP_ARTIFACT_ID_INVALID", "not_started", "A verified family file identity is required.", "invalid_artifact_identity");
             string name = filename as string, sha = sha256 as string;
             if (name == null || name.Length < 38 || name.Length > 85 ||
                 !Regex.IsMatch(name.Substring(name.Length - 37), @"\A-[a-f0-9]{32}\.rfa\z") ||
                 !ValidName(name.Substring(0, name.Length - 37)) ||
                 sha == null || !Regex.IsMatch(sha, @"\A[a-f0-9]{64}\z") || !(bytes is int || bytes is long))
-                return Failure("PUMP_ARTIFACT_ID_INVALID", "not_started", "The generated family file identity is invalid.");
+                return diagnostics.Failure("PUMP_ARTIFACT_ID_INVALID", "not_started", "The generated family file identity is invalid.", "invalid_artifact_identity");
             long expectedBytes = Convert.ToInt64(bytes, CultureInfo.InvariantCulture);
             string path = Path.Combine(artifacts, name);
             bool openAttempted = false;
             try
             {
                 if (expectedBytes <= 0 || expectedBytes > MaxArtifactBytes)
-                    return Failure("PUMP_ARTIFACT_ID_INVALID", "not_started", "The generated family file size is invalid.");
+                    return diagnostics.Failure("PUMP_ARTIFACT_ID_INVALID", "not_started", "The generated family file size is invalid.", "invalid_artifact_size");
                 long length;
                 if (VerifyFile(path, out length) != sha || length != expectedBytes)
-                    return Failure("PUMP_ARTIFACT_CHANGED", "not_started", "The verified family file has changed.");
+                    return diagnostics.Failure("PUMP_ARTIFACT_CHANGED", "not_started", "The verified family file has changed.", "saved_file_changed");
                 RequireContinue(expires, mayContinue);
                 Document active = app.ActiveUIDocument == null ? null : app.ActiveUIDocument.Document;
                 if (MatchesPath(active, path)) return new { success = true, opened = true };
                 if (active != null && active.IsModifiable)
-                    return Failure("PUMP_OPEN_HOST_BUSY", "not_started", "Finish the current Revit operation before opening the family.");
+                    return diagnostics.Failure("PUMP_OPEN_HOST_BUSY", "not_started", "Finish the current Revit operation before opening the family.", "active_document_modifiable");
                 openAttempted = true;
                 UIDocument opened = app.OpenAndActivateDocument(path);
                 if (opened == null || !MatchesPath(opened.Document, path) || app.ActiveUIDocument == null ||
                     !MatchesPath(app.ActiveUIDocument.Document, path))
-                    return Failure("PUMP_OPEN_UNVERIFIED", "unknown", "Revit did not confirm activation of the generated family.");
+                    return diagnostics.Failure("PUMP_OPEN_UNVERIFIED", "unknown", "Revit did not confirm activation of the generated family.", "activation_unverified");
                 return new { success = true, opened = true };
             }
             catch (Exception error)
             {
-                return Failure(openAttempted ? "PUMP_OPEN_UNVERIFIED" : "PUMP_OPEN_PRECHECK_FAILED",
-                    openAttempted ? "unknown" : "not_started", "Open family (" + error.GetType().Name + ")");
+                return diagnostics.Failure(openAttempted ? "PUMP_OPEN_UNVERIFIED" : "PUMP_OPEN_PRECHECK_FAILED",
+                    openAttempted ? "unknown" : "not_started", "Revit did not finish opening the generated family.", error: error);
             }
         }
 
@@ -279,13 +323,10 @@ namespace BuildX.FamilyRevit
             return true;
         }
 
-        private static object Failure(string code, string outcome, string message)
-        { return new { success = false, code, outcome, message }; }
-
         private static void RequireContinue(DateTime expires, Func<bool> mayContinue)
         {
             if (DateTime.UtcNow >= expires || !mayContinue())
-                throw new InvalidOperationException("The approved pump request expired or was cancelled.");
+                throw new PumpValidationException("access_expired_or_cancelled");
         }
 
         private static List<Document> OpenDocuments(UIApplication app)
@@ -295,7 +336,7 @@ namespace BuildX.FamilyRevit
         {
             if (document == null || !document.IsValidObject || before.Any(old => old.IsValidObject && old.Equals(document)) ||
                 currentApp.ActiveUIDocument != null && currentApp.ActiveUIDocument.Document.Equals(document))
-                throw new InvalidOperationException("Revit did not return a separate, owned document.");
+                throw new PumpValidationException("family_document_not_owned");
             ownedDocument = document;
         }
 
@@ -313,11 +354,12 @@ namespace BuildX.FamilyRevit
             catch { return false; }
         }
 
-        private static void Build(Document document, PumpSpec spec)
+        private static void Build(Document document, PumpSpec spec, PumpDiagnostics diagnostics)
         {
             RequireMechanicalFamily(document);
             if (Elements<ConnectorElement>(document).Any() || Elements<Extrusion>(document).Any())
-                throw new InvalidOperationException("The pump template must have no model geometry or connectors.");
+                throw new PumpValidationException("unexpected_template_geometry");
+            diagnostics.Stage = "family_parameters";
             FamilyManager manager = document.FamilyManager;
             manager.CurrentType = manager.NewType(TypeName);
             AddDimension(manager, "BuildX Width", spec.Width);
@@ -329,6 +371,7 @@ namespace BuildX.FamilyRevit
             double w = Ft(spec.Width), d = Ft(spec.Depth), h = Ft(spec.Height);
             double casingRadius = .27 * Math.Min(w, h), motorRadius = .20 * Math.Min(w, h);
             double axisHeight = h * .45;
+            diagnostics.Stage = "geometry";
             var baseProfile = new CurveArray();
             XYZ[] corners = { XYZ.Zero, new XYZ(w, 0, 0), new XYZ(w, d, 0), new XYZ(0, d, 0) };
             for (int i = 0; i < corners.Length; i++)
@@ -336,29 +379,36 @@ namespace BuildX.FamilyRevit
             Extrude(document, baseProfile, XYZ.Zero, XYZ.BasisZ, h * .10);
             CircleExtrusion(document, new XYZ(w / 2, d * .15, axisHeight), XYZ.BasisZ, XYZ.BasisX, casingRadius, d * .38);
             CircleExtrusion(document, new XYZ(w / 2, d * .51, axisHeight), XYZ.BasisZ, XYZ.BasisX, motorRadius, d * .38);
-            CircleExtrusion(document, new XYZ(w / 2, d * .19, axisHeight), XYZ.BasisX, XYZ.BasisZ, Ft(spec.Inlet) / 2, d * .19);
-            CircleExtrusion(document, new XYZ(w / 2, d * .37, axisHeight), XYZ.BasisX, XYZ.BasisY, Ft(spec.Outlet) / 2, h - axisHeight);
+            Extrusion inletBody = CircleExtrusion(document, new XYZ(w / 2, d * .19, axisHeight), XYZ.BasisX, XYZ.BasisZ, Ft(spec.Inlet) / 2, d * .19);
+            Extrusion outletBody = CircleExtrusion(document, new XYZ(w / 2, d * .37, axisHeight), XYZ.BasisX, XYZ.BasisY, Ft(spec.Outlet) / 2, h - axisHeight);
             // Solid saddles bridge the schematic casing/motor to the base.
             Support(document, w, d * .25, d * .44, h * .10, axisHeight);
             Support(document, w, d * .61, d * .80, h * .10, axisHeight);
+            diagnostics.Stage = "geometry_regenerate";
             document.Regenerate();
 
-            Reference inlet = FindCap(document, new XYZ(w / 2, 0, axisHeight), -XYZ.BasisY, Ft(spec.Inlet) / 2);
-            Reference outlet = FindCap(document, new XYZ(w / 2, d * .37, h), XYZ.BasisZ, Ft(spec.Outlet) / 2);
-            BindConnector(document, ConnectorElement.CreatePipeConnector(document, spec.System, inlet), inletDiameter, FlowDirectionType.In, "Inlet");
-            BindConnector(document, ConnectorElement.CreatePipeConnector(document, spec.System, outlet), outletDiameter, FlowDirectionType.Out, "Outlet");
+            diagnostics.Stage = "inlet_face";
+            Reference inlet = FindCap(inletBody, new XYZ(w / 2, 0, axisHeight), -XYZ.BasisY, Ft(spec.Inlet) / 2);
+            diagnostics.Stage = "inlet_connector";
+            BindConnector(manager, ConnectorElement.CreatePipeConnector(document, spec.System, inlet), inletDiameter, spec.Inlet, FlowDirectionType.In, "Inlet");
+            // Obtain the outlet reference after the inlet operation, including
+            // regeneration by CreatePipeConnector and the size association.
+            diagnostics.Stage = "outlet_face";
             document.Regenerate();
+            Reference outlet = FindCap(outletBody, new XYZ(w / 2, d * .37, h), XYZ.BasisZ, Ft(spec.Outlet) / 2);
+            diagnostics.Stage = "outlet_connector";
+            BindConnector(manager, ConnectorElement.CreatePipeConnector(document, spec.System, outlet), outletDiameter, spec.Outlet, FlowDirectionType.Out, "Outlet");
         }
 
         private static FamilyParameter AddDimension(FamilyManager manager, string name, double mm)
+        { return AddDimension(manager, name, mm, SpecTypeId.Length); }
+
+        private static FamilyParameter AddDimension(FamilyManager manager, string name, double mm, ForgeTypeId spec)
         {
-            FamilyParameter parameter = AddLength(manager, name);
-            manager.SetFormula(parameter, mm.ToString("0.################", CultureInfo.InvariantCulture) + " mm");
+            FamilyParameter parameter = manager.AddParameter(name, GroupTypeId.Geometry, spec, false);
+            manager.Set(parameter, Ft(mm));
             return parameter;
         }
-
-        private static FamilyParameter AddLength(FamilyManager manager, string name)
-        { return manager.AddParameter(name, GroupTypeId.Geometry, SpecTypeId.Length, false); }
 
         private static void Support(Document document, double width, double lowY, double highY, double z, double top)
         {
@@ -369,70 +419,81 @@ namespace BuildX.FamilyRevit
             Extrude(document, profile, corners[0], XYZ.BasisZ, top - z);
         }
 
-        private static void CircleExtrusion(Document document, XYZ center, XYZ axis1, XYZ axis2, double radius, double length)
+        private static Extrusion CircleExtrusion(Document document, XYZ center, XYZ axis1, XYZ axis2, double radius, double length)
         {
             var profile = new CurveArray();
             profile.Append(Arc.Create(center, radius, 0, Math.PI, axis1, axis2));
             profile.Append(Arc.Create(center, radius, Math.PI, 2 * Math.PI, axis1, axis2));
-            Extrude(document, profile, center, axis1.CrossProduct(axis2), length);
+            return Extrude(document, profile, center, axis1.CrossProduct(axis2), length);
         }
 
-        private static void Extrude(Document document, CurveArray profile, XYZ origin, XYZ normal, double length)
+        private static Extrusion Extrude(Document document, CurveArray profile, XYZ origin, XYZ normal, double length)
         {
             var loops = new CurveArrArray();
             loops.Append(profile);
             SketchPlane plane = SketchPlane.Create(document, Plane.CreateByNormalAndOrigin(normal, origin));
-            document.FamilyCreate.NewExtrusion(true, loops, plane, length);
+            return document.FamilyCreate.NewExtrusion(true, loops, plane, length);
         }
 
-        private static Reference FindCap(Document document, XYZ expected, XYZ normal, double radius)
+        private static Reference FindCap(Extrusion port, XYZ expected, XYZ normal, double radius)
         {
             Reference found = null;
-            foreach (Extrusion extrusion in Elements<Extrusion>(document))
-                foreach (Solid solid in Solids(extrusion, true))
-                    foreach (Face face in solid.Faces)
-                    {
-                        PlanarFace cap = face as PlanarFace;
-                        if (cap == null || cap.Reference == null || cap.FaceNormal.DotProduct(normal) < .9999 ||
-                            Math.Abs((cap.Origin - expected).DotProduct(normal)) > Ft(.1) ||
-                            Math.Abs(cap.Area - Math.PI * radius * radius) > Math.PI * radius * radius * .0001) continue;
-                        IntersectionResult projected = cap.Project(expected);
-                        if (projected == null || projected.Distance > Ft(.1)) continue;
-                        if (found != null) throw new InvalidOperationException("Pump port geometry has an ambiguous cap reference.");
-                        found = cap.Reference;
-                    }
-            if (found == null) throw new InvalidOperationException("A native circular pump port face was not found.");
+            double area = Math.PI * radius * radius;
+            foreach (Solid solid in Solids(port, true))
+                foreach (Face face in solid.Faces)
+                {
+                    PlanarFace cap = face as PlanarFace;
+                    if (cap == null || cap.Reference == null || cap.FaceNormal.DotProduct(normal) < .9999 ||
+                        Math.Abs((cap.Origin - expected).DotProduct(normal)) > Ft(ToleranceMm) ||
+                        Math.Abs(cap.Area - area) > area * .0001) continue;
+                    IntersectionResult projected = cap.Project(expected);
+                    if (projected == null || projected.Distance > Ft(ToleranceMm)) continue;
+                    if (found != null) throw new PumpValidationException("port_face_ambiguous");
+                    found = cap.Reference;
+                }
+            if (found == null) throw new PumpValidationException("port_face_missing");
             return found;
         }
 
-        private static void BindConnector(Document document, ConnectorElement connector, FamilyParameter diameter, FlowDirectionType flow, string label)
+        private static void BindConnector(FamilyManager manager, ConnectorElement connector, FamilyParameter diameter, double sizeMm, FlowDirectionType flow, string label)
         {
-            FamilyManager manager = document.FamilyManager;
+            if (connector == null || connector.Domain != Domain.DomainPiping)
+                throw new PumpValidationException("port_classification_mismatch");
             Parameter direction = connector.get_Parameter(BuiltInParameter.RBS_PIPE_FLOW_DIRECTION_PARAM);
             if (direction == null || direction.StorageType != StorageType.Integer ||
                 (direction.AsInteger() != (int)flow && (direction.IsReadOnly || !direction.Set((int)flow))))
-                throw new InvalidOperationException("Pump connector flow direction could not be assigned.");
+                throw new PumpValidationException("port_flow_unavailable");
             Parameter description = connector.get_Parameter(BuiltInParameter.RBS_CONNECTOR_DESCRIPTION);
             if (description != null && !description.IsReadOnly) description.Set("BuildX " + label);
 
-            Parameter nativeSize = connector.get_Parameter(BuiltInParameter.CONNECTOR_DIAMETER);
-            FamilyParameter familySize = diameter;
-            if (nativeSize == null || !manager.CanElementParameterBeAssociated(nativeSize))
+            Parameter radius = connector.get_Parameter(BuiltInParameter.CONNECTOR_RADIUS);
+            Parameter nativeDiameter = connector.get_Parameter(BuiltInParameter.CONNECTOR_DIAMETER);
+            if (!BindPortSize(manager, radius, null, "BuildX " + label + " Radius", sizeMm / 2) &&
+                !BindPortSize(manager, nativeDiameter, diameter, "BuildX " + label + " Connector Diameter", sizeMm))
+                throw new PumpValidationException("port_size_unavailable");
+        }
+
+        private static bool BindPortSize(FamilyManager manager, Parameter nativeSize, FamilyParameter metadata, string name, double mm)
+        {
+            if (nativeSize == null || nativeSize.StorageType != StorageType.Double) return false;
+            ForgeTypeId spec = nativeSize.Definition.GetDataType();
+            if (!UnitUtils.IsMeasurableSpec(spec) || !UnitUtils.IsValidUnit(spec, UnitTypeId.Millimeters)) return false;
+            if (manager.CanElementParameterBeAssociated(nativeSize))
             {
-                nativeSize = connector.get_Parameter(BuiltInParameter.CONNECTOR_RADIUS);
-                if (nativeSize == null || !manager.CanElementParameterBeAssociated(nativeSize))
-                    throw new InvalidOperationException("Pump connector cannot be associated with a family size.");
-                familySize = AddLength(manager, "BuildX " + label + " Radius");
-                manager.SetFormula(familySize, diameter.Definition.Name + " / 2");
+                FamilyParameter familySize = metadata != null && metadata.Definition.GetDataType() == spec
+                    ? metadata : AddDimension(manager, name, mm, spec);
+                manager.AssociateElementParameterToFamilyParameter(nativeSize, familySize);
+                return true;
             }
-            manager.AssociateElementParameterToFamilyParameter(nativeSize, familySize);
+            return !nativeSize.IsReadOnly && (Math.Abs(Mm(nativeSize.AsDouble()) - mm) <= ToleranceMm || nativeSize.Set(Ft(mm)));
         }
 
         private static object[] Inspect(Document document, PumpSpec spec)
         {
             RequireMechanicalFamily(document);
             FamilyManager manager = document.FamilyManager;
-            FamilyType type = manager.Types.Cast<FamilyType>().Single(item => item.Name == TypeName);
+            FamilyType type = manager.Types.Cast<FamilyType>().FirstOrDefault(item => item.Name == TypeName);
+            if (type == null) throw new PumpValidationException("family_type_missing");
             foreach (var target in new[] {
                 new KeyValuePair<string,double>("Width", spec.Width), new KeyValuePair<string,double>("Depth", spec.Depth),
                 new KeyValuePair<string,double>("Height", spec.Height), new KeyValuePair<string,double>("Inlet Diameter", spec.Inlet),
@@ -440,16 +501,17 @@ namespace BuildX.FamilyRevit
             {
                 FamilyParameter parameter = manager.get_Parameter("BuildX " + target.Key);
                 double? actual = parameter == null ? null : type.AsDouble(parameter);
-                if (!actual.HasValue || Math.Abs(actual.Value * MmPerFoot - target.Value) > .1)
-                    throw new InvalidOperationException("A saved pump family dimension does not match the request.");
+                if (!actual.HasValue || Math.Abs(Mm(actual.Value) - target.Value) > ToleranceMm)
+                    throw new PumpValidationException("type_parameter_value_mismatch");
             }
             Extrusion[] forms = Elements<Extrusion>(document).ToArray();
-            if (forms.Length != 7 || forms.Any(form => !Solids(form, false).Any()))
-                throw new InvalidOperationException("The saved pump family is missing expected solid geometry.");
-            VerifyBounds(forms, spec);
+            Solid[][] solids = forms.Select(form => Solids(form, false).ToArray()).ToArray();
+            if (solids.Length != 7 || solids.Any(form => form.Length == 0))
+                throw new PumpValidationException("solid_geometry_missing");
+            VerifyBounds(solids.SelectMany(form => form), spec);
 
             ConnectorElement[] connectors = Elements<ConnectorElement>(document).ToArray();
-            if (connectors.Length != 2) throw new InvalidOperationException("The pump family must have exactly two connectors.");
+            if (connectors.Length != 2) throw new PumpValidationException("port_count_mismatch");
             double w = Ft(spec.Width), d = Ft(spec.Depth), h = Ft(spec.Height);
             return new[] {
                 InspectConnector(connectors, new XYZ(w / 2, 0, h * .45), -XYZ.BasisY, spec.Inlet, spec.Classification, FlowDirectionType.In),
@@ -457,13 +519,15 @@ namespace BuildX.FamilyRevit
             };
         }
 
-        private static void VerifyBounds(Extrusion[] forms, PumpSpec spec)
+        private static void VerifyBounds(IEnumerable<Solid> solids, PumpSpec spec)
         {
             var points = new List<XYZ>();
-            foreach (Extrusion form in forms)
+            foreach (Solid solid in solids)
             {
-                BoundingBoxXYZ box = form.get_BoundingBox(null);
-                if (box == null) throw new InvalidOperationException("A pump solid has no geometry bounds.");
+                // Solid bounds are local to their transform. Element bounds can
+                // additionally include controls that are not pump geometry.
+                BoundingBoxXYZ box = solid.GetBoundingBox();
+                if (box == null) throw new PumpValidationException("solid_geometry_missing");
                 foreach (double x in new[] { box.Min.X, box.Max.X })
                 foreach (double y in new[] { box.Min.Y, box.Max.Y })
                 foreach (double z in new[] { box.Min.Z, box.Max.Z })
@@ -471,30 +535,34 @@ namespace BuildX.FamilyRevit
             }
             XYZ minimum = new XYZ(points.Min(point => point.X), points.Min(point => point.Y), points.Min(point => point.Z));
             XYZ maximum = new XYZ(points.Max(point => point.X), points.Max(point => point.Y), points.Max(point => point.Z));
-            if (minimum.DistanceTo(XYZ.Zero) > Ft(.1) ||
-                maximum.DistanceTo(new XYZ(Ft(spec.Width), Ft(spec.Depth), Ft(spec.Height))) > Ft(.1))
-                throw new InvalidOperationException("The saved pump geometry bounds do not match the requested size.");
+            if (minimum.DistanceTo(XYZ.Zero) > Ft(ToleranceMm) ||
+                maximum.DistanceTo(new XYZ(Ft(spec.Width), Ft(spec.Depth), Ft(spec.Height))) > Ft(ToleranceMm))
+                throw new PumpValidationException("geometry_bounds_mismatch");
         }
 
         private static object InspectConnector(ConnectorElement[] connectors, XYZ position, XYZ normal, double diameter, MEPSystemClassification classification, FlowDirectionType flow)
         {
-            ConnectorElement item = connectors.Single(connector => {
-                Parameter direction = connector.get_Parameter(BuiltInParameter.RBS_PIPE_FLOW_DIRECTION_PARAM);
-                return direction != null && direction.StorageType == StorageType.Integer && direction.AsInteger() == (int)flow;
-            });
-            if (item.Domain != Domain.DomainPiping || item.Shape != ConnectorProfileType.Round || item.SystemClassification != classification ||
-                item.Origin.DistanceTo(position) > Ft(.1) || item.CoordinateSystem.BasisZ.Normalize().DotProduct(normal) < .9999 ||
-                Math.Abs(item.Radius * (2 * MmPerFoot) - diameter) > .1)
-                throw new InvalidOperationException("A saved native pipe connector does not match the approved type, position or size.");
-            return new { flow = flow.ToString(), system = item.SystemClassification.ToString(), diameter_mm = item.Radius * (2 * MmPerFoot),
-                origin_mm = new[] { item.Origin.X * MmPerFoot, item.Origin.Y * MmPerFoot, item.Origin.Z * MmPerFoot } };
+            ConnectorElement item = connectors.FirstOrDefault(connector => connector.Origin.DistanceTo(position) <= Ft(ToleranceMm));
+            if (item == null) throw new PumpValidationException("port_origin_mismatch");
+            if (item.Domain != Domain.DomainPiping || item.Shape != ConnectorProfileType.Round || item.SystemClassification != classification)
+                throw new PumpValidationException("port_classification_mismatch");
+            if (item.CoordinateSystem.BasisZ.Normalize().DotProduct(normal) < .9999)
+                throw new PumpValidationException("port_normal_mismatch");
+            double actualDiameter = Mm(item.Radius * 2);
+            if (Math.Abs(actualDiameter - diameter) > ToleranceMm)
+                throw new PumpValidationException("port_diameter_mismatch");
+            Parameter direction = item.get_Parameter(BuiltInParameter.RBS_PIPE_FLOW_DIRECTION_PARAM);
+            if (direction == null || direction.StorageType != StorageType.Integer || direction.AsInteger() != (int)flow)
+                throw new PumpValidationException("port_flow_mismatch");
+            return new { flow = flow.ToString(), system = item.SystemClassification.ToString(), diameter_mm = actualDiameter,
+                origin_mm = new[] { Mm(item.Origin.X), Mm(item.Origin.Y), Mm(item.Origin.Z) } };
         }
 
         private static void RequireMechanicalFamily(Document document)
         {
             if (document == null || !document.IsValidObject || !document.IsFamilyDocument || document.OwnerFamily == null ||
                 document.OwnerFamily.FamilyCategory == null || document.OwnerFamily.FamilyCategory.Id.Value != (long)BuiltInCategory.OST_MechanicalEquipment)
-                throw new InvalidOperationException("The selected Revit template is not a mechanical equipment family.");
+                throw new PumpValidationException("family_category_mismatch");
         }
 
         private static IEnumerable<T> Elements<T>(Document document) where T : Element
@@ -506,7 +574,8 @@ namespace BuildX.FamilyRevit
             return geometry == null ? Enumerable.Empty<Solid>() : geometry.OfType<Solid>().Where(solid => solid.Volume > 0);
         }
 
-        private static double Ft(double mm) { return mm / MmPerFoot; }
+        private static double Ft(double mm) { return UnitUtils.ConvertToInternalUnits(mm, UnitTypeId.Millimeters); }
+        private static double Mm(double feet) { return UnitUtils.ConvertFromInternalUnits(feet, UnitTypeId.Millimeters); }
         private static string Hex(byte[] digest) { return BitConverter.ToString(digest).Replace("-", "").ToLowerInvariant(); }
         private static string Sha256(byte[] input)
         { using (var sha = SHA256.Create()) return Hex(sha.ComputeHash(input)); }
