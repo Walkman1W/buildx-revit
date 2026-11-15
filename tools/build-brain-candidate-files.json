@@ -262,6 +262,7 @@
   "test-support/live-dialogue-receipt.mjs",
   "test-support/installation-layout-native-producer.mjs",
   "test-support/native-model-query-peers.cs",
+  "test-support/workbench-timeout.mjs",
   "public/register.html",
   "public/register.css",
   "installer-directory-owner.test.mjs",

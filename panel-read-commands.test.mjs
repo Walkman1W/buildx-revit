@@ -296,8 +296,9 @@ test('partial tmp write is known unpublished while an ambiguous rename remains u
     const p=await peer(t),original=fs.writeFile.bind(fs);t.mock.method(fs,'writeFile',async(file,...args)=>{await original(file,...args);if(path.dirname(file)===path.join(p.root,'queue','inbox')&&file.endsWith('.tmp'))throw new Error('controlled failed write acknowledgement');});
     const value=await p.run('document');assert.equal(value.error.code,'COMMAND_NOT_STARTED');assert.equal(value.error.outcome,'not_started');assert.equal(p.requests.length,0);assert.deepEqual(value.evidence.requestIds,[]);assert.ok((await fs.stat(value.evidence.unpublishedRequest.tempPath)).isFile());
   });
-  await t.test('rename completed before error',async t=>{
-    const p=await peer(t),original=fs.rename.bind(fs);t.mock.method(fs,'rename',async(source,target)=>{await original(source,target);if(path.dirname(source)===path.join(p.root,'queue','inbox')&&source.endsWith('.tmp'))throw new Error('controlled unknown rename acknowledgement');});
-    const value=unconfirmed(await p.run('document'));assert.equal(value.evidence.unconfirmedRequest.phase,'publication');await new Promise(resolve=>setTimeout(resolve,35));assert.equal(p.requests.length,1);assert.deepEqual(value.evidence.requestIds,[p.requests[0].id]);
+  await t.test('rename completed before error',{timeout:5000},async t=>{
+    const claimed=Promise.withResolvers();
+    const p=await peer(t,()=>{claimed.resolve();return null;}),original=fs.rename.bind(fs);t.mock.method(fs,'rename',async(source,target)=>{await original(source,target);if(path.dirname(source)===path.join(p.root,'queue','inbox')&&source.endsWith('.tmp'))throw new Error('controlled unknown rename acknowledgement');});
+    const value=unconfirmed(await p.run('document'));assert.equal(value.evidence.unconfirmedRequest.phase,'publication');await claimed.promise;assert.equal(p.requests.length,1);assert.deepEqual(value.evidence.requestIds,[p.requests[0].id]);
   });
 });

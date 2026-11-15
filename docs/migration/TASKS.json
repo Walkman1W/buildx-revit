@@ -4,6 +4,14 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-MAIN-SOURCE-20261115",
+      "title": "主线源码基线与中英文文档",
+      "status": "source_baseline",
+      "acceptance": "main 包含项目范围自动应用候选，源码标签关联同一提交，中英文 README 和版本记录可读",
+      "evidence": "buildx-source-20261115; includes 13a95fc; 222 native-query, 120 layout, 180 type-write, 30 manual-type-write, 82 focused and 117 controlled host checks passed; isolated Revit 2024 API x64 build passed",
+      "realModelExecutionVerified": false
+    },
+    {
       "id": "BX-SCOPED-AUTO-APPLY-20261115",
       "title": "项目范围自动应用、工具目录及诊断回执",
       "status": "candidate_packaged",
