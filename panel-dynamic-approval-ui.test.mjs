@@ -116,6 +116,25 @@ test('a pending artifact checks its original receipt and appears as a file only 
   await ui.click(check);assert.equal(ui.requests.length,1);
 });
 
+test('a terminal file failure keeps its own explanation and checks only the original artifact ID',async()=>{
+  const ui=await setup(),files=ui.get('generated-files');
+  const failure={status:'failed',artifactId:'a0c8ede3-2ba0-44d9-8f7e-0ab91db65eb0',
+    fileName:'泵-a0c8ede32ba044d98f7e0ab91db65eb0.rfa',message:'Revit 未能定位进水口端面。'};
+  ui.show(null,{busy:false,generatedFileFailures:[failure]});
+  const [card,detail,feedback]=files.children;
+  assert.match(card.textContent,/制作失败/);
+  assert.match(card['aria-label'],/核对原回执/);
+  assert.match(detail.textContent,/进水口端面/);
+  assert.ok(detail.textContent.includes(failure.artifactId));
+  await ui.click(card);
+  assert.deepEqual(ui.requests.map(request=>({url:request.url,body:request.body})),[{
+    url:'/api/chat-artifact/check',body:{client:'id-1',conversationId:'conversation-a',artifactId:failure.artifactId}
+  }]);
+  await ui.respond(ui.requests[0],{ok:true,...failure});
+  assert.ok(feedback.textContent.includes(failure.artifactId));
+  assert.match(feedback.textContent,/进水口端面/);
+});
+
 test('expired and malformed previews cannot be submitted',async()=>{
   const ui=await setup(),box=ui.get('dynamic-approval');ui.show(approval({deadline:Date.now()-1}));
   assert.match(box.children[3].textContent,/超时/);assert.equal(box.children[2].children[0].disabled,true);await ui.click(box.children[2].children[0]);assert.equal(ui.requests.length,0);

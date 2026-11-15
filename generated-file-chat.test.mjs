@@ -15,7 +15,7 @@ import {createGeneratedFileTransport} from './lib/generated-file-transport.mjs';
 
 const program=fileURLToPath(new URL('.',import.meta.url));
 const sessionId='b'.repeat(32);
-const parameters=Object.freeze({file_name:'端吸泵',width_mm:1200,depth_mm:600,height_mm:750,inlet_diameter_mm:150,outlet_diameter_mm:100,system:'hydronic_supply'});
+const parameters=Object.freeze({file_name:'端吸泵',width_mm:600,depth_mm:1200,height_mm:700,inlet_diameter_mm:100,outlet_diameter_mm:80,system:'hydronic_supply'});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 
 class CodexPeer extends EventEmitter{
@@ -85,10 +85,14 @@ async function fixture(t,{timeoutMs=1600}={}){
     await fs.writeFile(path.join(queue,'outbox',request.id+'.json'),JSON.stringify(result));
     return fileName;
   }
+  async function fail(request,value){
+    const result={id:request.id,ok:true,result:{operation:request.operation,hostSession:sessionId,value:{success:false,code:'PUMP_BUILD_FAILED',...value}}};
+    await fs.writeFile(path.join(queue,'outbox',request.id+'.json'),JSON.stringify(result));
+  }
   const preview=()=>app.snapshot('browser').dynamicApproval;
   const approve=(p,decision='accept')=>post('dynamic-approval',{requestId:p.id,conversationId:p.conversationId,digest:p.digest,decision});
   assert.equal((await post('turn',{message:'制作水泵族'})).status,202);
-  return {app,codex,post,approve,preview,queueFiles,claim,complete,acknowledgeOpen,owner};
+  return {app,codex,post,approve,preview,queueFiles,claim,complete,fail,acknowledgeOpen,owner};
 }
 
 test('one approved chat request publishes a bound permit and opens a verified file',async t=>{
@@ -130,5 +134,60 @@ test('late success is recovered from the original receipt without another queue 
   const view=f.app.snapshot('browser');
   assert.equal(view.generatedFiles[0].artifactId,request.id);
   assert.deepEqual(view.generatedFilePending,[]);
+  assert.deepEqual(await f.queueFiles(),[]);
+});
+
+test('the failed pump request keeps its original ID and exposes only verified diagnostic fields',async t=>{
+  const f=await fixture(t),preview=f.preview();
+  assert.equal((await f.approve(preview)).status,200);
+  const request=await f.claim();
+  const diagnostic={stage:'inlet_face',reason:'port_face_missing',exceptionType:'System.InvalidOperationException',
+    saveAttempted:false,cleanupComplete:true,failureIds:['3c0bfb00-b118-49b3-8b1f-c9f43247661d']};
+  await f.fail(request,{outcome:'failed',diagnostic,message:'untrusted stack C:/private/test'});
+  const answer=await waitFor(()=>f.codex.answers[0]);
+  const body=JSON.parse(answer.contentItems[0].text);
+  assert.equal(body.status,'failed');
+  assert.equal(body.artifactId,request.id);
+  assert.deepEqual(body.diagnostic,diagnostic);
+  assert.match(body.message,/进水口端面/);
+  assert.doesNotMatch(JSON.stringify(answer),/untrusted|private/);
+  const original=await waitFor(()=>f.app.snapshot('browser').generatedFileFailures?.[0]);
+  assert.equal(original.artifactId,request.id);
+  assert.equal(original.fileName,preview.target);
+  assert.deepEqual(original.diagnostic,diagnostic);
+  const payload={artifactId:request.id,conversationId:preview.conversationId};
+  assert.equal((await f.post('chat-artifact/check',payload,null)).status,403);
+  assert.equal((await f.post('chat-artifact/check',{...payload,client:'other'})).status,409);
+  const checked=await f.post('chat-artifact/check',payload);
+  assert.equal(checked.status,200);
+  assert.equal(checked.body.status,'failed');
+  assert.equal(checked.body.artifactId,request.id);
+  assert.deepEqual(checked.body.diagnostic,diagnostic);
+  assert.equal((await f.post('chat-artifact/open',payload)).status,404);
+  assert.deepEqual(await f.queueFiles(),[]);
+});
+
+test('an unknown save result retains the original pending slot and can be checked without opening it',async t=>{
+  const f=await fixture(t),preview=f.preview();
+  assert.equal((await f.approve(preview)).status,200);
+  const request=await f.claim();
+  const diagnostic={stage:'save',reason:'native_api_error',exceptionType:'System.IO.IOException',
+    saveAttempted:true,cleanupComplete:true};
+  await f.fail(request,{outcome:'unknown',diagnostic});
+  const answer=JSON.parse((await waitFor(()=>f.codex.answers[0])).contentItems[0].text);
+  assert.equal(answer.status,'unknown');
+  assert.equal(answer.artifactId,request.id);
+  assert.deepEqual(answer.diagnostic,diagnostic);
+  const payload={artifactId:request.id,conversationId:preview.conversationId};
+  const checked=await f.post('chat-artifact/check',payload);
+  assert.equal(checked.body.status,'unknown');
+  assert.deepEqual(checked.body.diagnostic,diagnostic);
+  await waitFor(()=>f.app.snapshot('browser').generatedFilePending?.[0]);
+  assert.equal((await f.post('chat-artifact/open',payload)).status,404);
+  f.codex.request(2);
+  assert.equal((await f.approve(f.preview())).status,200);
+  const repeat=JSON.parse((await waitFor(()=>f.codex.answers[1])).contentItems[0].text);
+  assert.equal(repeat.status,'unknown');
+  assert.equal(repeat.artifactId,request.id);
   assert.deepEqual(await f.queueFiles(),[]);
 });
