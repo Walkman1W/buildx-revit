@@ -8,7 +8,56 @@ import {createHash,randomUUID} from 'node:crypto';
 import {spawn} from 'node:child_process';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
-const modules=Object.freeze(['codex-client-core.mjs','local-runtimes.mjs','panel-server-core.mjs','chat-session.mjs','chat-context.mjs','cad-document-path.mjs','workbench-contracts.mjs','panel-accounts.mjs','codex-confirmation.mjs']);
+// Keep the copied dependency list explicit so unexpected imports fail in the child.
+const modules=Object.freeze([
+  'lib/access-lock-recovery.mjs',
+  'lib/access-policy.mjs',
+  'lib/batch-filter-preview.mjs',
+  'lib/buildx-paths.mjs',
+  'lib/cad-candidates.mjs',
+  'lib/cad-document-path.mjs',
+  'lib/cad-inventory.mjs',
+  'lib/cad-tools.mjs',
+  'lib/chat-context.mjs',
+  'lib/chat-session.mjs',
+  'lib/codex-client-core.mjs',
+  'lib/codex-confirmation.mjs',
+  'lib/command-save-receipt.mjs',
+  'lib/command-sequence.mjs',
+  'lib/command-store.mjs',
+  'lib/confirmed-write-profile.mjs',
+  'lib/family-tools.mjs',
+  'lib/generated-file-diagnostic.mjs',
+  'lib/local-chat-tools.mjs',
+  'lib/local-image-generation.mjs',
+  'lib/local-runtimes.mjs',
+  'lib/model-operation-contracts.mjs',
+  'lib/model-operation-effects.mjs',
+  'lib/model-permission-owner.mjs',
+  'lib/modelling-tools.mjs',
+  'lib/native-chat-image.mjs',
+  'lib/native-model-queries.mjs',
+  'lib/native-parameter-queries.mjs',
+  'lib/native-parameter-writes.mjs',
+  'lib/native-schematic-tools.mjs',
+  'lib/native-snapshot-delta.mjs',
+  'lib/native-type-parameter-writes.mjs',
+  'lib/panel-accounts.mjs',
+  'lib/panel-audit.mjs',
+  'lib/panel-chat-format.mjs',
+  'lib/panel-server-core.mjs',
+  'lib/panel-tools.mjs',
+  'lib/parameter-write-result.mjs',
+  'lib/project-instance-binding-preview.mjs',
+  'lib/type-parameter-write-approval.mjs',
+  'lib/visual-artifact-owner.mjs',
+  'lib/visual-inspection-recovery.mjs',
+  'lib/visual-inspection-tools.mjs',
+  'lib/workbench-client.mjs',
+  'lib/workbench-contracts.mjs',
+  'lib/workbench-receipt.mjs',
+  'public/command-parameter-options.mjs',
+]);
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 
 // This is a real module resolver boundary, not a source-text dependency scan.
@@ -23,7 +72,7 @@ import {registerHooks,isBuiltin} from 'node:module';
 
 const root=path.dirname(fileURLToPath(import.meta.url));
 const names=JSON.parse(process.argv[2]);
-const permitted=new Set(names.map(name=>pathToFileURL(path.join(root,'lib',name)).href));
+const permitted=new Set(names.map(name=>pathToFileURL(path.join(root,name)).href));
 const resolved=[],denied=[];
 registerHooks({resolve(specifier,context,nextResolve){
   const result=nextResolve(specifier,context);
@@ -40,8 +89,11 @@ assert.equal(typeof createPanelServerCore,'function');
 await assert.rejects(import('./lib/panel-profile.mjs'),{code:'ERR_MODULE_NOT_FOUND'});
 await assert.rejects(import('./forbidden.mjs'),{code:'CORE_IMPORT_SCOPE'});
 await assert.rejects(fs.stat(path.join(root,'forbidden-ran')),{code:'ENOENT'});
-assert.deepEqual((await fs.readdir(path.join(root,'lib'))).sort(),[...names].sort());
-for(const wrapper of ['panel-server.mjs','codex-client.mjs','panel-profile.mjs','codex-profile.mjs','panel-tools.mjs','source-tools.mjs'])await assert.rejects(fs.stat(path.join(root,'lib',wrapper)),{code:'ENOENT'});
+for(const directory of ['lib','public']){
+  const copied=(await fs.readdir(path.join(root,directory))).map(name=>directory+'/'+name);
+  assert.deepEqual(copied.sort(),names.filter(name=>name.startsWith(directory+'/')).sort());
+}
+for(const wrapper of ['panel-server.mjs','codex-client.mjs','panel-profile.mjs','codex-profile.mjs','model-command-catalog.mjs','source-tools.mjs'])await assert.rejects(fs.stat(path.join(root,'lib',wrapper)),{code:'ENOENT'});
 
 class FakeCodex extends EventEmitter{
   constructor(){super();this.state={service:'isolated-fixture',ready:true,error:false,message:'fixture ready',mode:'source-development',toolCount:0,connectionGeneration:1};this.starts=0;this.closes=0;this.turns=[];this.threads=0;}
@@ -121,8 +173,12 @@ test('copied chat cores run HTTP/SSE and confirmed cleanup with only declared pr
   const temp=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-chat-core-'));
   const tempReal=await fs.realpath(temp),hashes=[];let execution=null,removed=false;
   try{
-    await fs.mkdir(path.join(temp,'lib'));
-    for(const name of modules){const bytes=await fs.readFile(path.join(root,'lib',name));await fs.writeFile(path.join(temp,'lib',name),bytes);hashes.push({module:'lib/'+name,sha256:hash(bytes),byteLength:bytes.byteLength});}
+    for(const name of modules){
+      const target=path.join(temp,name),bytes=await fs.readFile(path.join(root,name));
+      await fs.mkdir(path.dirname(target),{recursive:true});
+      await fs.writeFile(target,bytes);
+      hashes.push({module:name,sha256:hash(bytes),byteLength:bytes.byteLength});
+    }
     await fs.writeFile(path.join(temp,'runner.mjs'),fixture);
     await fs.writeFile(path.join(temp,'forbidden.mjs'),"import fs from 'node:fs/promises'; await fs.writeFile(new URL('./forbidden-ran',import.meta.url),'unexpected');");
     execution=await runChild(temp);

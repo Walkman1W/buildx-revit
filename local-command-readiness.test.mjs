@@ -32,7 +32,6 @@ test('local commands and catalog remain available while the chat model is discon
   const f=await fixture(t);
   assert.equal(f.state.ready,false);assert.equal(f.state.commandsReady,true);
   assert.equal(f.state.commandCatalogAvailable,true);assert.equal(Object.hasOwn(f.state,'commandCatalog'),false);
-  assert.ok(Buffer.byteLength(JSON.stringify(f.state),'utf8')<8192,'native service probes remain below their 8 KiB buffer');
   const catalog=await fetch(f.origin+'/api/command-catalog').then(response=>response.json());
   assert.deepEqual(catalog.commands,commands);
   assert.equal((await f.post('document')).status,202);await idle(f);

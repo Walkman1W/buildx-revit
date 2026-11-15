@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {readAsciiDxf,ASCII_DXF_LIMITS} from './lib/cad-dxf-reader.mjs';
 const pairs=items=>items.map(([code,value])=>code+'\n'+value+'\n').join('');
@@ -8,17 +7,18 @@ const line=(extra=[])=>[[0,'LINE'],[8,'BX_WALL_AXIS'],[5,'AB'],[10,'1'],[20,'2']
 const dxf=(entities=line(),header=[[9,'$INSUNITS'],[70,4]])=>pairs([[0,'SECTION'],[2,'HEADER'],...header,[0,'ENDSEC'],[0,'SECTION'],[2,'ENTITIES'],...entities,[0,'ENDSEC'],[0,'EOF']]);
 function value(input){const result=readAsciiDxf(input);assert.equal(result.ok,true,JSON.stringify(result));return result.value;}
 function error(input,code){const result=readAsciiDxf(input);assert.equal(result.ok,false);assert.equal(result.error.code,code,JSON.stringify(result));}
-test('A01 real generated file retains 8 exact WCS lines, ignored note entity and provenance',async()=>{
-  const pathname=new URL('./planning/argus-replica/samples/BuildX-A01.centerlines.dxf',import.meta.url);
-  const input=await fs.readFile(pathname),geometry=JSON.parse(await fs.readFile(new URL('./planning/argus-replica/samples/BuildX-A01.geometry.json',import.meta.url)));
-  const result=readAsciiDxf(input,{sourceName:pathname.pathname});assert.equal(result.ok,true,JSON.stringify(result));
+test('a generated DXF fixture retains 8 exact WCS lines, its note entity and provenance',()=>{
+  const expected=Array.from({length:8},(_,i)=>({layer:i%2?'BX_COLUMN_AXIS':'BX_WALL_AXIS',from:[150-250*i,120*i,0],to:[60+300*i,90+200*i,0]}));
+  const entities=expected.flatMap(({layer,from,to},i)=>[[0,'LINE'],[5,(16+i).toString(16)],[8,layer],[10,from[0]],[20,from[1]],[11,to[0]],[21,to[1]]]);
+  const input=Buffer.from(dxf([...entities,[0,'TEXT'],[5,'20'],[8,'NOTES'],[1,'Synthetic axes']]),'ascii');
+  const result=readAsciiDxf(input,{sourceName:'synthetic-centerlines.dxf'});assert.equal(result.ok,true,JSON.stringify(result));
   const v=result.value;assert.deepEqual(v.coverage,{entityCount:9,lineCount:8,unsupportedCount:1,invalidLineCount:0});
   assert.deepEqual(v.units,{code:4,name:'millimetres',millimetresPerUnit:1});
-  assert.equal(v.source.byteLength,input.length);assert.equal(v.source.sha256,createHash('sha256').update(input).digest('hex'));
+  assert.equal(v.source.name,'synthetic-centerlines.dxf');assert.equal(v.source.byteLength,input.length);assert.equal(v.source.sha256,createHash('sha256').update(input).digest('hex'));
   for(let i=0;i<8;i++){
-    const entity=v.entities[i],expected=geometry.lines[i];
-    assert.deepEqual(entity.geometry.from,[...expected.from,0]);assert.deepEqual(entity.geometry.to,[...expected.to,0]);
-    assert.equal(entity.layer,expected.layer);assert.deepEqual(entity.issues,[]);assert.equal(entity.ordinal,i+1);
+    const entity=v.entities[i],line=expected[i];
+    assert.deepEqual(entity.geometry.from,line.from);assert.deepEqual(entity.geometry.to,line.to);
+    assert.equal(entity.layer,line.layer);assert.deepEqual(entity.issues,[]);assert.equal(entity.ordinal,i+1);
   }
   assert.equal(v.entities[8].type,'TEXT');assert.equal(v.entities[8].geometry,null);
   assert.ok(v.entities[8].issues.some(x=>x.code==='UNSUPPORTED_ENTITY'));

@@ -83,7 +83,7 @@ test('a malformed call never consumes a current grant and a corrected new call c
 test('unsupported tools, transaction modes and document mismatches retain separate producer reasons',async t=>{
   const f=await fixture(t);await f.choose('automatic');await f.begin();
   const cases=[
-    [{tool:'revit_create_roof',parameters:{mode:'commit'}},'MODEL_OPERATION_UNSUPPORTED'],
+    [{tool:'revit_fixture_unavailable_operation',parameters:{mode:'commit'}},'MODEL_OPERATION_UNSUPPORTED'],
     [{tool:'revit_move_elements',parameters:{mode:'apply',element_ids:[1],delta_mm:{x:1,y:0,z:0}}},'MODEL_TRANSACTION_MODE_INVALID'],
     [{tool:'revit_move_elements',parameters:{expected_document:'C:\\other.rvt',mode:'commit',element_ids:[1],delta_mm:{x:1,y:0,z:0}}},'MODEL_DOCUMENT_MISMATCH'],
     [{tool:'revit_execute_csharp',parameters:{code:42}},'MODEL_SCRIPT_PARAMETERS_INVALID'],

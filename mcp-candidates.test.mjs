@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {CodexClientCore} from './lib/codex-client-core.mjs';
 import {createModelWorkspaceSessionProfile,createReadonlyWorkbenchSessionProfile} from './lib/codex-profile.mjs';
-import {MODEL_WORKSPACE_TOOLS} from './lib/panel-tools.mjs';
-import {MODEL_WORKSPACE_TOOL_NAMES} from './lib/model-command-catalog.mjs';
+import {MODEL_AI_READ_TOOLS} from './lib/panel-tools.mjs';
 import {createModelWorkspaceFixture} from './test-support/model-workspace-preview.mjs';
 import {createPanelServer} from './lib/panel-server.mjs';
 
@@ -21,7 +20,7 @@ function createClient(t){
       if(message.method==='account/read')result={requiresOpenaiAuth:true,account:{type:'chatgpt',email:null,planType:'free'}};
       if(message.method==='thread/start')result={thread:{id:'isolated-thread'}};
       if(message.method==='mcpServerStatus/list')result={data:[
-        {name:'revit_workbench',runtimeStatus:'connected',authStatus:'unsupported',tools:Object.fromEntries(MODEL_WORKSPACE_TOOLS.map(tool=>[tool.name,structuredClone(tool)])),resources:[],resourceTemplates:[],toolsError:null},
+        {name:'revit_workbench',runtimeStatus:'connected',authStatus:'unsupported',tools:Object.fromEntries(MODEL_AI_READ_TOOLS.map(tool=>[tool.name,structuredClone(tool)])),resources:[],resourceTemplates:[],toolsError:null},
         {name:'alpha',runtimeStatus:'disabled',authStatus:'unknown',tools:{},resources:[],resourceTemplates:[],toolsError:null},
       ],nextCursor:null};
       child.stdout.emit('data',Buffer.from(JSON.stringify({id:message.id,result})+'\n'));
@@ -74,7 +73,7 @@ test('skill policy is a frozen trusted owner, never an accessor or mutable brows
 });
 
 function fakeCodex(){
-  const codex=new EventEmitter();codex.profile=Object.freeze({id:'model-workspace',toolNames:MODEL_WORKSPACE_TOOL_NAMES});codex.skillCatalogMode='research';
+  const codex=new EventEmitter();codex.profile=createModelWorkspaceSessionProfile(root);codex.skillCatalogMode='research';
   codex.state={ready:true,error:false,mode:'document-workbench',connectionGeneration:1,codexAccount:{accountRevision:2}};
   codex.configuredMcpCandidates=()=>({source:'launch_snapshot',generation:1,revision:2,servers:[{name:'alpha',status:'disabled',secret:'never-return'},{name:'other',status:'unknown'}],secret:'never-return'});
   codex.close=async()=>({closed:true});return codex;

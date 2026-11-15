@@ -34,6 +34,7 @@ namespace System.Windows.Threading {
 
 namespace BuildX.FamilyRevit {
     using Document = RevitLocalCodex.Document;
+    using UIApplication = RevitLocalCodex.UIApplication;
     // The production document owner's comparison is extracted separately so
     // these host checks cannot quietly invent another identity rule.
     internal sealed class RevitProjectDocumentSource {
@@ -41,6 +42,24 @@ namespace BuildX.FamilyRevit {
         internal RevitProjectDocumentSource(int threadId) { apiThreadId=threadId; }
         // ORIGINAL_DOCUMENT_SOURCE_THREAD
         // ORIGINAL_DOCUMENT_SOURCE_IDENTITY
+    }
+
+    // Exercise the production operation classifier in ProcessOne while keeping
+    // pump approval and Revit family I/O outside this scheduler verifier.
+    internal sealed class PumpFamilyArtifact {
+        private const string OutsideScope = "Pump family artifacts are outside scheduler checks.";
+        // ORIGINAL_PUMP_OPERATION_NAMES
+        // ORIGINAL_PUMP_OPERATION_CLASSIFICATION
+        internal PumpFamilyArtifact(string root) { throw new NotSupportedException(OutsideScope); }
+        internal static void ConsumeApproval(string queue, string session, string id, byte[] request, JavaScriptSerializer json) {
+            throw new NotSupportedException(OutsideScope);
+        }
+        internal object Create(UIApplication app, Dictionary<string,object> args, string id, DateTime expires, Func<bool> mayContinue) {
+            throw new NotSupportedException(OutsideScope);
+        }
+        internal object Open(UIApplication app, Dictionary<string,object> args, DateTime expires, Func<bool> mayContinue) {
+            throw new NotSupportedException(OutsideScope);
+        }
     }
 }
 
@@ -162,6 +181,7 @@ namespace RevitLocalCodex {
         private UIControlledApplication controlledApplication;
         private SnapshotRevitBridge snapshotBridge;
         private FamilyApprovalPeer familyWorkflow;
+        private BuildX.FamilyRevit.PumpFamilyArtifact pumpFamilyArtifact;
         private TypeParameterWriteApproval typeParameterApprovals;
         private ExternalEvent externalEvent = new ExternalEvent();
         private SchedulerObservation pendingObservation;
@@ -183,7 +203,8 @@ namespace RevitLocalCodex {
         private string Root { get { return queue; } }
         public WorkbenchHost(string directory) { queue=directory;activeWindowWake=new CurrentUiWindowWake(uiPeer.Current,uiPeer.Native,uiPeer.Process,uiPeer.ActiveWindow,uiPeer.Valid,uiPeer.Enabled,uiPeer.Iconic,uiPeer.Owner,uiPeer.Post); }
         private void InitializeFamilyApprovalObserver(UIApplication uiapp) { }
-        private object Dispatch(UIApplication uiapp,string operation,Dictionary<string,object> args,string id,AccessPolicy.Binding access) {
+        private object Dispatch(UIApplication uiapp,string operation,Dictionary<string,object> args,string id,AccessPolicy.Binding access,bool scopedAutoApply=false) {
+            if(scopedAutoApply)throw new NotSupportedException("Scoped auto apply is outside scheduler checks.");
             DispatchCalls++;Thread.Sleep(20);
             if(dispatchFailure)throw new InvalidOperationException("Controlled dispatch peer failed.");
             selectedDocument=Text(args,"expected_document");

@@ -14,6 +14,8 @@ $accessPolicyPath=Join-Path $panelRoot 'revit-addin\AccessPolicy.cs'
 $actionsSourcePath=Join-Path $panelRoot 'revit-addin\WorkbenchActions.cs'
 $actionsSource=[IO.File]::ReadAllText($actionsSourcePath)
 $parameterSource=[IO.File]::ReadAllText((Join-Path $panelRoot 'revit-addin\NativeParameterQueries.cs'))
+$pumpSourcePath=Join-Path $panelRoot 'family-core\revit\PumpFamilyArtifact.cs'
+$pumpSource=[IO.File]::ReadAllText($pumpSourcePath)
 function Read-Producer([string]$start,[string]$end,[string]$producer=$source){
  $begin=$producer.IndexOf($start,[StringComparison]::Ordinal);if($begin -lt 0){throw ('Missing producer '+$start)}
  $finish=$producer.IndexOf($end,$begin,[StringComparison]::Ordinal)
@@ -36,6 +38,8 @@ $methods=[ordered]@{
  ORIGINAL_ATOMIC_OPERATIONS=(Read-Producer 'private static readonly string[] AtomicReadOperations' 'internal string SessionId')
  ORIGINAL_OPERATION_CLASSIFICATION=(Read-Producer 'internal static readonly string[] ReadOperations' 'internal static object Read(' $actionsSource)
  ORIGINAL_PARAMETER_READ_CLASSIFICATION=(Read-Producer 'internal static bool IsRead(' 'internal static object Read(' $parameterSource)
+ ORIGINAL_PUMP_OPERATION_NAMES=(Read-Producer 'internal const string Operation =' 'private const string TemplateId =' $pumpSource)
+ ORIGINAL_PUMP_OPERATION_CLASSIFICATION=(Read-Producer 'internal static bool IsOperation(' 'internal static void ConsumeApproval(' $pumpSource)
  ORIGINAL_DOCUMENT_VALIDATION=(Read-Producer 'private static void RequireDocument(' 'internal static string Text(')
  ORIGINAL_TIMING_OWNER=(Read-Producer 'private sealed class SchedulerObservation' 'internal WorkbenchHost(')
  ORIGINAL_CURRENT_WINDOW_OWNER=(Read-Producer 'private sealed class CurrentUiWindowWake' 'private sealed class SchedulerObservation')
@@ -61,5 +65,5 @@ if($LASTEXITCODE-ne 0){throw 'Managed verifier compilation failed.'}
 if($LASTEXITCODE-ne 0){throw 'Managed verification failed.'}
 $result=Get-Content -LiteralPath (Join-Path $evidence 'results.json') -Raw|ConvertFrom-Json
 if($result.checks-ne 117 -or @($result.results|Where-Object {-not $_.passed}).Count){throw 'Managed checks are incomplete.'}
-[ordered]@{source=$hostPath;sourceSha256=(Get-FileHash -LiteralPath $hostPath -Algorithm SHA256).Hash.ToLowerInvariant();documentIdentitySource=$documentSourcePath;documentIdentitySha256=(Get-FileHash -LiteralPath $documentSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();accessPolicySource=$accessPolicyPath;accessPolicySha256=(Get-FileHash -LiteralPath $accessPolicyPath -Algorithm SHA256).Hash.ToLowerInvariant();operationClassificationSource=$actionsSourcePath;operationClassificationSha256=(Get-FileHash -LiteralPath $actionsSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();checks=$result.checks;scope='Exact scheduler, request/access validation and native document identity owners with controlled Revit/business peers; not a real Revit run.';methods=@($methods.Keys)}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $evidence 'source-proof.json') -Encoding utf8
+[ordered]@{source=$hostPath;sourceSha256=(Get-FileHash -LiteralPath $hostPath -Algorithm SHA256).Hash.ToLowerInvariant();documentIdentitySource=$documentSourcePath;documentIdentitySha256=(Get-FileHash -LiteralPath $documentSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();accessPolicySource=$accessPolicyPath;accessPolicySha256=(Get-FileHash -LiteralPath $accessPolicyPath -Algorithm SHA256).Hash.ToLowerInvariant();operationClassificationSource=$actionsSourcePath;operationClassificationSha256=(Get-FileHash -LiteralPath $actionsSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();pumpOperationClassificationSource=$pumpSourcePath;pumpOperationClassificationSha256=(Get-FileHash -LiteralPath $pumpSourcePath -Algorithm SHA256).Hash.ToLowerInvariant();checks=$result.checks;scope='Exact scheduler, request/access validation and native document identity owners with controlled Revit/business peers; not a real Revit run.';methods=@($methods.Keys)}|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $evidence 'source-proof.json') -Encoding utf8
 Write-Output ('Managed checks passed: '+$result.checks+'; evidence: '+$evidence)
