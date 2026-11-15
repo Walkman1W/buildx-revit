@@ -16,17 +16,19 @@ import {createGeneratedFileTransport} from './lib/generated-file-transport.mjs';
 const program=fileURLToPath(new URL('.',import.meta.url));
 const sessionId='b'.repeat(32);
 const parameters=Object.freeze({file_name:'端吸泵',width_mm:600,depth_mm:1200,height_mm:700,inlet_diameter_mm:100,outlet_diameter_mm:80,system:'hydronic_supply'});
+const failedPumpParameters=Object.freeze({...parameters,height_mm:750});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 
 class CodexPeer extends EventEmitter{
   profile=createCodexSessionProfile(program,{profile:MODEL_WORKSPACE_SESSION_PROFILE,generatedFiles:true});
   state={ready:true,error:false,mode:'document-workbench',connectionGeneration:1,codexAccount:{accountRevision:2}};
   answers=[];
+  constructor(requestedParameters){super();this.parameters=requestedParameters;}
   async newThread(){return 'local-thread';}
   async turn(){this.request(1);return {turn:{id:'local-turn'}};}
   async close(){return {closed:true};}
   request(id){
-    const params=Object.freeze({threadId:'local-thread',turnId:'local-turn',callId:'call-'+id,tool:'buildx_generate_file',arguments:Object.freeze({format:'rfa',parameters})});
+    const params=Object.freeze({threadId:'local-thread',turnId:'local-turn',callId:'call-'+id,tool:'buildx_generate_file',arguments:Object.freeze({format:'rfa',parameters:this.parameters})});
     this.emit('dynamic-tool-request',{id,params,generation:1,revision:2,respond:value=>{this.answers.push(value);return true;},reject(){},discard(){}});
   }
 }
@@ -39,12 +41,12 @@ async function waitFor(read){
   throw new Error('Expected local fixture transition did not occur');
 }
 
-async function fixture(t,{timeoutMs=1600}={}){
+async function fixture(t,{timeoutMs=1600,requestedParameters=parameters}={}){
   const dataRoot=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-generated-chat-'));
   const workbenchRoot=path.join(dataRoot,'workbench'),queue=path.join(workbenchRoot,'queue');
   for(const dir of ['inbox','processing','outbox'])await fs.mkdir(path.join(queue,dir),{recursive:true});
   await fs.writeFile(path.join(queue,'host.json'),JSON.stringify({sessionId,pid:process.pid,startedUtc:new Date().toISOString(),pumpFamilyArtifactVersion:1}));
-  const codex=new CodexPeer();
+  const codex=new CodexPeer(requestedParameters);
   const owner=createGeneratedFileOwner({dataRoot});
   const transport=createGeneratedFileTransport({workbenchRoot,timeoutMs,pollMs:15});
   const approval=createGeneratedFileApproval({owner,transport});
@@ -58,7 +60,7 @@ async function fixture(t,{timeoutMs=1600}={}){
     return {status:response.status,body:await response.json()};
   };
   const queueFiles=async()=> (await fs.readdir(path.join(queue,'inbox'))).filter(name=>name.endsWith('.json'));
-  async function claim(operation='create_pump_family_artifact',args=parameters){
+  async function claim(operation='create_pump_family_artifact',args=requestedParameters){
     const queued=await waitFor(async()=> (await queueFiles())[0]);
     const source=path.join(queue,'inbox',queued),destination=path.join(queue,'processing',queued);
     await fs.rename(source,destination);
@@ -77,7 +79,7 @@ async function fixture(t,{timeoutMs=1600}={}){
     await fs.writeFile(path.join(queue,'outbox',request.id+'.json'),JSON.stringify(result));
   }
   async function complete(request){
-    const fileName=parameters.file_name+'-'+request.id.replaceAll('-','')+'.rfa';
+    const fileName=requestedParameters.file_name+'-'+request.id.replaceAll('-','')+'.rfa';
     const contents=Buffer.from('Controlled fixture payload, never intended to open in Revit.');
     await fs.mkdir(owner.outputDirectory,{recursive:true});
     await fs.writeFile(path.join(owner.outputDirectory,fileName),contents);
@@ -95,7 +97,7 @@ async function fixture(t,{timeoutMs=1600}={}){
   return {app,codex,post,approve,preview,queueFiles,claim,complete,fail,acknowledgeOpen,owner};
 }
 
-test('one approved chat request publishes a bound permit and opens a verified file',async t=>{
+test('a 700 mm pump fixture publishes a bound permit and opens a verified file',async t=>{
   const f=await fixture(t),first=f.preview();
   assert.equal(first.kind,'file');
   assert.equal(first.cwd,f.owner.outputDirectory);
@@ -137,24 +139,29 @@ test('late success is recovered from the original receipt without another queue 
   assert.deepEqual(await f.queueFiles(),[]);
 });
 
-test('the failed pump request keeps its original ID and exposes only verified diagnostic fields',async t=>{
-  const f=await fixture(t),preview=f.preview();
+test('the 750 mm pump fixture retains bounded geometry diagnostics and the original failure ID',async t=>{
+  const f=await fixture(t,{requestedParameters:failedPumpParameters}),preview=f.preview();
   assert.equal((await f.approve(preview)).status,200);
   const request=await f.claim();
-  const diagnostic={stage:'inlet_face',reason:'port_face_missing',exceptionType:'System.InvalidOperationException',
-    saveAttempted:false,cleanupComplete:true,failureIds:['3c0bfb00-b118-49b3-8b1f-c9f43247661d']};
+  const geometry={port:'outlet',expectedCenterMm:[300,444,750],expectedNormal:[0,0,1],expectedRadiusMm:40,
+    sketchNormal:[0,0,1],startOffsetMm:0,endOffsetMm:412.5,
+    counts:{solids:1,instances:0,planar:2,referenced:2,aligned:1,coplanar:0,circular:0,matched:0},
+    candidates:[{normal:[0,0,1],axisDeltaMm:-412.5,radiusMm:40,hasReference:true,rejectedBy:'plane'}]};
+  const diagnostic={stage:'outlet_face',reason:'port_end_plane_mismatch',exceptionType:'System.InvalidOperationException',
+    saveAttempted:false,cleanupComplete:true,failureIds:['3c0bfb00-b118-49b3-8b1f-c9f43247661d'],geometry};
   await f.fail(request,{outcome:'failed',diagnostic,message:'untrusted stack C:/private/test'});
   const answer=await waitFor(()=>f.codex.answers[0]);
   const body=JSON.parse(answer.contentItems[0].text);
   assert.equal(body.status,'failed');
   assert.equal(body.artifactId,request.id);
   assert.deepEqual(body.diagnostic,diagnostic);
-  assert.match(body.message,/进水口端面/);
+  assert.match(body.message,/出水口端面.*末端截面.*平面 2.*法向匹配 1.*最终匹配 0/);
   assert.doesNotMatch(JSON.stringify(answer),/untrusted|private/);
   const original=await waitFor(()=>f.app.snapshot('browser').generatedFileFailures?.[0]);
   assert.equal(original.artifactId,request.id);
   assert.equal(original.fileName,preview.target);
   assert.deepEqual(original.diagnostic,diagnostic);
+  assert.equal(original.message,body.message);
   const payload={artifactId:request.id,conversationId:preview.conversationId};
   assert.equal((await f.post('chat-artifact/check',payload,null)).status,403);
   assert.equal((await f.post('chat-artifact/check',{...payload,client:'other'})).status,409);
@@ -163,6 +170,7 @@ test('the failed pump request keeps its original ID and exposes only verified di
   assert.equal(checked.body.status,'failed');
   assert.equal(checked.body.artifactId,request.id);
   assert.deepEqual(checked.body.diagnostic,diagnostic);
+  assert.equal(checked.body.message,body.message);
   assert.equal((await f.post('chat-artifact/open',payload)).status,404);
   assert.deepEqual(await f.queueFiles(),[]);
 });
