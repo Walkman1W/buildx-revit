@@ -4,12 +4,21 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-CHAT-PUMP-REPAIR-20261115",
+      "title": "原请求诊断与水泵族修复候选",
+      "status": "candidate_packaged",
+      "acceptance": "白底对话对原规格点击一次授权，生成独立族、保存并重开；失败可从原 ID 核对具体阶段，未知不重放",
+      "evidence": "STATUS.md; 94f1191 pinned source; 28dfe07 receipt, f4b6748 native fix, 6b551ae candidate 0.8.9-confirmed-write.20261115.2; 161/161 offline, Revit 2024 x64 API build, 144/144 ZIP entries verified",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
+    },
+    {
       "id": "BX-CHAT-PUMP-FAMILY-20261115",
       "title": "对话一次授权生成并打开水泵族",
       "status": "candidate_installed",
       "acceptance": "白底对话确认一次后生成独立的机械设备泵族，保存并重开核验，从文件卡在当前 Revit 打开，可核对原请求",
-      "evidence": "STATUS.md; 157/157 offline regression; Revit 2024 API 24.3.30.11 x64 isolated build; candidate 0.8.9-confirmed-write.20261115.1, 143/143 ZIP files verified, installed manifest and DLL verified; Revit first launch recorded licensing error 22",
-      "realRevitLoadVerified": false,
+      "evidence": "STATUS.md; 157/157 offline regression; Revit 2024 API 24.3.30.11 x64 isolated build; candidate 0.8.9-confirmed-write.20261115.1, 143/143 ZIP entries verified; live journal.0266 and native dispatch verified; pump generation failed before save",
+      "realRevitLoadVerified": true,
       "realModelExecutionVerified": false
     },
     {
