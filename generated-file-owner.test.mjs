@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {createGeneratedFileOwner,readPumpFileParameters} from './lib/generated-file-owner.mjs';
+import {generatedFileFailureView,readGeneratedFileDiagnostic} from './lib/generated-file-diagnostic.mjs';
 
 const pump=Object.freeze({file_name:'卧式端吸泵 P1',width_mm:500,depth_mm:620,height_mm:450,
   inlet_diameter_mm:120,outlet_diameter_mm:100,system:'hydronic_supply'});
@@ -158,4 +159,26 @@ test('a scoped terminal failure retains safe diagnostics after restart and leave
     diagnostic:{...diagnostic,exceptionType:'System.InvalidOperationException: C:/private/test'}})});
   assert.equal(unsafe.status,'failed');
   assert.equal(unsafe.diagnostic,undefined);
+});
+
+test('an invalid optional geometry payload leaves the previous diagnostic contract readable',()=>{
+  const base={stage:'inlet_face',reason:'port_reference_missing',exceptionType:'None',saveAttempted:false,cleanupComplete:true};
+  const candidate={normal:[0,-1,0],axisDeltaMm:0,hasReference:false,rejectedBy:'reference'};
+  const geometry={port:'inlet',expectedCenterMm:[300,0,337.5],expectedNormal:[0,-1,0],expectedRadiusMm:50,
+    counts:{planar:3,circular:1,matched:0},candidates:[candidate]};
+  assert.deepEqual(readGeneratedFileDiagnostic({...base,geometry}),{...base,geometry});
+  for(const patch of [
+    {port:'unknown'},{expectedCenterMm:[1,2]},{expectedCenterMm:[1,Infinity,0]},{expectedNormal:[0,0,10]},
+    {sketchNormal:[0,0,NaN]},{expectedRadiusMm:-1},{startOffsetMm:'0'},{endOffsetMm:20001},
+    {counts:{planar:0,unknown:1}},{counts:{planar:-1}},{counts:{planar:1.1}},{counts:{planar:10001}},
+    {candidates:Array(9).fill(candidate)},{candidates:[{...candidate,axisDeltaMm:NaN}]},
+    {candidates:[{...candidate,hasReference:1}]},{candidates:[{...candidate,rejectedBy:'unexpected'}]},
+    {candidates:[{...candidate,path:'private placeholder'}]}
+  ]){
+    assert.deepEqual(readGeneratedFileDiagnostic({...base,geometry:{...geometry,...patch}}),base);
+  }
+  assert.deepEqual(readGeneratedFileDiagnostic(base),base);
+  assert.doesNotMatch(generatedFileFailureView({status:'failed',diagnostic:base}).message,/端面筛查/);
+  assert.match(generatedFileFailureView({status:'failed',diagnostic:{...base,geometry}}).message,
+    /未返回可绑定的端面引用.*进水口端面筛查.*平面 3.*圆形 1.*最终匹配 0/);
 });
