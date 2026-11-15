@@ -82,6 +82,7 @@
     </section>
     <div id="history-note" class="history-note" hidden>较早的记录已截断，当前显示保留的对话。</div>
     <div id="transcript" role="log" aria-live="polite" aria-relevant="additions text"></div>
+    <section id="generated-files" class="model-sent-attachments generated-files" aria-label="生成的文件" hidden></section>
   </main>
   <div id="activity" class="activity" role="status" hidden><span class="activity-dot" aria-hidden="true"></span><span id="activity-text">Codex 正在处理…</span></div>
   <section id="user-input" class="user-input" aria-label="Codex 提问" hidden></section>
@@ -93,7 +94,15 @@
     </section>
     <form id="composer">
       <label for="prompt" class="sr-only">向 BuildX 提问</label><textarea id="prompt" rows="3" maxlength="16000" placeholder="描述任务，或问问当前模型…"></textarea>
-      <div class="composer-bottom"><span>Ctrl + Enter 发送</span><button id="stop" class="secondary-button" type="button" hidden>停止</button><button id="steer" class="secondary-button" type="button" hidden disabled>补充当前任务</button><button id="send" type="submit" disabled>发送 <span aria-hidden="true">↑</span></button></div>
+      <div class="composer-bottom">
+        <span class="composer-shortcuts">Ctrl + Enter 发送</span>
+        <div class="composer-actions">
+          <button id="steer" class="secondary-button" type="button" hidden disabled title="向当前任务发送补充指令">补充当前任务</button>
+          <button id="stop" class="secondary-button composer-round" type="button" hidden aria-label="停止" title="停止当前对话"><span class="composer-stop-icon" aria-hidden="true"></span></button>
+          <button id="send" class="composer-round" type="submit" disabled aria-label="发送" title="发送"><span class="composer-send-icon" aria-hidden="true"></span></button>
+        </div>
+      </div>
+      <p id="composer-wait" class="composer-wait" role="status" hidden></p>
       <p id="steer-feedback" class="steer-feedback" role="status" hidden></p>
     </form>
     <p id="workspace-footnote" class="footnote">使用你的 Codex 登录 · 不自动保存模型。停止对话不保证取消已开始的 Revit 操作。</p>

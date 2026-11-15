@@ -31,7 +31,7 @@ test('send freezes exact raw file bytes and clears only its accepted attachment 
 test('failure and unknown transport preserve staged files and never automatically resend',async t=>{
   const ui=await createInputUi();t.after(()=>ui.close());await ui.add([file('保留.txt','必须保留')]);ui.input('这轮请求');await ui.submit();
   const request=ui.requests.find(item=>item.url==='/api/turn');await ui.reject(request,'结果尚未确认');
-  assert.deepEqual(names(ui),['保留.txt']);assert.equal(ui.get('prompt').value,'这轮请求');assert.match(ui.get('error-notice').textContent,/结果尚未确认/);
+  assert.deepEqual(names(ui),['保留.txt']);assert.equal(ui.get('prompt').value,'这轮请求');assert.match(ui.get('error-notice').textContent,/结果尚未核实.*原对话回执/);
   ui.emit('state',{ready:true,message:'连接已恢复'});await flush();assert.equal(ui.requests.filter(item=>item.url==='/api/turn').length,1);
 });
 

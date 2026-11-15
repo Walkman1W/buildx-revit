@@ -17,6 +17,15 @@ footer{flex:none;padding:0 14px 10px;background:var(--paper)}.context-panel{marg
 .user-input{margin:0 16px 10px;padding:14px;border:1px solid #a6c7b8;border-radius:10px;background:#f4faf6;color:#17392a}
 .user-input-form fieldset{border:0;padding:10px 0;margin:0}.user-input-form legend{font-weight:600}.user-input-option{display:flex;gap:8px;align-items:flex-start;margin:7px 0}.user-input-option input[type=text]{width:100%;padding:8px;border:1px solid #a6b8ae;border-radius:6px}.user-input-feedback{margin:6px 0 0;font-size:12px}
 .steer-feedback{margin:6px 0 0;color:#667665;font-size:10px;line-height:1.5;overflow-wrap:anywhere}
+.composer-actions{display:flex;flex:none;align-items:center;gap:6px;margin-left:auto}
+.composer-actions .composer-round,#activity .composer-round{display:inline-grid;place-items:center;width:34px;height:34px;padding:0;border-radius:50%;flex:none}
+.composer-actions .composer-round[hidden],#activity .composer-round[hidden]{display:none}
+.composer-actions #send .composer-send-icon{position:relative;width:14px;height:16px;margin:0}
+.composer-send-icon::before,.composer-send-icon::after{content:'';position:absolute;left:50%}
+.composer-send-icon::before{top:2px;width:8px;height:8px;border:solid currentColor;border-width:2px 0 0 2px;transform:translateX(-50%) rotate(45deg)}
+.composer-send-icon::after{top:3px;width:2px;height:11px;background:currentColor;border-radius:1px;transform:translateX(-50%)}
+.composer-stop-icon{width:10px;height:10px;border-radius:2px;background:currentColor}
+.composer-wait{margin:8px 1px 0;font-size:11px;line-height:1.45;overflow-wrap:anywhere}
 .codex-setup-guide{flex:none;padding:9px 20px;border-bottom:1px solid var(--line);background:#f4faf6;color:var(--ink)}.codex-setup-title{margin:0 0 3px;font-size:11px;font-weight:600}.codex-setup-detail{margin:2px 0;font-size:10px;line-height:1.6;overflow-wrap:anywhere}
 .dynamic-approval { margin: 8px 14px; padding: 14px; border: 1px solid #d3b96f; border-radius: 8px; background: #fffaf0; }
 .dynamic-approval[hidden] { display: none; }

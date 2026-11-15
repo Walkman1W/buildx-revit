@@ -355,6 +355,8 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   function restoreLayout() {
     hideModelShell();
     if(currentView==='knowledge')window.dispatchEvent(new CustomEvent('buildx-project-files-closed'));
+    const composerActions=document.querySelector('.composer-actions');
+    if(composerActions)composerActions.insertBefore(get('stop'),get('send'));
     currentView = 'chat'; active = false; closePicker(); drawerOpen = false; showAccountMenu(false,false);
     document.body.classList.remove('model-workspace'); delete document.body.dataset.modelView;
     nav.hidden = true; if(permissionBar)permissionBar.hidden=true;if(accessConfirm)accessConfirm.hidden=true;if(accessStatus)accessStatus.hidden=true;if(accessReview)accessReviewNotice='状态已变化，权限未修改，请重新选择';accessReview=null;clearReceiptDisplay();renderTerminal(null);showDrawer(false); controls.hidden = true; commandList.hidden = true; knowledgePanel.hidden=true; skillsPage.hidden=true;if(chatDraftNotice)chatDraftNotice.hidden=true;
@@ -402,6 +404,11 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     const previousView=currentView;
     if(previousView==='knowledge'&&view!=='knowledge')window.dispatchEvent(new CustomEvent('buildx-project-files-closed'));
     currentView = view; document.body.dataset.modelView = view;
+    const composerActions=document.querySelector('.composer-actions');
+    if(composerActions){
+      if(view==='chat')composerActions.insertBefore(get('stop'),get('send'));
+      else get('activity').append(get('stop'));
+    }
     for(const [tab,name] of [[chatTab,'chat'],[commandTab,'commands'],[skillsTab,'skills'],[knowledgeTab,'knowledge']]){tab.setAttribute('aria-selected',String(view===name));tab.tabIndex=view===name?0:-1;}
     commandList.hidden = view !== 'commands'; knowledgePanel.hidden=view!=='knowledge'; skillsPage.hidden=view!=='skills'; get('welcome').hidden = view !== 'chat' || snapshot?.hasMessages === true;
     renderTerminal(snapshot);
@@ -1114,13 +1121,23 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&accessMenu.open){accessMenu.open=false;accessMenuLabel.focus();}});
     accessOptions=el('fieldset','model-access-options');accessOptions.id='model-access-options';accessOptions.setAttribute('aria-label','访问权限');accessOptions.setAttribute('aria-describedby','model-access-status');accessOptions.disabled=true;accessOptions.tabIndex=-1;
     accessOptions.append(el('legend','sr-only','访问权限'));
-    for(const [mode,label] of [['read-only','只读'],['project-write','项目范围'],['full-access','完全访问']]){
-      const choice=button('model-access-choice',label);choice.id='model-access-'+mode;choice.disabled=true;choice.setAttribute('aria-label',label);choice.setAttribute('aria-pressed','false');
+    const accessChoices=[
+      ['read-only','只读','读取授权范围内的模型和文件'],
+      ['project-write','项目范围','在选定项目内申请修改'],
+      ['full-access','完全访问','访问当前 Windows 账号可访问的本机文件'],
+    ];
+    for(const [mode,label,description] of accessChoices){
+      const choice=button('model-access-choice');
+      choice.append(el('span','model-access-choice-title',label),el('small','model-access-choice-detail',description));
+      choice.id='model-access-'+mode;choice.dataset.accessMode=mode;choice.disabled=true;
+      choice.setAttribute('aria-pressed','false');
       choice.addEventListener('click',()=>{if(!choice.disabled){accessMenu.open=false;reviewAccess({mode});}});accessButtons.set(mode,choice);accessOptions.append(choice);
     }
-    accessMenu.append(accessOptions);
+    const accessPopover=el('div','model-access-popover');
+    accessPopover.append(el('p','model-access-heading','访问权限'),accessOptions);
+    accessMenu.append(accessPopover);
     accessScope=el('span','sr-only');accessScope.setAttribute('role','status');
-    const permissionLabel=el('label','sr-only','执行方式');permissionLabel.setAttribute('for','model-permission-select');
+    const permissionLabel=el('label','model-execution-label','执行方式');permissionLabel.setAttribute('for','model-permission-select');
     permissionSelect=el('select','model-permission-select');permissionSelect.id='model-permission-select';permissionSelect.setAttribute('aria-label','执行方式');
     permissionSelect.title='选择回滚预览或应用方式；可访问文件和模型的范围由访问权限决定。';
     for(const [value,label] of [['','请选择执行方式'],['__pending','更新中…'],['rollback','回滚预览'],['confirm','确认后应用'],['automatic','自动应用']]){const option=el('option','',label);option.value=value;if(value==='__pending')option.disabled=true;if(value==='')permissionPlaceholder=option;if(value==='automatic')permissionAutomatic=option;permissionSelect.append(option);}
@@ -1130,7 +1147,9 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     permissionRefresh=button('model-access-choice','刷新服务状态');permissionRefresh.id='model-permission-refresh';permissionRefresh.hidden=true;
     permissionRefresh.title='只读取服务状态，保留待核查的原回执。';
     permissionRefresh.addEventListener('click',()=>{if(active&&!permissionRefresh.hidden&&!permissionRefresh.disabled)window.dispatchEvent(new CustomEvent('buildx-model-permission-refresh'));});
-    permissionBar.append(accessMenu,accessScope,permissionLabel,permissionSelect,permissionScope,permissionRefresh);
+    const execution=el('div','model-execution-row');execution.append(permissionLabel,permissionSelect);
+    accessPopover.append(execution,permissionScope);
+    permissionBar.append(accessMenu,accessScope,permissionRefresh);
     mountTerminal();
     accessConfirm=el('section','model-access-confirm');accessConfirm.id='model-access-confirm';accessConfirm.hidden=true;accessConfirm.tabIndex=-1;accessConfirm.setAttribute('aria-label','确认访问范围');
     accessConfirmText=el('p','model-access-confirm-text');accessConfirmApply=button('model-access-confirm-apply','授权此范围');accessConfirmApply.id='model-access-confirm-apply';
@@ -1218,7 +1237,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     empty.append(emptyText,loadPersonal);commandList.append(empty);buildCommandRows(commandCatalog);
     const frame = el('div','model-input-frame'); prompt.before(frame); frame.append(prompt);
     attachmentList=el('div','model-pending-attachments'); attachmentList.hidden=true; attachmentList.setAttribute('aria-label','待发送附件'); frame.before(attachmentList);
-    attachmentButton=button('model-add-file','＋'); attachmentButton.hidden=true; attachmentButton.title='添加图片或文本文件';
+    attachmentButton=button('model-add-file'); attachmentButton.hidden=true; attachmentButton.title='添加图片或文本文件';
     attachmentInput=el('input'); attachmentInput.type='file'; attachmentInput.multiple=true; attachmentInput.accept='.txt,.md,.markdown,.png,.jpg,.jpeg'; attachmentInput.hidden=true; attachmentInput.setAttribute('aria-label','选择图片或文本文件');
     document.querySelector('.composer-bottom').prepend(attachmentButton); attachmentButton.after(permissionBar);get('composer').append(attachmentInput);
     attachmentButton.addEventListener('click',() => { if(active && snapshot?.turnAttachmentsAvailable && !attachmentButton.disabled) attachmentInput.click(); });
@@ -1256,7 +1275,6 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     prompt.setAttribute('aria-controls',picker.id); prompt.setAttribute('aria-autocomplete','list'); prompt.setAttribute('aria-expanded','false');
     prompt.placeholder = '输入问题，或用 @ 选择工具';
     hint = document.querySelector('.composer-bottom > span'); if (hint) { originalHint = hint.textContent; hint.textContent = 'Enter 发送 · Shift + Enter 换行 · Ctrl+V 粘贴截图'; }
-    remember(get('stop')); get('activity').append(get('stop'));
     get('welcome-title').textContent = '今天想完成什么？';
     get('welcome-description').textContent = '从一个问题开始。';
     get('welcome-hint').textContent = '';
@@ -1337,7 +1355,6 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
       controls.hidden = false; controls.prepend(get('new-chat'));
       for (const {element} of placements) if (element.id === 'account-panel' || element.id === 'codex-account-panel' || element.classList.contains('connection')) drawerBody.append(element);
       skillsPage.append(get('skills-panel'));
-      get('activity').append(get('stop'));
       prompt.setAttribute('aria-controls',picker.id); prompt.setAttribute('aria-autocomplete','list'); prompt.setAttribute('aria-expanded','false');
       if (hint) hint.textContent = 'Enter 发送 · Shift + Enter 换行';
     }
@@ -1347,6 +1364,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
     const accessDisabled=!validAccess||value.accessPolicyPending===true||value.modelPermissionPending===true||value.blocked||value.busy||value.readOnly||value.ready!==true;
     accessOptions.disabled=Boolean(accessDisabled);accessOptions.setAttribute('aria-busy',String(value.accessPolicyPending===true));
     accessMenuLabel.textContent=value.accessPolicyPending?'更新中…':validAccess?({'read-only':'只读','project-write':'项目范围','full-access':'完全访问'}[policy.mode]||'访问权限'):'访问未核实';
+    accessMenu.dataset.accessMode=validAccess?policy.mode:'';
     accessMenuLabel.setAttribute('aria-disabled',String(Boolean(accessDisabled)));
     if(accessDisabled)accessMenu.open=false;
     for(const [mode,choice] of accessButtons){choice.hidden=value.confirmedWrite===true&&mode==='full-access';choice.disabled=Boolean(accessDisabled)||choice.hidden;choice.setAttribute('aria-pressed',String(validAccess&&policy.mode===mode));}

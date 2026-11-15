@@ -39,6 +39,15 @@ test('full access needs explicit range confirmation; cancel never submits and a 
   assert.equal(ui.get('model-permission-select').value,'rollback');
 });
 
+test('the confirmed-write edition keeps full access and automatic execution out of the menu',async t=>{
+  const ui=await setup(t);
+  ui.emit('state',{ready:true,confirmedWrite:true});
+  const full=ui.get('model-access-full-access'),selector=ui.get('model-permission-select');
+  const automatic=selector.children.find(item=>item.value==='automatic');
+  assert.equal(full.hidden,true);assert.equal(full.disabled,true);assert.equal(automatic.hidden,true);assert.equal(automatic.disabled,true);
+  await select(ui,'full-access');assert.equal(posts(ui).length,0);assert.equal(ui.get('model-access-confirm').hidden,true);
+});
+
 test('project write selects a library root and submits its ID only after reviewing the exact directory',async t=>{
   const ui=await setup(t);await select(ui,'project-write');assert.equal(ui.document.body.dataset.modelView,'knowledge');assert.equal(posts(ui).length,0);
   await ui.intent('buildx-access-project-request',{rootId:'trusted-directory',path:'D:\\项目\\工作区',label:'工作区'});

@@ -32,6 +32,7 @@ const commandResults = new Map();
 let historyAvailable = false, activeConversationId = null, conversationReadOnly = false;
 let dynamicApproval = null;
 const settledDynamicApprovals = new Set();
+let generatedFilesView = null;
 // This is a server-owned projection, never an authorization decision. A
 // missing or stale projection must not appear as an enabled permission.
 let modelPermission=null, modelPermissionPending=null, modelPermissionTimer=null, modelPermissionMessage='',serverBusyOperation=null;
@@ -609,6 +610,7 @@ function applyWorkspace(workspace) {
   if (!becameRestricted && wasAllowed === modelContextAllowed) return true;
   if (!modelContextAllowed) {
     turnAttachmentsAvailable=false; attachmentRead=null; closeImagePreview(false);clearAttachmentDrafts();
+    if(generatedFilesView)applyGeneratedFiles(null,null,null);
     directCommandsAvailable = false; clearCommands();
     context = null; pendingRequests.delete('context');
     $('include-document').checked = false; $('include-selection').checked = false;
@@ -694,9 +696,16 @@ function updateButtons() {
   $('send').disabled = !ready || blocked || selectionPreviewInFlight > 0 || (selectionReadUnconfirmed && $('include-selection').checked) || readOnly || Boolean(attachmentRead) || Boolean(skillRead) || staleSkillSelection || modelUiEnabled&&modelSelectionAvailable&&(!selectedModel||!effortSelectionReady()) || historyEnabled() && persistenceFailed() || !text || receiptBlocked || isUncertainSteer(conversationId,text) || turnSendBlocked(conversationId);
   $('steer').hidden = !(modelUiEnabled && steerAvailable && busy) || permissionChecking;
   $('steer').disabled = !binding || !text || text.length>16000 || pendingRequests.has('steer') || pendingRequests.has('interrupt') || visibleInputId!==null || ['pending','submitting'].includes(dynamicApproval?.state) || Boolean(attachmentRead) || pendingAttachments().length>0 || historyEnabled() && persistenceFailed() || receiptBlocked || isUncertainSteer(conversationId,text);
+  const waitHint=$('composer-wait');
+  waitHint.hidden=!(modelUiEnabled&&busy&&text&&!readOnly);
+  if(!waitHint.hidden){
+    const guidance=!$('steer').hidden&&!$('steer').disabled?'可补充当前任务，或等本轮结束后发送这条草稿。':'当前任务处理中。可继续编辑，结束后手动发送。';
+    if(waitHint.textContent!==guidance)waitHint.textContent=guidance;
+  }
   $('prompt').readOnly = readOnly || switchingConversation;
   $('new-chat').disabled = blocked;
   $('stop').hidden = !busy || permissionChecking || commandRunning() || commandPending() || commandStopUnavailable;
+  $('stop').disabled=pendingRequests.has('interrupt');
   $('activity').hidden = !busy&&!permissionChecking;
   if(permissionChecking)$('activity-text').textContent=modelPermissionPending&&modelPermissionMessage||'正在等待 Revit 核实当前模型与执行权限…';
   // A lost stream may retain an old busy view. The reachable recovery action
@@ -792,7 +801,7 @@ function status(state = {}) {
   if(!modelUiEnabled){commandCatalog=null;independentCommands=false;}
   const previousCommandIdentity=commandIdentityKey();
   commandIdentity(state);
-  if(previousCommandIdentity!==commandIdentityKey() && messages.length)renderConversation();
+  if(previousCommandIdentity!==commandIdentityKey() && (messages.length||generatedFilesView))renderConversation();
   if (Object.hasOwn(state, 'account')) modelAccount = state.account;
   if (Object.hasOwn(state, 'codexConfirmation')) modelConfirmation = state.codexConfirmation;
   if (!modelUiEnabled) { directCommandsAvailable = false; clearCommands(); }
@@ -891,7 +900,65 @@ function toolCard(messageId, tool, receipt) {
       ? '尚未取得确定结果；请先核对本轮回执。' : '尚未取得确定结果；模型写入结果未知时请先回查。'));
   details.append(summary, content); return details;
 }
+const generatedFileName = value => typeof value === 'string' && value.length <= 255 && /^[^\\/:*?"<>|\u0000-\u001f]+\.[a-z0-9]+$/iu.test(value);
+const generatedFileId = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
+
+function applyGeneratedFiles(value, pendingValue, conversationId) {
+  const list = $('generated-files');
+  const visibleConversation = lastSession?.conversation?.id;
+  if (!modelUiEnabled || !modelContextAllowed || !conversationId || conversationId !== visibleConversation) {
+    generatedFilesView = null;
+    list.replaceChildren();
+    list.hidden = true;
+    return;
+  }
+  const files = Array.isArray(value) ? value.filter(file => file?.kind === 'file' && generatedFileId(file.artifactId) && generatedFileName(file.fileName) && Number.isSafeInteger(file.bytes) && file.bytes > 0).slice(0, 32) : [];
+  const pending = Array.isArray(pendingValue) ? pendingValue.filter(file => generatedFileId(file?.artifactId) && generatedFileName(file.fileName)).slice(0, 32) : [];
+  const entries = new Map(pending.map(({artifactId,fileName}) => [artifactId,{artifactId,fileName,check:true}]));
+  for (const {artifactId,fileName,bytes} of files) entries.set(artifactId,{artifactId,fileName,bytes,check:false});
+  const signature = JSON.stringify([conversationId, accountEpoch, commandIdentityKey(), [...entries.values()]]);
+  if (generatedFilesView?.signature === signature) return;
+  const shouldScroll = nearBottom();
+  const owner = {signature,conversationId,accountEpoch,identityKey:commandIdentityKey()};
+  generatedFilesView = owner;
+  const feedback = node('p','generated-file-feedback');
+  feedback.setAttribute('role','status');
+  const cards = [...entries.values()].map(({artifactId,fileName,bytes,check}) => {
+    const action = check ? '核对原回执' : '打开文件';
+    const label = check ? action+' · '+fileName : fileName+' · '+(bytes < 1024 ? bytes+' B' : Math.ceil(bytes/1024)+' KiB');
+    const card = node('button','model-sent-file generated-file',label);
+    card.type = 'button';
+    card.title = action;
+    card.setAttribute('aria-label',action+' '+fileName);
+    const isCurrent = () => generatedFilesView === owner && modelUiEnabled && modelContextAllowed && owner.accountEpoch === accountEpoch && owner.identityKey === commandIdentityKey() && owner.conversationId === lastSession?.conversation?.id;
+    card.addEventListener('click',async () => {
+      if (card.disabled || !isCurrent() || pendingRequests.has('session')) return;
+      card.disabled = true;
+      feedback.textContent = check ? '正在核对原回执…' : '正在打开文件…';
+      const controller = typeof AbortController === 'function' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(),15000) : null;
+      try {
+        if (!csrf && !await refreshStatus()) throw new Error('本地服务状态尚未核对，请刷新后重试。');
+        if (!isCurrent() || pendingRequests.has('session')) return;
+        const result = await post(check ? 'chat-artifact/check' : 'chat-artifact/open',{conversationId,artifactId},controller ? {signal:controller.signal} : {});
+        if (result?.ok !== true) throw new Error(check ? '原回执仍待核对。' : '文件打开未确认。');
+        if (isCurrent()) feedback.textContent = check ? (['pending','unknown'].includes(result.status) ? '原回执仍待核对。' : '核对请求已提交。') : '打开请求已提交。';
+      } catch (error) {
+        if (isCurrent()) feedback.textContent = check ? '原回执仍待核对。' : error.name === 'AbortError' ? '打开请求超时，请查看本地文件。' : error.message || '文件打开未确认。';
+      } finally {
+        if (timer) clearTimeout(timer);
+        card.disabled = false;
+      }
+    });
+    return card;
+  });
+  list.replaceChildren(...cards,feedback);
+  list.hidden = !cards.length;
+  if (shouldScroll) scrollBottom();
+}
+
 function renderConversation() {
+  if (generatedFilesView && (!modelUiEnabled || !modelContextAllowed || generatedFilesView.accountEpoch !== accountEpoch || generatedFilesView.identityKey !== commandIdentityKey() || generatedFilesView.conversationId !== lastSession?.conversation?.id)) applyGeneratedFiles(null,null,null);
   const shouldScroll = nearBottom();
   $('welcome').hidden = messages.length > 0;
   $('history-note').hidden = !lastSession?.historyTruncated;
@@ -1117,7 +1184,8 @@ function dynamicApprovalPaint(owner){
   if(!owner.accept||!owner.decline||!feedback){box.hidden=true;return;}
   box.hidden=owner.request.conversationId!==lastSession?.conversation?.id;
   owner.accept.disabled=owner.state!=='pending';owner.decline.disabled=owner.state!=='pending';
-  feedback.textContent=owner.resultMessage??{pending:'请核对完整操作后决定。',submitting:'正在提交确认…',accepted:owner.request.kind==='model'?'确认已提交，正在等待模型操作结果…':'确认已提交，执行结果需另行核对。',declined:'拒绝已提交。',expired:'确认已超时；此操作不能再从这里批准。',disconnected:'连接或对话已变化；此操作不能再从这里批准。',unknown:'确认是否送达尚未核对，请勿重复提交。'}[owner.state];
+  const accepted = {model:'确认已提交，正在等待模型操作结果…',file:'已授权，生成结果会显示在对话里。'};
+  feedback.textContent=owner.resultMessage??{pending:'请核对完整操作后决定。',submitting:'正在提交确认…',accepted:accepted[owner.request.kind]??'确认已提交，执行结果需另行核对。',declined:'拒绝已提交。',expired:'确认已超时；此操作不能再从这里批准。',disconnected:'连接或对话已变化；此操作不能再从这里批准。',unknown:'确认是否送达尚未核对，请勿重复提交。'}[owner.state];
 }
 function applyDynamicApprovalResult(value){
   const owner=dynamicApproval;
@@ -1155,12 +1223,14 @@ async function showDynamicApproval(value){
   }
   const str=(v,max,empty=false)=>typeof v==='string'&&v.length<=max&&(empty||v.length>0)&&!v.includes('\0');
   const typeWrite=value?.action==='revit_set_type_parameter';
+  const fileWrite=value?.kind==='file';
   if(!modelUiEnabled||!ready||!busy||!value||typeof value!=='object'||Array.isArray(value)||
     !str(value.id,200)||!/^\w[\w-]*$/.test(value.id)||typeof value.digest!=='string'||!/^[a-f0-9]{64}$/.test(value.digest)||
-    !['terminal','browser','plugin','model'].includes(value.kind)||!str(value.action,16384)||!str(value.target,4096)||
+    !['terminal','browser','plugin','model','file'].includes(value.kind)||!str(value.action,16384)||!str(value.target,4096)||
     !str(value.source,512)||!str(value.cwd,4096,true)||!str(value.parameters,65536,true)||
     !Number.isSafeInteger(value.deadline)||value.deadline<=0||!str(value.conversationId,200)||value.conversationId!==lastSession?.conversation?.id||
-    typeWrite&&(value.kind!=='model'||!str(value.typeParameterReview,60000))||!typeWrite&&Object.hasOwn(value,'typeParameterReview')){
+    typeWrite&&(value.kind!=='model'||!str(value.typeParameterReview,60000))||!typeWrite&&Object.hasOwn(value,'typeParameterReview')||
+    (fileWrite||value.action==='buildx_generate_file')&&(!fileWrite||value.action!=='buildx_generate_file'||!generatedFileName(value.target)||!value.cwd||!value.parameters)){
     invalidateDynamicApproval();box.hidden=true;return;
   }
   const fields=['id','digest','kind','action','target','cwd','source','parameters','deadline','conversationId','typeParameterReview'];
@@ -1192,11 +1262,12 @@ async function showDynamicApproval(value){
     }
   }
   box.hidden=false;
-  const names={terminal:'终端',browser:'浏览器',plugin:'插件',model:'模型'},title=node('strong','','需要确认 '+names[request.kind]+' 操作'),detail=node('dl');
-  for(const [label,text] of typeWrite?[['操作','修改类型参数'],['目标',request.target],['来源',request.source]]:[['操作',request.action],['目标',request.target],['参数',request.parameters],['工作目录',request.cwd],['来源',request.source]]){
+  const names={terminal:'终端',browser:'浏览器',plugin:'插件',model:'模型'},title=node('strong','',fileWrite?'生成文件':'需要确认 '+names[request.kind]+' 操作'),detail=node('dl');
+  const reviewRows=fileWrite?[['文件名',request.target],['保存目录',request.cwd],['生成规格',request.parameters]]:typeWrite?[['操作','修改类型参数'],['目标',request.target],['来源',request.source]]:[['操作',request.action],['目标',request.target],['参数',request.parameters],['工作目录',request.cwd],['来源',request.source]];
+  for(const [label,text] of reviewRows){
     const value=node('dd','',text||'（空）');value.tabIndex=0;detail.append(node('dt','',label),value);
   }
-  const actions=node('div','dynamic-approval-actions'),accept=node('button','','同意本次操作'),decline=node('button','secondary-button','拒绝'),feedback=node('p','dynamic-approval-feedback');
+  const actions=node('div','dynamic-approval-actions'),accept=node('button','',fileWrite?'允许本次生成':'同意本次操作'),decline=node('button','secondary-button','拒绝'),feedback=node('p','dynamic-approval-feedback');
   accept.type='button';decline.type='button';feedback.setAttribute('role','status');actions.append(accept,decline);box.append(title,detail,...(typeReviewCard?[typeReviewCard]:[]),actions,feedback);
   if(request.kind==='model'&&!typeWrite)box.insertBefore(node('p','dynamic-approval-feedback','请核对完整参数。C# 脚本不是安全沙盒，回滚不能撤销文件、网络等事务外副作用。'),actions);
   owner.accept=accept;owner.decline=decline;owner.feedback=feedback;
@@ -1274,6 +1345,7 @@ function applyConversation(data = {}, commandEvidence = false) {
     if (data.session.contextEpoch !== undefined) contextEpoch = data.session.contextEpoch;
     if (data.session.context !== undefined) context = modelContextAllowed ? data.session.context : null;
     historyView(data.history);
+    if (Object.hasOwn(data,'generatedFiles') || Object.hasOwn(data,'generatedFilePending')) applyGeneratedFiles(data.generatedFiles,data.generatedFilePending,incomingId);
     renderConversation(); renderContext();
     if (changedConversation) { if (!Array.isArray(data.history?.sessions)) void refreshHistory(); }
   } else if (!canonical && typeof data.text === 'string' && data.text) {

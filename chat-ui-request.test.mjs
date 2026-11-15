@@ -460,11 +460,20 @@ async function steeringSetup(){
 test('steering is an explicit active-turn action and acceptance does not claim application',async()=>{
   const ui=await steeringSetup();ui.input('保留露台');
   assert.equal(ui.get('send').disabled,true);assert.equal(ui.get('steer').hidden,false);assert.equal(ui.get('steer').disabled,false);
+  assert.equal(ui.get('composer-wait').hidden,false);assert.match(ui.get('composer-wait').textContent,/可补充当前任务/);
   await ui.submit();assert.equal(ui.requests.filter(item=>item.url==='/api/steer').length,0);
   await ui.click('steer');const request=ui.requests.find(item=>item.url==='/api/steer');assert.ok(request);
   assert.equal(request.body.conversationId,'chat-a');assert.equal(request.body.turnId,'turn-a');assert.equal(request.body.message,'保留露台');assert.ok(request.body.requestId);
   await ui.click('steer');assert.equal(ui.requests.filter(item=>item.url==='/api/steer').length,1);
   await ui.respond(request,{ok:true,status:'accepted'});assert.equal(ui.get('prompt').value,'');assert.match(ui.get('steer-feedback').textContent,/已接收.*是否已应用/);
+});
+test('busy composer explains the waiting draft and leaves sending to the user',async()=>{
+  const ui=await historySetup();ui.emit('conversation',{busy:true,session:streamingHistory()});
+  ui.input('下一轮的草稿');assert.match(ui.get('composer-wait').textContent,/手动发送/);
+  await ui.submit();assert.equal(ui.requests.length,0);
+  ui.emit('conversation',{busy:false,session:historySession('chat-a')});await flush();
+  assert.equal(ui.get('composer-wait').hidden,true);assert.equal(ui.get('prompt').value,'下一轮的草稿');assert.equal(ui.requests.length,0);
+  await ui.submit();assert.equal(ui.requests[0].url,'/api/turn');await ui.respond(ui.requests[0]);
 });
 test('an unknown steer outcome blocks an accidental repeat while preserving the draft',async()=>{
   const ui=await steeringSetup();ui.input('原补充');await ui.click('steer');const request=ui.requests.find(item=>item.url==='/api/steer');

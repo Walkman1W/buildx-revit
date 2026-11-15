@@ -14,6 +14,9 @@ import {createProjectFilesStore} from './lib/project-files-store.mjs';
 import {invokeModelCommand} from './lib/model-tool-dispatch.mjs';
 import {createModelPermissionServices} from './lib/model-permission-services.mjs';
 import {createFamilyCapabilityOwner} from './lib/family-capability-owner.mjs';
+import {createGeneratedFileOwner} from './lib/generated-file-owner.mjs';
+import {createGeneratedFileTransport} from './lib/generated-file-transport.mjs';
+import {createGeneratedFileApproval} from './lib/generated-file-approval.mjs';
 import {createPanelServer} from './lib/panel-server.mjs';
 import {createPanelAudit} from './lib/panel-audit.mjs';
 import {buildxRuntimeConfig} from './lib/buildx-runtime-config.mjs';
@@ -46,6 +49,9 @@ const port=resolveBuildxPanelPort(installation),chatReadReceiptKey=randomBytes(3
 const onTiming=data=>lifecycle.audit('phase-timing.jsonl',data,true);
 const timingControl=(control={})=>({...control,root:paths.workbenchRoot,onTiming:combineWorkbenchTiming(onTiming,control.onTiming)});
 const familyCapabilityOwner=confirmedWrite?null:createFamilyCapabilityOwner();
+const generatedFileOwner=createGeneratedFileOwner({dataRoot:paths.dataRoot});
+const generatedFileTransport=createGeneratedFileTransport({workbenchRoot:paths.workbenchRoot});
+const dynamicApprovalOwner=createGeneratedFileApproval({owner:generatedFileOwner,transport:generatedFileTransport});
 const terminalWorkRoot=path.join(homedir(),'AppData','Local','BuildXTerminalWork');
 const accessServices=createAccessServices({root:paths.dataRoot,programRoot:paths.programRoot,stateDirectory:path.join(paths.historyDirectory,'access-permissions'),terminalWorkRoot});
 let terminalPython=installation?.pythonExecutable;
@@ -58,5 +64,5 @@ const terminalAvailability=await modelTerminal.availability();
 const runtimeDependencies={skillCatalogMode:configuration.mode,...familyCapabilityOwner?{familyCapabilityOwner}:{},
   spawn:(file,args,options)=>spawn(file,args,{...options,env:{...options.env,[CHAT_READ_RECEIPT_KEY_ENV]:chatReadReceiptKey,[CHAT_READ_RECEIPT_PORT_ENV]:String(port)}}),
   ...installation?{resolveRuntimes:()=>resolveInstallationRuntimes(installation)}:{}};
-const app=createPanelServer({confirmedWrite,root:ROOT,dataRoot:paths.dataRoot,port,profile,chatReadReceiptKey,codex:new CodexClient(ROOT,{profile,modelTerminal:!confirmedWrite&&terminalAvailability.available},runtimeDependencies),accessServices,modelTerminal:confirmedWrite?null:modelTerminal,terminalAvailability:confirmedWrite?null:terminalAvailability,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
+const app=createPanelServer({confirmedWrite,root:ROOT,dataRoot:paths.dataRoot,port,profile,chatReadReceiptKey,codex:new CodexClient(ROOT,{profile,generatedFiles:true,modelTerminal:!confirmedWrite&&terminalAvailability.available},runtimeDependencies),accessServices,modelTerminal:confirmedWrite?null:modelTerminal,terminalAvailability:confirmedWrite?null:terminalAvailability,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,generatedFileOwner,generatedFileTransport,dynamicApprovalOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
 await runPanelService({app,lifecycle,root:ROOT,runtimeDirectory:paths.runtimeDirectory});

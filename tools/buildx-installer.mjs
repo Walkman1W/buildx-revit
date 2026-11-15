@@ -259,7 +259,9 @@ export async function planInstall({packageRoot,installRoot,addinDirectory,nodeEx
   }
   const testReady=allowTestFixture&&manifest.stage==='test_fixture'&&manifest.releaseReady===false&&Array.isArray(manifest.missing)&&manifest.missing.length===0;
   const permitted=installationScope==='cross-pc-test'?internalReady:ready||testReady;
-  return {ok:true,readyToApply:permitted,experimental:true,installationScope:installationScope??null,revitVersion,environment,installRoot:root,dataRoot:state,addin,packageRoot:pkg,runtimes,runtimeVersions,dataLayout,files:manifest.files,blockers,internalBlockers,excludedCapabilities:installationScope==='cross-pc-test'?['arbitrary_csharp','saved_scripts','terminal','external_argus','family_operations']:[],reason:permitted?null:'候选组件仍有未验证的运行依赖，不能安装。'};
+  const pumpFiles=installationScope==='cross-pc-test'&&revitVersion==='2024'&&Array.isArray(manifest.buildEvidence?.sources)&&
+    manifest.buildEvidence.sources.some(source=>source.path==='family-core/revit/PumpFamilyArtifact.cs')&&present.has('lib/generated-file-transport.mjs');
+  return {ok:true,readyToApply:permitted,experimental:true,installationScope:installationScope??null,revitVersion,environment,installRoot:root,dataRoot:state,addin,packageRoot:pkg,runtimes,runtimeVersions,dataLayout,files:manifest.files,blockers,internalBlockers,...pumpFiles?{generatedFileFormats:['pump_rfa']}:{},excludedCapabilities:installationScope==='cross-pc-test'?['arbitrary_csharp','saved_scripts','terminal','external_argus',pumpFiles?'general_family_operations':'family_operations']:[],reason:permitted?null:'候选组件仍有未验证的运行依赖，不能安装。'};
 }
 async function probeRuntimeVersions(runtimes){
   const run=async(file)=>{try{const result=await promisify(execFile)(file,['--version'],{windowsHide:true,timeout:10000,maxBuffer:4096});return (result.stdout||result.stderr||'').trim();}catch{throw fail('RUNTIME_UNAVAILABLE','运行程序版本检查失败；请检查安装。');}};

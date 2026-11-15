@@ -3,10 +3,10 @@ export function mountModelPicker({document,window,CustomEvent}){
   const parent=document.querySelector('.composer-bottom');if(!parent)return;
   const root=document.createElement('div');root.className='model-picker';root.hidden=true;
   const toggle=document.createElement('button');toggle.type='button';toggle.className='model-picker-toggle';toggle.setAttribute('aria-label','选择模型和思考强度');toggle.setAttribute('aria-haspopup','dialog');toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-controls','model-picker-menu');
-  const icon=document.createElement('span');icon.className='model-picker-icon';icon.textContent='✦';icon.setAttribute('aria-hidden','true');
+  const icon=document.createElement('span');icon.className='model-picker-icon';icon.setAttribute('aria-hidden','true');
   const modelName=document.createElement('span');modelName.className='model-picker-current-model';modelName.textContent='选择模型';
   const currentEffort=document.createElement('span');currentEffort.className='model-picker-current-effort';currentEffort.hidden=true;
-  const arrow=document.createElement('span');arrow.className='model-picker-chevron';arrow.textContent='⌄';arrow.setAttribute('aria-hidden','true');
+  const arrow=document.createElement('span');arrow.className='model-picker-chevron';arrow.setAttribute('aria-hidden','true');
   toggle.append(icon,modelName,currentEffort,arrow);
   const menu=document.createElement('div');menu.id='model-picker-menu';menu.className='model-picker-menu';menu.hidden=true;menu.setAttribute('role','dialog');menu.setAttribute('aria-label','模型和思考强度');
   const modelLabel=document.createElement('label');modelLabel.className='model-picker-field-label';modelLabel.setAttribute('for','model-picker-select');modelLabel.textContent='模型';
@@ -19,7 +19,8 @@ export function mountModelPicker({document,window,CustomEvent}){
   const refresh=document.createElement('button');refresh.type='button';refresh.className='model-picker-refresh';refresh.textContent='刷新模型列表';refresh.setAttribute('aria-label','刷新模型列表');
   const note=document.createElement('span');note.className='model-picker-note';note.setAttribute('role','status');
   menu.append(modelLabel,select,reasoning,effortHint,refresh,note);root.append(toggle,menu);
-  const anchor=document.querySelector('#send');if(anchor&&anchor.parentNode===parent)parent.insertBefore(root,anchor);else parent.append(root);
+  const anchor=document.querySelector('.composer-actions')??document.querySelector('#send');
+  if(anchor?.parentNode===parent)parent.insertBefore(root,anchor);else parent.append(root);
   function setOpen(open){menu.hidden=!open;toggle.setAttribute('aria-expanded',String(open));}
   toggle.addEventListener('click',()=>setOpen(menu.hidden));
   window.addEventListener('click',event=>{if(!menu.hidden&&event.target&&!root.contains(event.target))setOpen(false);});

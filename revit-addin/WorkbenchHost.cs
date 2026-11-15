@@ -52,6 +52,7 @@ namespace RevitLocalCodex
         private SnapshotRevitBridge snapshotBridge;
         // One owner per host session; family documents never enter the project script group.
         private BuildX.FamilyRevit.RevitFamilyWorkflow familyWorkflow;
+        private BuildX.FamilyRevit.PumpFamilyArtifact pumpFamilyArtifact;
         private TypeParameterWriteApproval typeParameterApprovals;
         private bool familyObserverInitializationAttempted;
         private VisualInspection visualInspection;
@@ -333,7 +334,7 @@ namespace RevitLocalCodex
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
-                    familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1 });
+                    familyCabinetContractVersion = 1, familyLifecycleApprovalVersion = ready ? 1 : 0, pumpFamilyArtifactVersion = 1, visualInspectionVersion = 1, accessPolicyVersion = 1 });
             }
         }
 
@@ -803,8 +804,17 @@ namespace RevitLocalCodex
             string rejectionReason = null;
             try
             {
-                if (new FileInfo(claimed).Length > 128 * 1024) throw new InvalidOperationException("Request exceeds 128 KiB.");
-                var request = json.Deserialize<Dictionary<string, object>>(File.ReadAllText(claimed));
+                byte[] requestBytes;
+                using (var file = new FileStream(claimed, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var bytes = new MemoryStream())
+                {
+                    if (file.Length > 128 * 1024) throw new InvalidOperationException("Request exceeds 128 KiB.");
+                    file.CopyTo(bytes);
+                    requestBytes = bytes.ToArray();
+                }
+                Dictionary<string, object> request;
+                using (var reader = new StreamReader(new MemoryStream(requestBytes)))
+                    request = json.Deserialize<Dictionary<string, object>>(reader.ReadToEnd());
                 if (Text(request, "id") != id) throw new InvalidOperationException("Request id mismatch.");
                 if (Text(request, "targetSession") != session) throw new InvalidOperationException("Revit session changed; query status again.");
                 DateTime expires;
@@ -827,6 +837,12 @@ namespace RevitLocalCodex
                 var args = request.ContainsKey("args") ? request["args"] as Dictionary<string, object> : null;
                 bool atomicRead = AtomicReadRequested(request, operation);
                 AccessPolicy.Binding access = AccessPolicy.RequestBinding(request);
+                if (BuildX.FamilyRevit.PumpFamilyArtifact.IsOperation(operation))
+                {
+                    rejectionCode = "PUMP_APPROVAL_UNVERIFIED";
+                    BuildX.FamilyRevit.PumpFamilyArtifact.ConsumeApproval(queue, session, id, requestBytes, json);
+                    rejectionCode = null;
+                }
                 if (access != null && RequiresProjectEdit(operation))
                 {
                     rejectionCode = "WORKBENCH_ACCESS_DENIED";
@@ -839,9 +855,20 @@ namespace RevitLocalCodex
                 dispatchStartedTicks = Stopwatch.GetTimestamp();
                 validationFinishedTicks = dispatchStartedTicks;
                 dispatchStarted = true;
-                try { result = atomicRead
-                    ? DispatchAtomicRead(uiapp, operation, args ?? new Dictionary<string, object>(), id, access)
-                    : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access); }
+                try {
+                    if (BuildX.FamilyRevit.PumpFamilyArtifact.IsOperation(operation))
+                    {
+                        if (pumpFamilyArtifact == null) pumpFamilyArtifact = new BuildX.FamilyRevit.PumpFamilyArtifact(Root);
+                        Func<bool> mayContinue = () => QueueRejection(id, expires, json) == null;
+                        object pump = operation == BuildX.FamilyRevit.PumpFamilyArtifact.Operation
+                            ? pumpFamilyArtifact.Create(uiapp, args, id, expires, mayContinue)
+                            : pumpFamilyArtifact.Open(uiapp, args, expires, mayContinue);
+                        result = FreezeResult(new { operation, hostSession = session, value = pump });
+                    }
+                    else result = atomicRead
+                        ? DispatchAtomicRead(uiapp, operation, args ?? new Dictionary<string, object>(), id, access)
+                        : Dispatch(uiapp, operation, args ?? new Dictionary<string, object>(), id, access);
+                }
                 finally { dispatchFinishedUtc = DateTime.UtcNow; dispatchFinishedTicks = Stopwatch.GetTimestamp(); }
             }
             catch (Exception error)
@@ -1145,7 +1172,7 @@ namespace RevitLocalCodex
                     nativeSelectionWritesVersion = 1, nativeSelectionWriteOperations = new[] { "set_selection", "select_by_unique_ids" },
                     nativeBasicWritesVersion = 1, nativeBasicWriteOperations = NativeBasicWriteOperations,
                     parameterWriteTargetPolicyVersion = 1, parameterWriteTargetPolicy = "instance_only",
-                    structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, visualInspectionVersion = 1, accessPolicyVersion = 1,
+                    structuredScriptParameters = true, familyLifecycleApprovalVersion = familyWorkflow != null && familyWorkflow.ApprovalObserverReady ? 1 : 0, pumpFamilyArtifactVersion = 1, visualInspectionVersion = 1, accessPolicyVersion = 1,
                     supportedOperations = new[] { "status", "execute_csharp", "smart_annotate", "build_schematic", "preview_schematic", "export_schematic", "list_cad_imports", "read_cad_geometry" }
                         .Concat(WorkbenchActions.ReadOperations).Concat(WorkbenchActions.WriteOperations).Concat(FamilyOperations).Concat(VisualInspection.Operations).ToArray() },
                 executionNotice = "C# runs with Revit user privileges and is not sandboxed. Transactions undo model changes, not filesystem/network side effects. Do not automatically retry unknown outcomes."

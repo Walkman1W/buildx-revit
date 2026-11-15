@@ -66,6 +66,56 @@ test('model approval shows full supplied parameters and warns about C# side effe
   await ui.respond(ui.requests[0],{ok:true,requestId:p.id,decision:'accept',status:'submitted'});
 });
 
+test('a generated file requires one scoped approval and is opened by opaque ID',async()=>{
+  const ui=await setup(),box=ui.get('dynamic-approval'),files=ui.get('generated-files');
+  const proposal=approval({kind:'file',action:'buildx_generate_file',target:'端吸泵.rfa',cwd:'D:\\模型输出',parameters:'600 × 400 × 500 mm'});
+  ui.show(proposal);
+  const [title,detail,actions,approvalFeedback]=box.children;
+  assert.equal(title.textContent,'生成文件');
+  assert.deepEqual(detail.children.map(child=>child.textContent),['文件名',proposal.target,'保存目录',proposal.cwd,'生成规格',proposal.parameters]);
+  assert.equal(actions.children[0].textContent,'允许本次生成');
+  await ui.click(actions.children[0]);await ui.click(actions.children[0]);
+  assert.equal(ui.requests.length,1);
+  assert.deepEqual(ui.requests[0].body,{client:'id-1',conversationId:proposal.conversationId,requestId:proposal.id,digest:proposal.digest,decision:'accept'});
+  await ui.respond(ui.requests[0],{ok:true,requestId:proposal.id,decision:'accept',status:'submitted'});
+  assert.match(approvalFeedback.textContent,/已授权/);
+  const file={kind:'file',artifactId:'e5f0f9f7-830c-4df2-8976-f8b2311b6f21',fileName:proposal.target,bytes:4096};
+  ui.show(null,{busy:false,generatedFiles:[file,file,{...file,artifactId:'d5f0f9f7-830c-4df2-8976-f8b2311b6f21',fileName:'..\\其他.rfa'}]});
+  assert.equal(files.hidden,false);
+  const [open,feedback]=files.children;
+  assert.equal(files.children.length,2);
+  assert.match(open.textContent,/端吸泵\.rfa · 4 KiB/);
+  await ui.click(open);await ui.click(open);
+  assert.equal(ui.requests.length,2);
+  assert.equal(ui.requests[1].url,'/api/chat-artifact/open');
+  assert.deepEqual(ui.requests[1].body,{client:'id-1',conversationId:proposal.conversationId,artifactId:file.artifactId});
+  await ui.respond(ui.requests[1],{ok:true});
+  assert.match(feedback.textContent,/打开请求已提交/);
+  ui.emit('conversation',{workspace,busy:false,session:session('conversation-b'),generatedFiles:[]});
+  assert.equal(files.hidden,true);
+  await ui.click(open);assert.equal(ui.requests.length,2);
+});
+
+test('a pending artifact checks its original receipt and appears as a file only after verification',async()=>{
+  const ui=await setup(),files=ui.get('generated-files');
+  const artifact={artifactId:'f5f0f9f7-830c-4df2-8976-f8b2311b6f21',fileName:'端吸泵.rfa'};
+  ui.show(null,{busy:false,generatedFiles:[],generatedFilePending:[artifact]});
+  assert.equal(files.hidden,false);
+  const [check,feedback]=files.children;
+  assert.match(check.textContent,/核对原回执/);
+  await ui.click(check);await ui.click(check);
+  assert.equal(ui.requests.length,1);
+  assert.equal(ui.requests[0].url,'/api/chat-artifact/check');
+  assert.deepEqual(ui.requests[0].body,{client:'id-1',conversationId:'conversation-a',artifactId:artifact.artifactId});
+  await ui.respond(ui.requests[0],{ok:true,status:'pending'});
+  assert.match(feedback.textContent,/原回执仍待核对/);
+  ui.show(null,{busy:false,generatedFiles:[{...artifact,kind:'file',bytes:4096}],generatedFilePending:[artifact]});
+  const [open]=files.children;
+  assert.equal(files.children.length,2);
+  assert.equal(open['aria-label'],'打开文件 '+artifact.fileName);
+  await ui.click(check);assert.equal(ui.requests.length,1);
+});
+
 test('expired and malformed previews cannot be submitted',async()=>{
   const ui=await setup(),box=ui.get('dynamic-approval');ui.show(approval({deadline:Date.now()-1}));
   assert.match(box.children[3].textContent,/超时/);assert.equal(box.children[2].children[0].disabled,true);await ui.click(box.children[2].children[0]);assert.equal(ui.requests.length,0);

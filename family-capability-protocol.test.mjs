@@ -5,7 +5,7 @@ import {CodexClientCore} from './lib/codex-client-core.mjs';
 
 const A='a'.repeat(32),B='b'.repeat(32);
 const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};
-function tool(names){return freeze({type:'function',name:'buildx_model_operation',description:'fixture',inputSchema:{type:'object',properties:{tool:{type:'string',enum:names},parameters:{type:'object'}},required:['tool','parameters'],additionalProperties:false,oneOf:names.map(name=>({properties:{tool:{type:'string',enum:[name]},parameters:{type:'object'}},required:['tool','parameters']}))}});}
+function tool(names){return freeze({type:'function',name:'buildx_model_operation',description:'fixture',inputSchema:{type:'object',properties:{tool:{type:'string',enum:names},parameters:{type:'object'}},required:['tool','parameters'],additionalProperties:false}});}
 function profile(){
   const toolNames=Object.freeze(['fixture_read']),group=Object.freeze({name:'fixture_group',toolNames,statusTimeout:1000,failFast:true});
   return Object.freeze({id:'model-workspace',service:'fixture-codex',mode:'document-workbench',toolNames,groups:Object.freeze([group]),clientInfo:Object.freeze({name:'fixture',version:'1'}),buildLaunchArgs:()=>[],buildInstructions:()=>'',connectingTools:'checking',catalogFailed:'failed',catalogNotReady:'not ready',verifiedDiagnostic:'verified',denialMessage:'denied',dynamicTools:Object.freeze([tool(['revit_move_elements'])]),familyLifecycleDynamicTools:Object.freeze([tool(['revit_move_elements','revit_family_save_job','revit_family_close_job'])])});

@@ -4,6 +4,23 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-CHAT-PUMP-FAMILY-20261115",
+      "title": "对话一次授权生成并打开水泵族",
+      "status": "candidate_installed",
+      "acceptance": "白底对话确认一次后生成独立的机械设备泵族，保存并重开核验，从文件卡在当前 Revit 打开，可核对原请求",
+      "evidence": "STATUS.md; 157/157 offline regression; Revit 2024 API 24.3.30.11 x64 isolated build; candidate 0.8.9-confirmed-write.20261115.1, 143/143 ZIP files verified, installed manifest and DLL verified; Revit first launch recorded licensing error 22",
+      "realRevitLoadVerified": false,
+      "realModelExecutionVerified": false
+    },
+    {
+      "id": "BX-CHAT-COMPOSER-20261114",
+      "title": "对话输入栏视觉与等待提示",
+      "status": "candidate_installed",
+      "acceptance": "紧凑附件、访问范围、模型与思考强度、发送和停止，等待草稿由用户手动提交",
+      "evidence": "STATUS.md; candidate 0.8.9-confirmed-write.20261114.2 installed, manifest and DLL verified; Revit startup journal licensing error 22; 140/140 ZIP entries verified; 167/167 offline regression; Edge controlled preview, attachment chooser, access review, model switch, send/stop and widths 320px, 360px and 375px",
+      "realRevitLoadVerified": false
+    },
+    {
       "id": "BX-REVIT-INTEGRATION-20261114",
       "title": "个人命令、Revit 排队与对话资料库集成",
       "status": "source_verified",

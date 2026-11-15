@@ -22,13 +22,15 @@ namespace BuildX.FamilyRevit
     internal sealed class RevitConfiguredTemplateSource : IFamilyTemplateSource
     {
         private readonly Func<string> configuredDirectory;
+        private readonly bool allowEnglishMechanicalTemplate;
         private FamilyTemplateCatalog catalog;
         private string catalogDirectory;
 
-        internal RevitConfiguredTemplateSource(Func<string> configuredDirectory)
+        internal RevitConfiguredTemplateSource(Func<string> configuredDirectory, bool allowEnglishMechanicalTemplate = false)
         {
             if (configuredDirectory == null) throw new ArgumentNullException("configuredDirectory");
             this.configuredDirectory = configuredDirectory;
+            this.allowEnglishMechanicalTemplate = allowEnglishMechanicalTemplate;
         }
 
         public FamilyTemplateObservation Inspect(string templateId)
@@ -64,9 +66,12 @@ namespace BuildX.FamilyRevit
             {
                 try
                 {
+                    string mechanical = Path.Combine(directory, "公制机械设备.rft");
+                    if (allowEnglishMechanicalTemplate && !File.Exists(mechanical))
+                        mechanical = Path.Combine(directory, "Metric Mechanical Equipment.rft");
                     catalog = new FamilyTemplateCatalog(new[] {
                         new FamilyTemplateLocation("metric-generic-model", Path.Combine(directory, "公制常规模型.rft")),
-                        new FamilyTemplateLocation("metric-mechanical-equipment", Path.Combine(directory, "公制机械设备.rft"))
+                        new FamilyTemplateLocation("metric-mechanical-equipment", mechanical)
                     });
                     catalogDirectory = directory;
                 }
