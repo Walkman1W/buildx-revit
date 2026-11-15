@@ -6,10 +6,10 @@
     {
       "id": "BX-CHAT-PUMP-REPAIR-20261115",
       "title": "原请求诊断与水泵族修复候选",
-      "status": "candidate_packaged",
+      "status": "candidate_installed",
       "acceptance": "白底对话对原规格点击一次授权，生成独立族、保存并重开；失败可从原 ID 核对具体阶段，未知不重放",
-      "evidence": "STATUS.md; 94f1191 pinned source; 28dfe07 receipt, f4b6748 native fix, 6b551ae candidate 0.8.9-confirmed-write.20261115.2; 161/161 offline, Revit 2024 x64 API build, 144/144 ZIP entries verified",
-      "realRevitLoadVerified": false,
+      "evidence": "STATUS.md; 94f1191 pinned source; 28dfe07 receipt, f4b6748 native fix, 6b551ae candidate 0.8.9-confirmed-write.20261115.2; 161/161 offline, Revit 2024 x64 API build, 144/144 ZIP entries verified; installed DLL, journal.0267 and pump capability bound to live Revit PID verified",
+      "realRevitLoadVerified": true,
       "realModelExecutionVerified": false
     },
     {
