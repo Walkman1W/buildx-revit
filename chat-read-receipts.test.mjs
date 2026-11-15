@@ -48,12 +48,14 @@ async function openWorkspaceMcp(f){
   for(const name of ['lib','public','release'])await fs.cp(path.join(root,name),path.join(f.directory,name),{
     recursive:true,filter:async filename=>(await fs.lstat(filename)).isDirectory()||['.mjs','.json'].includes(path.extname(filename))
   });
-  // The unchanged production MCP entry and transport execute the timeout
-  // path without waiting for the 150-second production deadline in tests.
+  // In this child process, advance the deadline after publication so the
+  // original MCP flow receives a timed-out request and its receipt owner.
+  await fs.copyFile(path.join(root,'test-support','workbench-timeout.mjs'),path.join(f.directory,'lib','workbench-timeout.mjs'));
   const dispatch=path.join(f.directory,'lib','model-tool-dispatch.mjs');
   await fs.rename(dispatch,path.join(f.directory,'lib','controlled-model-tool-dispatch.mjs'));
   await fs.writeFile(dispatch,"import {invokeModelTool as real} from './controlled-model-tool-dispatch.mjs';\n"+
-    'export const invokeModelTool=(name,args,options)=>real(name,args,{...options,timeout:30});\n');
+    "import {timeoutAfterPublication} from './workbench-timeout.mjs';\n"+
+    'export const invokeModelTool=(name,args,options)=>timeoutAfterPublication(control=>real(name,args,control),options);\n');
   const transport=new StdioClientTransport({command:process.execPath,args:[path.join(f.directory,'workbench-mcp.mjs'),'--workspace'],
     cwd:f.directory,env:{...process.env,[CHAT_READ_RECEIPT_KEY_ENV]:f.key,[CHAT_READ_RECEIPT_PORT_ENV]:String(f.port)},stderr:'pipe'});
   transport.stderr.resume();

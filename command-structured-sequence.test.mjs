@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {invokeCommand} from './lib/command-store.mjs';
 import {validateTool,invokeWorkbench} from './lib/workbench-client.mjs';
+import {timeoutAfterPublication} from './test-support/workbench-timeout.mjs';
 async function fixture(t){const root=await fs.mkdtemp(path.join(os.tmpdir(),'buildx-sequence-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));return (name,args,options={})=>invokeCommand(name,args,{root,...options});}
 const base={command_id:'read-data',name:'Read',description:'Find model data.'};
 const identity={session:'host-1',path:'C:/model.rvt'};
@@ -45,7 +46,7 @@ test('an unknown native step transfers its original receipt owner for inspection
  const steps=[{id:'one',tool:'revit_get_selection',arguments:{}},{id:'two',tool:'revit_list_levels',arguments:{}}];
  const saved=await call('revit_save_command',{...base,steps});let calls=0;
  const run=await call('revit_run_command',runArgs(saved),{bindSequence:async()=>identity,verifySequence:async()=>true,executeStep:async(name)=>{
-   calls++;return {ok:true,value:await invokeWorkbench(name,{expected_document:identity.path},{root,timeout:1,retainReceiptOwner:true,expectedHostSession:session})};
+   calls++;return {ok:true,value:await timeoutAfterPublication(options=>invokeWorkbench(name,{expected_document:identity.path},options),{root,retainReceiptOwner:true,expectedHostSession:session})};
  }});
  assert.equal(calls,1);assert.equal(run.execution.status,'unknown');assert.deepEqual(run.execution.steps.map(x=>x.status),['unknown','not_started']);
  const owner=run.receiptOwner;assert.ok(owner);assert.equal(owner,run.execution.receiptOwner);assert.equal(Object.getOwnPropertyDescriptor(run,'receiptOwner').enumerable,false);

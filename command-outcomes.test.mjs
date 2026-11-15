@@ -9,7 +9,7 @@ const directory=fileURLToPath(new URL('./workbench/validation/20261027-command-o
 const wait=async fn=>{for(let i=0;i<500;i++){if(await fn())return;await new Promise(resolve=>setTimeout(resolve,10));}throw new Error('Controlled outcome deadline');};
 
 test('typed request outcomes cross original HTTP/SSE into exact command labels without replay or chat changes',async t=>{
-  const f=await createReadCommandFixture({directory,timeout:300});t.after(()=>f.close());const login=await f.post('account/sign-in',{email:'demo@example.invalid',password:'fixture-password'}),cookie=login.cookie;assert.equal((await f.confirm(cookie)).status,200);
+  const f=await createReadCommandFixture({directory,timeout:2000});t.after(()=>f.close());const login=await f.post('account/sign-in',{email:'demo@example.invalid',password:'fixture-password'}),cookie=login.cookie;assert.equal((await f.confirm(cookie)).status,200);
   const stream=await f.events(cookie),snapshot=(await stream.next()).data,id=snapshot.session.conversation.id,view=()=>f.app.snapshot('model-test-client');
   assert.equal((await f.post('turn',{message:'已有对话和引用保持'} ,cookie)).status,202);f.codex.finish(0,'completed','原回复');await wait(()=>!view().busy);
   await f.post('chat/draft',{conversationId:id,draft:{text:'保留的输入 @revit_list_levels',includeSelection:true}},cookie);
@@ -20,7 +20,7 @@ test('typed request outcomes cross original HTTP/SSE into exact command labels w
     let terminal;do{terminal=await stream.next();}while(terminal.data.command?.executionId!==accepted.body.executionId||['running','stopping'].includes(terminal.data.command.status));
     const command=terminal.data.command;assert.equal(command.status,status,mode);assert.equal(command.error.code,code,mode);assert.equal(command.error.outcome,outcome,mode);assert.equal(command.conversationId,id);assert.equal(modelCommandPresentation(command).status,label);assert.ok(!command.result);
     if(mode.startsWith('typed-')){assert.equal(command.error.nativeFailure.started,mode==='typed-failed');assert.equal(command.error.nativeFailure.phase,mode==='typed-failed'?'dispatch':'validation');assert.equal(command.error.nativeFailure.reason,mode==='typed-expired'?'expired':null);assert.equal(command.error.nativeFailure.requestId,f.queueRequests.at(-1).id);}
-    const count=f.queueRequests.length;await new Promise(resolve=>setTimeout(resolve,35));assert.equal(f.queueRequests.length,count);assert.equal(count-start,mode==='timeout'?1:2);assert.equal(f.codex.turns.length,1);assert.equal(f.codex.interrupts.length,0);assert.deepEqual(view().session,session);assert.deepEqual(view().draft,draft);assert.deepEqual(await fs.readFile(logFile),before);
+    const count=f.queueRequests.length;await new Promise(resolve=>setTimeout(resolve,35));assert.equal(f.queueRequests.length,count);assert.deepEqual(f.queueRequests.slice(start).map(request=>request.operation),mode==='timeout'?['status']:['status','get_selection'],mode);assert.equal(f.codex.turns.length,1);assert.equal(f.codex.interrupts.length,0);assert.deepEqual(view().session,session);assert.deepEqual(view().draft,draft);assert.deepEqual(await fs.readFile(logFile),before);
   }
 });
 

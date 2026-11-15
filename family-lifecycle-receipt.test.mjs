@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {invokeWorkbench,workbenchFailureEvidence} from './lib/workbench-client.mjs';
+import {timeoutAfterPublication} from './test-support/workbench-timeout.mjs';
 
 const session='d'.repeat(32),token='e'.repeat(32),sourceDocument={session,title:'Sample',path:'C:\\workbench\\samples\\Argus-Codex-Plumbing-Sample.rvt'};
 const pendingSave={attempted:false,state:'not_started',path:null,sha256:null,independently_reopened_verified:false};
@@ -23,8 +24,8 @@ function receipt(id,name){
   const body={operation,host_session:session,revit_pid:process.pid,job_handle:'job-123',project_handle:'project-123',project_fingerprint:'project-fingerprint',job_scope:'bound_project',stage:'Closed',core_registry_current:true,success:true,code:isSave?'FAMILY_RFA_VERIFIED':'FAMILY_CLOSED',outcome:isSave?'file_persists_independently':'closed',cleanup_pending:false,build_state:'committed',template:identity(name).template,native_status:{family_transaction:'Committed'},save:{...saved,bytes:1234},effects:{saved_file_may_persist:true,project_saved:false},value:isSave?{family_document:true}:null,approval_validation:{schema_version:1,operation,approval_token:token,verified:true}};
   return {id,ok:true,completedUtc:stamp,timing:{schemaVersion:1,requestId:id,hostSession:session,schedulerCorrelation:'unmatched',executeEnteredUtc:stamp,claimedUtc:stamp,responsePreparedUtc:stamp,observedUtc:null,raiseReturnedUtc:null,dispatchStartedUtc:stamp,dispatchFinishedUtc:stamp,observedToExecuteMs:null,dispatchMs:0,validationMs:0,hostWorkMs:0,raiseResult:null},result:{operation,hostSession:session,value:body}};
 }
-async function timedOut(f,name){let error;try{await invokeWorkbench(name,input(name),{root:f.root,timeout:25,...control(name)});}catch(value){error=value;}
-  const facts=workbenchFailureEvidence(error);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(facts.receiptOwner);return {id:facts.requestIds[0],owner:facts.receiptOwner};}
+async function timedOut(f,name){let error;try{await timeoutAfterPublication(options=>invokeWorkbench(name,input(name),options),{root:f.root,...control(name)});}catch(value){error=value;}
+  const facts=workbenchFailureEvidence(error);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(facts.receiptOwner);const [id]=facts.requestIds;assert.deepEqual(await fs.readdir(path.join(f.queue,'inbox')),[id+'.json']);return {id,owner:facts.receiptOwner};}
 
 test('old host and malformed or caller-supplied approvals cannot publish',async t=>{
   for(const capability of [null,0,2]){const f=await fixture(t,capability);await assert.rejects(invokeWorkbench('revit_family_save_job',input('revit_family_save_job'),{root:f.root,...control('revit_family_save_job')}),error=>workbenchFailureEvidence(error).outcome==='not_started');assert.deepEqual(await fs.readdir(path.join(f.queue,'inbox')),[]);}
@@ -39,7 +40,7 @@ test('approval tokens can be requested only through trusted host-bound control',
   await assert.rejects(invokeWorkbench(name,{job_handle:'job-123',request_lifecycle_approval:true},{root:f.root}));
   await assert.rejects(invokeWorkbench(name,{job_handle:'job-123'},{root:f.root,requestLifecycleApproval:true}));
   assert.deepEqual(await fs.readdir(path.join(f.queue,'inbox')),[]);
-  await assert.rejects(invokeWorkbench(name,{job_handle:'job-123'},{root:f.root,timeout:25,sourceDocument,shouldContinue:()=>true,requestLifecycleApproval:true}));
+  await assert.rejects(timeoutAfterPublication(options=>invokeWorkbench(name,{job_handle:'job-123'},options),{root:f.root,sourceDocument,shouldContinue:()=>true,requestLifecycleApproval:true}),/Revit response timeout/);
   const files=(await fs.readdir(path.join(f.queue,'inbox'))).filter(value=>value.endsWith('.json'));
   assert.equal(files.length,1);const request=JSON.parse(await fs.readFile(path.join(f.queue,'inbox',files[0]),'utf8'));
   assert.equal(request.args.request_lifecycle_approval,true);assert.equal(request.targetSession,session);
@@ -47,7 +48,7 @@ test('approval tokens can be requested only through trusted host-bound control',
 
 test('ordinary inspection never requests a token and unsupported hosts cannot request one',async t=>{
   const name='revit_family_inspect_job',f=await fixture(t);
-  await assert.rejects(invokeWorkbench(name,{job_handle:'job-123'},{root:f.root,timeout:25}));
+  await assert.rejects(timeoutAfterPublication(options=>invokeWorkbench(name,{job_handle:'job-123'},options),{root:f.root}),/Revit response timeout/);
   const files=(await fs.readdir(path.join(f.queue,'inbox'))).filter(value=>value.endsWith('.json'));
   assert.equal(files.length,1);const request=JSON.parse(await fs.readFile(path.join(f.queue,'inbox',files[0]),'utf8'));
   assert.equal(Object.hasOwn(request.args,'request_lifecycle_approval'),false);

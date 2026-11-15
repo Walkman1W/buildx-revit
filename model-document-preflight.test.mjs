@@ -7,6 +7,7 @@ import {createModelToolDispatcher} from './lib/model-tool-dispatch.mjs';
 import {createModelPermissionServices} from './lib/model-permission-services.mjs';
 import {createModelPermissionOwner} from './lib/model-permission-owner.mjs';
 import {invokeAtomicWorkbenchRead} from './lib/workbench-client.mjs';
+import {timeoutAfterPublication} from './test-support/workbench-timeout.mjs';
 
 const document={session:'a'.repeat(32),path:'C:\\test.rvt',title:'Test'};
 const wall={mode:'commit',wall_type_id:1740,level_id:355,start_mm:{x:0,y:0,z:0},end_mm:{x:4000,y:0,z:0},height_mm:3000};
@@ -25,7 +26,7 @@ test('a timed-out preflight retains its original read owner, then converges when
   for(const folder of ['inbox','processing','outbox'])await fs.mkdir(path.join(root,'queue',folder),{recursive:true});
   await fs.writeFile(path.join(root,'queue','host.json'),JSON.stringify({sessionId:document.session,pid:process.pid,version:'0.8.0',accessPolicyVersion:1}));
   let writes=0;
-  const dispatcher=createModelToolDispatcher({invokeAtomicRead:(name,args,options)=>invokeAtomicWorkbenchRead(name,args,{...options,root,timeout:30}),invokeWorkbench:async()=>{writes++;}});
+  const dispatcher=createModelToolDispatcher({invokeAtomicRead:(name,args,options)=>timeoutAfterPublication(control=>invokeAtomicWorkbenchRead(name,args,control),{...options,root}),invokeWorkbench:async()=>{writes++;}});
   const services=createModelPermissionServices({invoke:dispatcher.invokeTool,observe:async()=>({hostSession:document.session,document:{path:document.path,title:document.title,allowedSample:true}})});
   const scope={client:'browser',conversationId:'conversation',generation:1,revision:1,account:'account',document};
   const owner=createModelPermissionOwner({verifyDocument:async()=>true,invoke:(...args)=>services.invoke(...args)});owners.push(owner);

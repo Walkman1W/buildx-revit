@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {invokeWorkbench,workbenchFailureEvidence} from './lib/workbench-client.mjs';
+import {timeoutAfterPublication} from './test-support/workbench-timeout.mjs';
 
 const session='b'.repeat(32),sourceDocument={session,title:'Sample',path:'C:\\workbench\\samples\\Argus-Codex-Plumbing-Sample.rvt'};
 const approvedFamily={job_handle:'job-123',project_handle:'project-123',project_fingerprint:'project-fingerprint',save:{path:'C:\\workbench\\family-artifacts\\valve.rfa',sha256:'c'.repeat(64)}};
@@ -21,8 +22,8 @@ function receipt(id,mode){
   return {id,ok:true,completedUtc:stamp,timing:{schemaVersion:1,requestId:id,hostSession:session,schedulerCorrelation:'unmatched',executeEnteredUtc:stamp,claimedUtc:stamp,responsePreparedUtc:stamp,observedUtc:null,raiseReturnedUtc:null,dispatchStartedUtc:stamp,dispatchFinishedUtc:stamp,observedToExecuteMs:null,dispatchMs:0,validationMs:0,hostWorkMs:0,raiseResult:null},result:{operation:'family_load_job',hostSession:session,value:{operation:'family_load_job',host_session:session,revit_pid:process.pid,job_handle:approvedFamily.job_handle,project_handle:approvedFamily.project_handle,project_fingerprint:approvedFamily.project_fingerprint,job_scope:'bound_project',success:true,code:'FAMILY_LOADED_AND_READ_BACK',outcome:rollback?'rolled_back_verified':'family_committed_in_memory_not_saved',cleanup_pending:false,save:{...approvedFamily.save,independently_reopened_verified:true},native_status:{project_group:rollback?'RolledBack':'Committed',project_transaction:'Committed',validation_subtransaction:'RolledBack'},effects:{project_saved:false,project_load:detail},value:detail}}};
 }
 async function timeout(f,mode='rollback'){
-  let error;try{await invokeWorkbench('revit_family_load_job',input(mode),{root:f.root,timeout:25,...control});}catch(value){error=value;}
-  const facts=workbenchFailureEvidence(error);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(facts.receiptOwner);return {id:facts.requestIds[0],owner:facts.receiptOwner};
+  let error;try{await timeoutAfterPublication(options=>invokeWorkbench('revit_family_load_job',input(mode),options),{root:f.root,...control});}catch(value){error=value;}
+  const facts=workbenchFailureEvidence(error);assert.equal(facts.outcome,'unconfirmed');assert.equal(facts.requestIds.length,1);assert.ok(facts.receiptOwner);const [id]=facts.requestIds;assert.deepEqual(await fs.readdir(path.join(f.queue,'inbox')),[id+'.json']);return {id,owner:facts.receiptOwner};
 }
 
 test('family load requires the exact approved job, project and artifact before publication',async t=>{

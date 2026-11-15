@@ -19,6 +19,7 @@ import {createModelToolDispatcher,invokeModelCommand} from './lib/model-tool-dis
 import {createCodexSessionProfile,MODEL_WORKSPACE_SESSION_PROFILE,verifyModelWorkspaceCatalog,verifyReadonlyWorkbenchCatalog} from './lib/codex-profile.mjs';
 import {panelProfile,MODEL_SERVER_PROFILE} from './lib/panel-profile.mjs';
 import {readonlyPanelCommandSchema} from './lib/workbench-client.mjs';
+import {timeoutAfterPublication} from './test-support/workbench-timeout.mjs';
 
 const root=fileURLToPath(new URL('.',import.meta.url));
 const session='f'.repeat(32),document={title:'Registry sample',path:'D:\\samples\\registry.rvt',activeViewId:12,activeViewType:'ThreeD',modified:false};
@@ -256,9 +257,10 @@ test('a real queue timeout retains the producing read receipt owner through the 
   for(const child of ['inbox','processing','outbox'])await fs.mkdir(path.join(temporary,'queue',child),{recursive:true});
   await fs.writeFile(path.join(temporary,'queue','host.json'),JSON.stringify({sessionId:session,pid:process.pid,version:'0.6.4',atomicReadSnapshot:true}));
   t.after(async()=>{assert.equal(path.dirname(path.resolve(temporary)),path.resolve(os.tmpdir()));assert.ok(path.basename(temporary).startsWith('buildx-dispatch-receipt-'));await fs.rm(temporary,{recursive:true,force:true});});
-  const result=await invokeModelCommand('revit_list_family_types',{}, {root:temporary,timeout:1});
+  const result=await timeoutAfterPublication(options=>invokeModelCommand('revit_list_family_types',{},options),{root:temporary});
   assert.equal(result.ok,false);assert.equal(result.error.outcome,'unconfirmed');
   assert.equal(result.evidence.requestIds.length,1);assert.ok(result.receiptOwner);
+  assert.deepEqual(await fs.readdir(path.join(temporary,'queue','inbox')),[result.evidence.requestIds[0]+'.json']);
   assert.equal((await result.receiptOwner.close()).ok,true);
 });
 
