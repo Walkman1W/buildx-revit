@@ -4,6 +4,15 @@
   "ownerThreadId": "01a1a752-4305-77f1-8b04-e8a1b338c1d0",
   "tasks": [
     {
+      "id": "BX-CHAT-LOCAL-TOOLS-20261115",
+      "title": "本机扫描 PDF、Excel、搜索和 PNG 联调",
+      "status": "source_verified",
+      "acceptance": "混排扫描报价经 OCR 和一次确认生成并在 Excel 重算；搜索经确认只发送所列查询并返回来源；纯文字和选中参考图出 PNG",
+      "evidence": "CHAT-LOCAL-TOOLS-20261115.zh-CN.md; c786754 local HTTP integration with real OCR and workbook; Excel 16 calculation 25000 CNY; controlled Brave and Images API results; independent candidate branch",
+      "realExternalProvidersVerified": false,
+      "realRevitWebViewVerified": false
+    },
+    {
       "id": "BX-CHAT-PUMP-PORTS-20261115",
       "title": "水泵原生管口端面与筛选诊断",
       "status": "candidate_packaged",

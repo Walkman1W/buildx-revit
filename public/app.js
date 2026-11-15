@@ -39,7 +39,7 @@ let modelPermission=null, modelPermissionPending=null, modelPermissionTimer=null
 let accessPolicy=null,accessPolicyPending=null,accessPolicyMessage='';
 let modelReceipt=null,modelReceiptPending=null,modelReceiptMessage='',modelReceiptAckSubmitted=false;
 let terminal=null,terminalPending=null,terminalMessage='',terminalRevision=0,terminalStale=false;
-let turnAttachmentsAvailable = false, attachmentRead = null;
+let turnAttachmentsAvailable = false, pdfAttachmentsAvailable = false, attachmentRead = null;
 let skillsSupported=false,skillChoices=[],skillSelection=new Set(),skillRevision=null,skillRead=null,observedSkillsRevision=null;
 let staleSkillSelection=false;
 let mcpCandidatesAvailable=false,mcpCandidateRead=null;
@@ -58,24 +58,33 @@ function closeImagePreview(returnFocus=true){
 function imagePreviewCurrent(owner){return imagePreview===owner&&modelUiEnabled&&modelContextAllowed&&owner.accountEpoch===accountEpoch&&owner.contextEpoch===contextEpoch&&owner.conversationId===activeConversationId;}
 async function openImagePreview(detail){
   if(!modelUiEnabled||!modelContextAllowed||!historyEnabled()||!activeConversationId||pendingRequests.has('session'))return;
+  const artifact=detail?.artifact;
   const message=typeof detail?.messageId==='string'?messages.find(value=>value.id===detail.messageId&&['user','assistant'].includes(value.role)):null;
-  const item=message?message.attachments?.find(value=>value.id===detail.attachmentId):pendingAttachments().find(value=>value.id===detail?.attachmentId);
+  const item=artifact?{kind:'image',mediaType:'image/png',name:artifact.fileName,bytes:artifact.bytes}:
+    message?message.attachments?.find(value=>value.id===detail.attachmentId):pendingAttachments().find(value=>value.id===detail?.attachmentId);
   if(!item||item.kind!=='image'||!['image/png','image/jpeg'].includes(item.mediaType))return;
   if(message&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id))return;
-  if(!message&&!item.previewUrl)return;
+  if(!message&&!artifact&&!item.previewUrl)return;
   closeImagePreview(false);
-  const overlay=node('div','model-image-preview'),dialog=node('section','model-image-dialog'),heading=node('div','model-image-heading'),title=node('strong','',item.name),close=node('button','model-image-close','×'),status=node('p','model-image-status',message?'正在读取图片…':''),image=node('img','model-image-full');
+  const overlay=node('div','model-image-preview'),dialog=node('section','model-image-dialog'),heading=node('div','model-image-heading'),title=node('strong','',item.name),close=node('button','model-image-close','×'),status=node('p','model-image-status',message||artifact?'正在读取图片…':''),image=node('img','model-image-full');
   close.type='button';close.setAttribute('aria-label','关闭图片');image.alt=item.name;image.hidden=true;
   dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','图片预览 '+item.name);
   heading.append(title,close);dialog.append(heading,status,image);overlay.append(dialog);document.body.append(overlay);
   const owner={accountEpoch,contextEpoch,conversationId:activeConversationId,overlay,image,focus:document.activeElement,controller:typeof AbortController==='function'?new AbortController():null};imagePreview=owner;
   close.addEventListener('click',()=>closeImagePreview());overlay.addEventListener('click',event=>{if(event.target===overlay)closeImagePreview();});
-  dialog.addEventListener('keydown',event=>{if(event.key==='Tab'){event.preventDefault();close.focus();}});close.focus();
-  if(!message){image.src=item.previewUrl;image.hidden=false;status.hidden=true;return;}
+  let save;
+  dialog.addEventListener('keydown',event=>{if(event.key==='Tab'){event.preventDefault();(save&&document.activeElement===close?save:close).focus();}});close.focus();
+  if(!message&&!artifact){image.src=item.previewUrl;image.hidden=false;status.hidden=true;return;}
   try{
     if(!csrf&&!await refreshStatus())throw new Error('本地服务状态尚未核对，请重试。');
     if(!imagePreviewCurrent(owner))return;
     owner.timer=setTimeout(()=>owner.controller?.abort(),15000);owner.timer?.unref?.();
+    if(artifact){
+      const blob=await readLocalArtifact(owner.conversationId,artifact,owner.controller?.signal);
+      if(!imagePreviewCurrent(owner))return;
+      owner.ownedUrl=URL.createObjectURL(blob);image.src=owner.ownedUrl;image.hidden=false;status.hidden=true;
+      save=node('a','', '下载 PNG');save.href=owner.ownedUrl;save.download=artifact.fileName;heading.append(save);return;
+    }
     const response=await fetch('/api/chat/attachment',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Chat':csrf},body:JSON.stringify({client,conversationId:owner.conversationId,messageId:message.id,attachmentId:item.id}),...(owner.controller?{signal:owner.controller.signal}:{})});
     if(!imagePreviewCurrent(owner))return;
     if(!response.ok){let result;try{result=await response.json();}catch{}throw new Error(typeof result?.error==='string'?result.error:'图片暂时无法读取，请重试。');}
@@ -321,6 +330,7 @@ async function addLibraryAttachment(value,binding){
   catch(error){return {ok:false,error:error?.message||'无法添加资料文件。'};}
 }
 function attachmentKind(file) {
+  if (pdfAttachmentsAvailable&&/\.pdf$/iu.test(file.name)) return {kind:'pdf',mediaType:'application/pdf'};
   if (/\.png$/iu.test(file.name)) return {kind:'image',mediaType:'image/png'};
   if (/\.jpe?g$/iu.test(file.name)) return {kind:'image',mediaType:'image/jpeg'};
   if (/\.txt$/iu.test(file.name)) return {kind:'text',mediaType:'text/plain'};
@@ -330,7 +340,7 @@ function attachmentKind(file) {
 function attachmentBudget(items) {
   if (items.length > 4) throw new Error('每次最多添加 4 个文件。');
   if (items.filter(item => item.kind === 'image').length > 2) throw new Error('每次最多添加 2 张图片。');
-  if (items.some(item => item.kind === 'image' && item.bytes > 2*1024*1024)) throw new Error('每张图片不能超过 2 MiB。');
+  if (items.some(item => ['image','pdf'].includes(item.kind) && item.bytes > 2*1024*1024)) throw new Error('每张图片或每份 PDF 不能超过 2 MiB。');
   if (items.reduce((sum,item) => sum+item.bytes,0) > 4*1024*1024) throw new Error('附件总大小不能超过 4 MiB。');
   const texts=items.filter(item => item.kind === 'text');
   if (texts.reduce((sum,item) => sum+item.bytes,0) > 64*1024 || texts.reduce((sum,item) => sum+(item.characters||0),0) > 32000) throw new Error('文本附件合计不能超过 64 KiB 或 32000 字符。');
@@ -542,7 +552,7 @@ function publishModelView() {
     directCommandsAvailable:directCommandsAvailable && Boolean(commandConversationId()), commands:commandIdentityVisible ? [...commandResults.values()] : [],
     commandStopPending:pendingRequests.has('interrupt'),
     commandCheckPending:pendingRequests.has('command-check') || commandChecking(),
-    turnAttachmentsAvailable:attachmentsEnabled(), attachments:pendingAttachments().map(attachmentSummary), attachmentReading:Boolean(attachmentRead), attachmentEditBlocked:pendingRequests.has('session'),
+    turnAttachmentsAvailable:attachmentsEnabled(), pdfAttachmentsAvailable, attachments:pendingAttachments().map(attachmentSummary), attachmentReading:Boolean(attachmentRead), attachmentEditBlocked:pendingRequests.has('session'),
   } }));
 }
 function publishModelPicker(){
@@ -809,6 +819,7 @@ function status(state = {}) {
   if (Object.hasOwn(state,'historyAvailable')) historyAvailable = modelUiEnabled && state.historyAvailable === true;
   if (!modelUiEnabled) historyAvailable = false;
   if (Object.hasOwn(state,'turnAttachmentsAvailable')) turnAttachmentsAvailable = modelUiEnabled && state.turnAttachmentsAvailable === true;
+  pdfAttachmentsAvailable=modelUiEnabled&&turnAttachmentsAvailable&&state.pdfAttachmentsAvailable===true;
   if (!modelUiEnabled) turnAttachmentsAvailable = false;
   if ((customerWorkspace() || modelUiEnabled && directCommandsAvailable) && typeof state.busy === 'boolean' && state.busy !== busy) { busy = state.busy; busyRevision++; }
   if (state.busy === false) commandStopUnavailable = false;
@@ -902,6 +913,21 @@ function toolCard(messageId, tool, receipt) {
 }
 const generatedFileName = value => typeof value === 'string' && value.length <= 255 && /^[^\\/:*?"<>|\u0000-\u001f]+\.[a-z0-9]+$/iu.test(value);
 const generatedFileId = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
+async function readLocalArtifact(conversationId,file,signal){
+  const mediaType=/\.png$/i.test(file.fileName)?'image/png':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const response=await fetch('/api/chat-artifact/local',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Chat':csrf},
+    body:JSON.stringify({client,conversationId,artifactId:file.artifactId}),...(signal?{signal}:{})});
+  if(!response.ok||response.headers.get('Content-Type')!==mediaType||Number(response.headers.get('Content-Length'))!==file.bytes||file.bytes>12*1024*1024)
+    throw new Error('本机文件或回执不一致，请重新读取。');
+  const blob=await response.blob();
+  if(blob.size!==file.bytes||blob.type!==mediaType)throw new Error('本机文件大小不一致。');
+  return blob;
+}
+
+function downloadLocalArtifact(file,blob){
+  const url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  anchor.href=url;anchor.download=file.fileName;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+}
 
 function applyGeneratedFiles(value, pendingValue, failureValue, conversationId) {
   const list = $('generated-files');
@@ -915,9 +941,9 @@ function applyGeneratedFiles(value, pendingValue, failureValue, conversationId) 
   const files = Array.isArray(value) ? value.filter(file => file?.kind === 'file' && generatedFileId(file.artifactId) && generatedFileName(file.fileName) && Number.isSafeInteger(file.bytes) && file.bytes > 0).slice(0, 32) : [];
   const pending = Array.isArray(pendingValue) ? pendingValue.filter(file => generatedFileId(file?.artifactId) && generatedFileName(file.fileName)).slice(0, 32) : [];
   const failures = Array.isArray(failureValue) ? failureValue.filter(file => file?.status === 'failed' && generatedFileId(file.artifactId) && generatedFileName(file.fileName) && typeof file.message === 'string' && file.message.length <= 400).slice(0, 32) : [];
-  const entries = new Map(pending.map(({artifactId,fileName}) => [artifactId,{artifactId,fileName,check:true}]));
-  for (const {artifactId,fileName,message} of failures) entries.set(artifactId,{artifactId,fileName,message,check:true,failed:true});
-  for (const {artifactId,fileName,bytes} of files) entries.set(artifactId,{artifactId,fileName,bytes,check:false});
+  const entries = new Map(pending.map(({artifactId,fileName,local}) => [artifactId,{artifactId,fileName,check:true,local:local===true}]));
+  for (const {artifactId,fileName,message,local} of failures) entries.set(artifactId,{artifactId,fileName,message,check:true,failed:true,local:local===true});
+  for (const {artifactId,fileName,bytes,local} of files) entries.set(artifactId,{artifactId,fileName,bytes,check:false,local:local===true});
   const signature = JSON.stringify([conversationId, accountEpoch, commandIdentityKey(), [...entries.values()]]);
   if (generatedFilesView?.signature === signature) return;
   const shouldScroll = nearBottom();
@@ -925,8 +951,10 @@ function applyGeneratedFiles(value, pendingValue, failureValue, conversationId) 
   generatedFilesView = owner;
   const feedback = node('p','generated-file-feedback');
   feedback.setAttribute('role','status');
-  const cards = [...entries.values()].flatMap(({artifactId,fileName,bytes,check,failed,message}) => {
-    const action = check ? '核对原回执' : '打开文件';
+  const cards = [...entries.values()].flatMap(file => {
+    const {artifactId,fileName,bytes,check,failed,message,local}=file;
+    const wantsPreview=local&&!check&&/\.png$/iu.test(fileName);
+    const action = check ? '核对原回执' : wantsPreview?'预览图片':local?'下载 Excel':'打开文件';
     const label = check ? (failed?'制作失败':action)+' · '+fileName : fileName+' · '+(bytes < 1024 ? bytes+' B' : Math.ceil(bytes/1024)+' KiB');
     const card = node('button','model-sent-file generated-file',label);
     card.type = 'button';
@@ -935,6 +963,7 @@ function applyGeneratedFiles(value, pendingValue, failureValue, conversationId) 
     const isCurrent = () => generatedFilesView === owner && modelUiEnabled && modelContextAllowed && owner.accountEpoch === accountEpoch && owner.identityKey === commandIdentityKey() && owner.conversationId === lastSession?.conversation?.id;
     card.addEventListener('click',async () => {
       if (card.disabled || !isCurrent() || pendingRequests.has('session')) return;
+      if(wantsPreview){void openImagePreview({artifact:file});return;}
       card.disabled = true;
       feedback.textContent = check ? '正在核对原回执…' : '正在打开文件…';
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -942,7 +971,12 @@ function applyGeneratedFiles(value, pendingValue, failureValue, conversationId) 
       try {
         if (!csrf && !await refreshStatus()) throw new Error('本地服务状态尚未核对，请刷新后重试。');
         if (!isCurrent() || pendingRequests.has('session')) return;
-        const result = await post(check ? 'chat-artifact/check' : 'chat-artifact/open',{conversationId,artifactId},controller ? {signal:controller.signal} : {});
+        if(local&&!check){
+          const blob=await readLocalArtifact(conversationId,file,controller?.signal);
+          if(isCurrent()){downloadLocalArtifact(file,blob);feedback.textContent='已提交下载。';}
+          return;
+        }
+        const result = await post(local?'chat-artifact/local-check':check?'chat-artifact/check':'chat-artifact/open',{conversationId,artifactId},controller ? {signal:controller.signal} : {});
         if (result?.ok !== true) throw new Error(check ? '原回执仍待核对。' : '文件打开未确认。');
         if (isCurrent()) {
           const summary = check && typeof result.message === 'string' && result.message.length <= 400 && result.artifactId === artifactId
@@ -992,7 +1026,7 @@ function renderConversation() {
       entry.state.textContent = receiptNotice?.label ?? messageStatus(message.status);
       if (message.role === 'assistant') renderMarkdown(entry.body, message.text || '', message); else entry.body.textContent = message.text || '';
       entry.body.hidden = !message.text;
-      const attachments=modelUiEnabled && ['user','assistant'].includes(message.role) && Array.isArray(message.attachments) ? message.attachments.filter(item => item && typeof item.name === 'string' && ['text','image'].includes(item.kind) && Number.isSafeInteger(item.bytes) && item.bytes >= 0).slice(0,message.role==='assistant'?12:4) : [];
+      const attachments=modelUiEnabled && ['user','assistant'].includes(message.role) && Array.isArray(message.attachments) ? message.attachments.filter(item => item && typeof item.name === 'string' && ['text','image','pdf'].includes(item.kind) && Number.isSafeInteger(item.bytes) && item.bytes >= 0).slice(0,message.role==='assistant'?12:4) : [];
       entry.attachments.replaceChildren(...attachments.map(item => {
         const readable=item.kind==='image'&&['image/png','image/jpeg'].includes(item.mediaType)&&typeof item.id==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
         const label=item.name+' · '+(item.kind === 'image' ? '图片' : '文本')+' · '+(item.bytes < 1024 ? item.bytes+' B' : Math.ceil(item.bytes/1024)+' KiB');
@@ -1230,13 +1264,14 @@ async function showDynamicApproval(value){
   const str=(v,max,empty=false)=>typeof v==='string'&&v.length<=max&&(empty||v.length>0)&&!v.includes('\0');
   const typeWrite=value?.action==='revit_set_type_parameter';
   const fileWrite=value?.kind==='file';
+  const fileAction=['buildx_generate_file','buildx_create_workbook','buildx_generate_image'].includes(value?.action);
   if(!modelUiEnabled||!ready||!busy||!value||typeof value!=='object'||Array.isArray(value)||
     !str(value.id,200)||!/^\w[\w-]*$/.test(value.id)||typeof value.digest!=='string'||!/^[a-f0-9]{64}$/.test(value.digest)||
     !['terminal','browser','plugin','model','file'].includes(value.kind)||!str(value.action,16384)||!str(value.target,4096)||
     !str(value.source,512)||!str(value.cwd,4096,true)||!str(value.parameters,65536,true)||
     !Number.isSafeInteger(value.deadline)||value.deadline<=0||!str(value.conversationId,200)||value.conversationId!==lastSession?.conversation?.id||
     typeWrite&&(value.kind!=='model'||!str(value.typeParameterReview,60000))||!typeWrite&&Object.hasOwn(value,'typeParameterReview')||
-    (fileWrite||value.action==='buildx_generate_file')&&(!fileWrite||value.action!=='buildx_generate_file'||!generatedFileName(value.target)||!value.cwd||!value.parameters)){
+    (fileWrite||fileAction)&&(!fileWrite||!fileAction||!generatedFileName(value.target)||!value.cwd||!value.parameters)){
     invalidateDynamicApproval();box.hidden=true;return;
   }
   const fields=['id','digest','kind','action','target','cwd','source','parameters','deadline','conversationId','typeParameterReview'];

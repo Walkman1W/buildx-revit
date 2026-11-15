@@ -1042,6 +1042,7 @@ export function mountModelWorkspace({document, window, CustomEvent, Event}) {
   }
   function renderAttachments() {
     const available=active && snapshot?.turnAttachmentsAvailable === true;
+    if(attachmentInput)attachmentInput.accept='.txt,.md,.markdown,.png,.jpg,.jpeg'+(snapshot?.pdfAttachmentsAvailable===true?',.pdf':'');
     attachmentButton.hidden=!available;
     const blocked=Boolean(snapshot?.readOnly || snapshot?.attachmentReading || snapshot?.attachmentEditBlocked || snapshot?.persistence?.status === 'failed');
     attachmentButton.disabled=blocked;

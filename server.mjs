@@ -28,12 +28,14 @@ import {createModelTerminalService} from './lib/model-terminal-service.mjs';
 import {resolvePythonExecutable} from './lib/local-runtimes.mjs';
 import {resolveBuildxPaths,resolveBuildxPanelPort} from './lib/buildx-paths.mjs';
 import {CHAT_READ_RECEIPT_KEY_ENV,CHAT_READ_RECEIPT_PORT_ENV} from './lib/chat-read-receipts.mjs';
+import {createInstalledLocalChatTools} from './lib/local-chat-tools-runtime.mjs';
 
 const ROOT=path.dirname(fileURLToPath(import.meta.url));
 const confirmedWrite=confirmedWriteProfile(ROOT);
 const configuration=buildxRuntimeConfig();
 const installation=await readInstallationConfiguration(ROOT);
 const paths=resolveBuildxPaths(ROOT,installation);
+const localChatTools=createInstalledLocalChatTools({paths,installation});
 const lifecycle=createPanelAudit(paths.runtimeDirectory);
 const history=createPanelChatStore({stateDirectory:paths.historyDirectory});
 const projectKnowledgeFactory=options=>createProjectKnowledge({...options,...installation?{pythonExecutable:installation.pythonExecutable}:{}});
@@ -64,5 +66,5 @@ const terminalAvailability=await modelTerminal.availability();
 const runtimeDependencies={skillCatalogMode:configuration.mode,...familyCapabilityOwner?{familyCapabilityOwner}:{},
   spawn:(file,args,options)=>spawn(file,args,{...options,env:{...options.env,[CHAT_READ_RECEIPT_KEY_ENV]:chatReadReceiptKey,[CHAT_READ_RECEIPT_PORT_ENV]:String(port)}}),
   ...installation?{resolveRuntimes:()=>resolveInstallationRuntimes(installation)}:{}};
-const app=createPanelServer({confirmedWrite,root:ROOT,dataRoot:paths.dataRoot,port,profile,chatReadReceiptKey,codex:new CodexClient(ROOT,{profile,generatedFiles:true,modelTerminal:!confirmedWrite&&terminalAvailability.available},runtimeDependencies),accessServices,modelTerminal:confirmedWrite?null:modelTerminal,terminalAvailability:confirmedWrite?null:terminalAvailability,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,generatedFileOwner,generatedFileTransport,dynamicApprovalOwner,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
+const app=createPanelServer({confirmedWrite,root:ROOT,dataRoot:paths.dataRoot,port,profile,chatReadReceiptKey,codex:new CodexClient(ROOT,{profile,generatedFiles:true,modelTerminal:!confirmedWrite&&terminalAvailability.available,localTools:localChatTools?.tools},runtimeDependencies),accessServices,modelTerminal:confirmedWrite?null:modelTerminal,terminalAvailability:confirmedWrite?null:terminalAvailability,invokeWorkbench:(name,args,control={})=>invokeWorkbench(name,args,timingControl(control)),invokeAtomicContextRead:(name,args,control)=>invokeAtomicWorkbenchRead(name,args,timingControl(control)),invokeReadonlyCommand:(command,parameters,control)=>invokeModelCommand(command,parameters,timingControl(control)),modelPermissionServices:createModelPermissionServices({timingControl}),familyCapabilityOwner,generatedFileOwner,generatedFileTransport,dynamicApprovalOwner,localChatTools,materialOpener,materialIndexFactory,materialStoreFactory,projectKnowledgeFactory,projectHistoryFactory,auditLifecycle:lifecycle,historyStore:history,accountAuth:configuration.accountAuth,requireAccount:configuration.requireAccount,requireLicense:configuration.requireLicense,installationId:installation?.installationId??null});
 await runPanelService({app,lifecycle,root:ROOT,runtimeDirectory:paths.runtimeDirectory});
