@@ -33,4 +33,6 @@ test('review requires trusted tool availability and explicit model write mode',(
   assert.throws(()=>request([levels,{...group,parameters:{...group.parameters,mode:'automatic'}}]),/WORKFLOW_MODE_REQUIRED/);
   assert.throws(()=>request([levels,{...group,parameters:{...group.parameters,element_ids:[101]}}]),/WORKFLOW_PARAMETERS_INVALID/);
   assert.throws(()=>request(undefined,{deadline:root.now}),/WORKFLOW_SCOPE_INVALID/);
+  assert.throws(()=>request(undefined,{scope:{...root.scope,unreviewed:true}}),/WORKFLOW_SCOPE_INVALID/);
+  assert.throws(()=>request([levels,{...group,parameters:{...group.parameters,name:'x'.repeat(70000)}}]),/WORKFLOW_INPUT_LIMIT/);
 });
