@@ -610,7 +610,7 @@ function applyWorkspace(workspace) {
   if (!becameRestricted && wasAllowed === modelContextAllowed) return true;
   if (!modelContextAllowed) {
     turnAttachmentsAvailable=false; attachmentRead=null; closeImagePreview(false);clearAttachmentDrafts();
-    if(generatedFilesView)applyGeneratedFiles(null,null,null);
+    if(generatedFilesView)applyGeneratedFiles(null,null,null,null);
     directCommandsAvailable = false; clearCommands();
     context = null; pendingRequests.delete('context');
     $('include-document').checked = false; $('include-selection').checked = false;
@@ -903,7 +903,7 @@ function toolCard(messageId, tool, receipt) {
 const generatedFileName = value => typeof value === 'string' && value.length <= 255 && /^[^\\/:*?"<>|\u0000-\u001f]+\.[a-z0-9]+$/iu.test(value);
 const generatedFileId = value => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value);
 
-function applyGeneratedFiles(value, pendingValue, conversationId) {
+function applyGeneratedFiles(value, pendingValue, failureValue, conversationId) {
   const list = $('generated-files');
   const visibleConversation = lastSession?.conversation?.id;
   if (!modelUiEnabled || !modelContextAllowed || !conversationId || conversationId !== visibleConversation) {
@@ -914,7 +914,9 @@ function applyGeneratedFiles(value, pendingValue, conversationId) {
   }
   const files = Array.isArray(value) ? value.filter(file => file?.kind === 'file' && generatedFileId(file.artifactId) && generatedFileName(file.fileName) && Number.isSafeInteger(file.bytes) && file.bytes > 0).slice(0, 32) : [];
   const pending = Array.isArray(pendingValue) ? pendingValue.filter(file => generatedFileId(file?.artifactId) && generatedFileName(file.fileName)).slice(0, 32) : [];
+  const failures = Array.isArray(failureValue) ? failureValue.filter(file => file?.status === 'failed' && generatedFileId(file.artifactId) && generatedFileName(file.fileName) && typeof file.message === 'string' && file.message.length <= 400).slice(0, 32) : [];
   const entries = new Map(pending.map(({artifactId,fileName}) => [artifactId,{artifactId,fileName,check:true}]));
+  for (const {artifactId,fileName,message} of failures) entries.set(artifactId,{artifactId,fileName,message,check:true,failed:true});
   for (const {artifactId,fileName,bytes} of files) entries.set(artifactId,{artifactId,fileName,bytes,check:false});
   const signature = JSON.stringify([conversationId, accountEpoch, commandIdentityKey(), [...entries.values()]]);
   if (generatedFilesView?.signature === signature) return;
@@ -923,9 +925,9 @@ function applyGeneratedFiles(value, pendingValue, conversationId) {
   generatedFilesView = owner;
   const feedback = node('p','generated-file-feedback');
   feedback.setAttribute('role','status');
-  const cards = [...entries.values()].map(({artifactId,fileName,bytes,check}) => {
+  const cards = [...entries.values()].flatMap(({artifactId,fileName,bytes,check,failed,message}) => {
     const action = check ? '核对原回执' : '打开文件';
-    const label = check ? action+' · '+fileName : fileName+' · '+(bytes < 1024 ? bytes+' B' : Math.ceil(bytes/1024)+' KiB');
+    const label = check ? (failed?'制作失败':action)+' · '+fileName : fileName+' · '+(bytes < 1024 ? bytes+' B' : Math.ceil(bytes/1024)+' KiB');
     const card = node('button','model-sent-file generated-file',label);
     card.type = 'button';
     card.title = action;
@@ -942,7 +944,11 @@ function applyGeneratedFiles(value, pendingValue, conversationId) {
         if (!isCurrent() || pendingRequests.has('session')) return;
         const result = await post(check ? 'chat-artifact/check' : 'chat-artifact/open',{conversationId,artifactId},controller ? {signal:controller.signal} : {});
         if (result?.ok !== true) throw new Error(check ? '原回执仍待核对。' : '文件打开未确认。');
-        if (isCurrent()) feedback.textContent = check ? (['pending','unknown'].includes(result.status) ? '原回执仍待核对。' : '核对请求已提交。') : '打开请求已提交。';
+        if (isCurrent()) {
+          const summary = check && typeof result.message === 'string' && result.message.length <= 400 && result.artifactId === artifactId
+            ? result.message+' 原回执 '+artifactId : '';
+          feedback.textContent = summary || (check ? (['pending','unknown'].includes(result.status) ? '原回执仍待核对。' : '已核对原回执。') : '打开请求已提交。');
+        }
       } catch (error) {
         if (isCurrent()) feedback.textContent = check ? '原回执仍待核对。' : error.name === 'AbortError' ? '打开请求超时，请查看本地文件。' : error.message || '文件打开未确认。';
       } finally {
@@ -950,7 +956,7 @@ function applyGeneratedFiles(value, pendingValue, conversationId) {
         card.disabled = false;
       }
     });
-    return card;
+    return failed ? [card,node('p','generated-file-feedback',message+' 原回执 '+artifactId)] : [card];
   });
   list.replaceChildren(...cards,feedback);
   list.hidden = !cards.length;
@@ -958,7 +964,7 @@ function applyGeneratedFiles(value, pendingValue, conversationId) {
 }
 
 function renderConversation() {
-  if (generatedFilesView && (!modelUiEnabled || !modelContextAllowed || generatedFilesView.accountEpoch !== accountEpoch || generatedFilesView.identityKey !== commandIdentityKey() || generatedFilesView.conversationId !== lastSession?.conversation?.id)) applyGeneratedFiles(null,null,null);
+  if (generatedFilesView && (!modelUiEnabled || !modelContextAllowed || generatedFilesView.accountEpoch !== accountEpoch || generatedFilesView.identityKey !== commandIdentityKey() || generatedFilesView.conversationId !== lastSession?.conversation?.id)) applyGeneratedFiles(null,null,null,null);
   const shouldScroll = nearBottom();
   $('welcome').hidden = messages.length > 0;
   $('history-note').hidden = !lastSession?.historyTruncated;
@@ -1345,7 +1351,7 @@ function applyConversation(data = {}, commandEvidence = false) {
     if (data.session.contextEpoch !== undefined) contextEpoch = data.session.contextEpoch;
     if (data.session.context !== undefined) context = modelContextAllowed ? data.session.context : null;
     historyView(data.history);
-    if (Object.hasOwn(data,'generatedFiles') || Object.hasOwn(data,'generatedFilePending')) applyGeneratedFiles(data.generatedFiles,data.generatedFilePending,incomingId);
+    if (Object.hasOwn(data,'generatedFiles') || Object.hasOwn(data,'generatedFilePending') || Object.hasOwn(data,'generatedFileFailures')) applyGeneratedFiles(data.generatedFiles,data.generatedFilePending,data.generatedFileFailures,incomingId);
     renderConversation(); renderContext();
     if (changedConversation) { if (!Array.isArray(data.history?.sessions)) void refreshHistory(); }
   } else if (!canonical && typeof data.text === 'string' && data.text) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
-import {link,mkdir,mkdtemp,readdir,rm,writeFile} from 'node:fs/promises';
+import {link,mkdir,mkdtemp,readFile,readdir,rm,writeFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -133,4 +133,29 @@ test('a started failure remains recoverable when its receipt conflicts with disk
   assert.equal(failed.status,'unknown');
   assert.equal((await owner.pending({scope}))[0].artifactId,requestId);
   assert.equal(await owner.read({scope,artifactId:requestId}),null);
+});
+
+test('a scoped terminal failure retains safe diagnostics after restart and leaves older records intact',async t=>{
+  const {owner,dataRoot}=await fixture(t),requestId=randomUUID(),legacyId=randomUUID();
+  const diagnostic={stage:'verify_before_save',reason:'port_count_mismatch',exceptionType:'System.InvalidOperationException',
+    saveAttempted:false,cleanupComplete:true};
+  const receipt={ok:false,outcome:'failed',artifactCreated:false,code:'PUMP_BUILD_FAILED'};
+  const failure=await owner.execute({scope,requestId,parameters:pump,invoke:async()=>({...receipt,diagnostic})});
+  assert.equal(failure.status,'failed');
+  assert.deepEqual(failure.diagnostic,diagnostic);
+  const legacy=await owner.execute({scope,requestId:legacyId,parameters:pump,invoke:async()=>receipt});
+  const record=path.join(dataRoot,'generated-file-jobs',legacyId+'.result.json');
+  const priorBytes=await readFile(record);
+  const restarted=createGeneratedFileOwner({dataRoot});
+  const observe=()=>assert.fail('Terminal failure checked an unrelated receipt');
+  assert.deepEqual(await restarted.recover({scope,artifactId:requestId,observe}),failure);
+  assert.deepEqual(await restarted.recover({scope,artifactId:legacyId,observe}),legacy);
+  assert.deepEqual(await readFile(record),priorBytes);
+  assert.deepEqual((await restarted.summary({scope:{...scope,accountId:'unrelated'}})).failures,[]);
+  assert.deepEqual((await restarted.summary({scope})).failures.find(item=>item.artifactId===requestId).diagnostic,diagnostic);
+
+  const unsafe=await owner.execute({scope,requestId:randomUUID(),parameters:pump,invoke:async()=>({...receipt,
+    diagnostic:{...diagnostic,exceptionType:'System.InvalidOperationException: C:/private/test'}})});
+  assert.equal(unsafe.status,'failed');
+  assert.equal(unsafe.diagnostic,undefined);
 });
