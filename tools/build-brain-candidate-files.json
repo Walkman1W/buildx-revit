@@ -108,6 +108,7 @@
   "revit-addin/SchematicModel.cs",
   "revit-addin/SchematicRevitService.cs",
   "revit-addin/SchematicWindowEntry.cs",
+  "revit-addin/ScopedAutoApply.cs",
   "revit-addin/ScriptRunner.cs",
   "revit-addin/WindowWorkbenchClient.cs",
   "revit-addin/WorkbenchActions.cs",

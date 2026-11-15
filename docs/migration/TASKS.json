@@ -28,10 +28,10 @@
     {
       "id": "BX-CHAT-PUMP-PORTS-20261115",
       "title": "水泵原生管口端面与筛选诊断",
-      "status": "candidate_packaged",
+      "status": "candidate_installed",
       "acceptance": "一次授权后用 600×1200×750 mm、DN100/DN80 和供水系统生成、保存并打开 RFA；如失败原回执可核对原生几何、端面筛选和清理",
-      "evidence": "7bd4603 diagnostics; 2241837 native port candidate; eaf1538 candidate 0.8.9-confirmed-write.20261115.3; 162/162 offline; H750/H700 controlled; x64 Revit 2024 API 24.3.30.11 build; 144/144 ZIP and isolated preflight verified",
-      "realRevitLoadVerified": false,
+      "evidence": "7bd4603 diagnostics; 2241837 native port candidate; eaf1538 candidate 0.8.9-confirmed-write.20261115.3; 162/162 offline; H750/H700 controlled; x64 Revit 2024 API 24.3.30.11 build; 144/144 ZIP and isolated preflight verified; candidate DLL loaded in journal.0268 and journal.0269, current Revit PID and pump dispatcher verified; local browser composer white and Codex ready",
+      "realRevitLoadVerified": true,
       "realModelExecutionVerified": false
     },
     {
